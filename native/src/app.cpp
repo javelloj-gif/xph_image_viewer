@@ -110,6 +110,7 @@ bool App::Initialize(const AppConfig& config) {
     m_thumbnailStrip.Initialize(this);
     m_libraryPage.Initialize(this);
     m_boardPage.Initialize(this);
+    m_waterfallPage.Initialize(this);
 
     // ── Load Initial Content ──────────────────────────────────────────────
     if (!config.initialFilePath.empty()) {
@@ -149,7 +150,8 @@ int App::Run() {
                                    || m_thumbnailStrip.HasActiveAnimations()
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
                                    || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused())
-                                   || (m_currentPage == Page::Board && m_boardPage.m_editingNoteIdx != -1);
+                                   || (m_currentPage == Page::Board && m_boardPage.m_editingNoteIdx != -1)
+                                   || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())));
 
         if (!needsContinuousRender) {
             // Wait for next message or 16ms timeout (~60fps max idle rate)
@@ -181,6 +183,8 @@ void App::RenderFrame() {
         m_libraryPage.Update(dt);
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Update(dt);
+    } else if (m_currentPage == Page::Waterfall) {
+        m_waterfallPage.Update(dt);
     }
 
     // Update animated image playback
@@ -223,6 +227,8 @@ void App::DrawViewerContent() {
         m_libraryPage.Draw(m_renderer);
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Draw(m_renderer);
+    } else if (m_currentPage == Page::Waterfall) {
+        m_waterfallPage.Draw(m_renderer);
     }
 }
 
@@ -514,6 +520,8 @@ void App::SetPage(Page page) {
         m_libraryPage.SyncCurrentFolderWithApp();
     } else if (page == Page::Board) {
         m_boardPage.OnEnterPage();
+    } else if (page == Page::Waterfall) {
+        m_waterfallPage.CalculateLayout();
     }
     m_window.RequestRedraw();
 }
@@ -537,6 +545,8 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
         if (m_libraryPage.OnMouseMove(x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseMove(x, y, mods)) return;
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnMouseMove(x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
         m_viewerPage.OnMouseMove(x, y, mods);
@@ -550,6 +560,8 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (m_libraryPage.OnMouseDown(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDown(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnMouseDown(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDown(btn, x, y, mods);
@@ -563,6 +575,8 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseUp(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnMouseUp(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
         m_viewerPage.OnMouseUp(btn, x, y, mods);
@@ -576,6 +590,8 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
         if (m_libraryPage.OnMouseWheel(delta, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseWheel(delta, x, y, mods)) return;
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnMouseWheel(delta, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
         m_viewerPage.OnMouseWheel(delta, x, y, mods);
@@ -589,6 +605,8 @@ void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mod
         if (m_libraryPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
@@ -604,6 +622,10 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         if (m_boardPage.OnKeyDown(vk, mods)) {
             return;
         }
+    } else if (m_currentPage == Page::Waterfall) {
+        if (m_waterfallPage.OnKeyDown(vk, mods)) {
+            return;
+        }
     }
 
     switch (vk) {
@@ -615,6 +637,9 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             break;
         case '4':
             SetPage(Page::Library);
+            break;
+        case '5':
+            SetPage(Page::Waterfall);
             break;
 
         case VK_ESCAPE:
@@ -703,6 +728,16 @@ void App::OnFileDrop(std::vector<std::wstring> files) {
     if (m_currentPage == Page::Board) {
         for (const auto& file : files) {
             m_boardPage.OnFileDrop(file, m_mouseX, m_mouseY);
+        }
+        return;
+    } else if (m_currentPage == Page::Waterfall) {
+        namespace fs = std::filesystem;
+        if (fs::is_directory(files[0])) {
+            LoadFolder(files[0]);
+        } else {
+            m_fileList.clear();
+            m_currentIndex = -1;
+            LoadImage(files[0]);
         }
         return;
     }

@@ -34,6 +34,7 @@ set(SOURCES
     src/thumbnail_strip.cpp
     src/library_page.cpp
     src/board_page.cpp
+    src/waterfall_page.cpp
     src/pch.cpp
 )
 
@@ -49,6 +50,7 @@ set(HEADERS
     src/thumbnail_strip.h
     src/library_page.h
     src/board_page.h
+    src/waterfall_page.h
 )
 
 # ─── Resource Files ───────────────────────────────────────────────────────────

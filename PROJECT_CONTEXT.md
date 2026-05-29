@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete; Phase 2 in progress: board, library, thumbnail strip, and viewer pages implemented; waterfall_page and start_page are pending, 2026-05-29 18:41) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete; Phase 2 in progress: board, library, thumbnail strip, viewer, and waterfall pages implemented; start_page is pending, 2026-05-29 18:41) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
@@ -492,7 +492,7 @@ The project is being rewritten as a native C++20 application. See `NATIVE_CONVER
 | Phase | Status | Path |
 |---|---|---|
 | Phase 1: Core Engine | **COMPLETE** | `native/` |
-| Phase 2: Application Pages | **IN PROGRESS** (Viewer, Thumbnail Strip, Library, and Board Pages complete; Waterfall and Start Pages pending) | `native/src/viewer_page.*`, `native/src/library_page.*`, `native/src/board_page.*` (Done), `native/src/waterfall_page.*`, `native/src/start_page.*` (Pending) |
+| Phase 2: Application Pages | **IN PROGRESS** (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending) | `native/src/viewer_page.*`, `native/src/library_page.*`, `native/src/board_page.*` (Done), `native/src/waterfall_page.*` (Done), `native/src/start_page.*` (Pending) |
 | Phase 3: Advanced Features | Pending | — |
 | Phase 4: Packaging | Pending | — |
 

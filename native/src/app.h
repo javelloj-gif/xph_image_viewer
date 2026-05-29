@@ -24,6 +24,7 @@
 #include "thumbnail_strip.h"
 #include "library_page.h"
 #include "board_page.h"
+#include "waterfall_page.h"
 
 namespace kv {
 
@@ -103,6 +104,7 @@ private:
     friend class ThumbnailStrip;
     friend class LibraryPage;
     friend class BoardPage;
+    friend class WaterfallPage;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -112,6 +114,7 @@ private:
     ThumbnailStrip      m_thumbnailStrip;
     LibraryPage         m_libraryPage;
     BoardPage           m_boardPage;
+    WaterfallPage       m_waterfallPage;
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;

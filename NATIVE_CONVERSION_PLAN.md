@@ -1,13 +1,13 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 18:41 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, and Board Pages complete; Waterfall and Start Pages pending)
+> **Last Updated**: 2026-05-29 18:41 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending)
 
 ## Implementation Status
 
 | Phase | Status | Evidence |
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
-| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page`, `thumbnail_strip`, `library_page`, and `board_page` implemented; `waterfall_page` and `start_page` are pending |
+| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page`, `thumbnail_strip`, `library_page`, `board_page`, and `waterfall_page` implemented; `start_page` is pending |
 | **Phase 3: Advanced Features** | ⬜ Pending | settings, library_data, IPC, gamepad, Explorer integration |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
@@ -238,7 +238,7 @@ Board page (PureRef/Miro clone) — **largest component**:
 - Progressive layout
 - Fixed double-click note/node editing, auto-scaling node sizes based on text and scaling node text proportionally during resize, double-click image to view in main viewer, uniform aspect-ratio image/node scaling, and deletable link connections
 
-#### `src/waterfall_page.h / waterfall_page.cpp` [NEW]
+#### `src/waterfall_page.h / waterfall_page.cpp` ✅ DONE
 Waterfall/masonry layout page:
 - Dynamic column count (Ctrl+wheel)
 - Configurable gaps (Ctrl+Shift+wheel)
