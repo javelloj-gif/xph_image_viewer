@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & Phase 2 Viewer Page and Thumbnail Strip complete, 2026-05-29) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & Phase 2 Viewer Page, Thumbnail Strip and Library Page complete, 2026-05-29) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
@@ -492,7 +492,7 @@ The project is being rewritten as a native C++20 application. See `NATIVE_CONVER
 | Phase | Status | Path |
 |---|---|---|
 | Phase 1: Core Engine | **COMPLETE** | `native/` |
-| Phase 2: Application Pages | **IN PROGRESS** (Viewer Page complete) | `native/src/viewer_page.*` |
+| Phase 2: Application Pages | **IN PROGRESS** (Viewer Page, Thumbnail Strip, and Library Page complete. Resolved hover flickering, animation completion crash, and added animated hover previews & single-click transitions) | `native/src/viewer_page.*`, `native/src/library_page.*` |
 | Phase 3: Advanced Features | Pending | — |
 | Phase 4: Packaging | Pending | — |
 

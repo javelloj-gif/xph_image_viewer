@@ -518,13 +518,6 @@ void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mod
             m_dragStart = { x, y };
             m_panStart = m_pan;
         }
-    } else if (btn == MouseButton::Right) {
-        // Cancel region zoom or reset view
-        if (m_regionZoomDefined) {
-            CancelRegionZoom();
-        } else {
-            ResetView();
-        }
     }
 }
 
@@ -671,6 +664,11 @@ void ViewerPage::ResetView() {
 
 // ─── Toggle 1:1 Scale / Fit-To-Screen ────────────────────────────────────────
 void ViewerPage::Toggle1To1() {
+    if (m_regionZoomDefined || m_regionZoomActive) {
+        CancelRegionZoom();
+        return;
+    }
+
     // Check if the current view is NOT fit-to-screen.
     // Fit-to-screen is defined as zoom == 1.0f and pan == {0,0}.
     bool isFitToScreen = (std::abs(m_zoom - 1.0f) < 0.001f) && 
@@ -823,7 +821,7 @@ void ViewerPage::CancelRegionZoom() {
         RectF viewportRect = RectF::FromXYWH(0, 0, targetSize.width, targetSize.height);
         m_projectedRect = FitRectIntoRect(CalculateImageRect(), viewportRect); // spotlight box scales back to normal fits
 
-        m_app->m_animations.Start("region_zoom_factor", 1.0f, 0.0f, 0.30, Easing::EaseInOutCubic, [this]() {
+        m_app->m_animations.Start("region_zoom_factor", 0.0f, 1.0f, 0.30, Easing::EaseInOutCubic, [this]() {
             m_regionZoomActive = false;
             m_regionZoomDefined = false;
             m_regionStageFactor = 0.0f;

@@ -1,13 +1,13 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 | **Phase 1**: ✅ COMPLETE | **Phase 2 (Viewer Page & Thumbnail Strip)**: ✅ COMPLETE
+> **Last Updated**: 2026-05-29 | **Phase 1**: ✅ COMPLETE | **Phase 2 (Viewer, Thumbnail Strip & Library Pages)**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, and Library Pages complete; added animated previews & click routing, fixed library hover flickering, right-click, key 1, and animation callback crash)
 
 ## Implementation Status
 
 | Phase | Status | Evidence |
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
-| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page` and `thumbnail_strip` implemented & verified |
+| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page`, `thumbnail_strip` and `library_page` implemented & verified (along with hover animations and fixes) |
 | **Phase 3: Advanced Features** | ⬜ Pending | settings, library_data, IPC, gamepad, Explorer integration |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
@@ -218,7 +218,7 @@ Bottom thumbnail panel (replaces `control_panel.py`):
 - Hover transparency
 - Context menu
 
-#### `src/library_page.h / library_page.cpp` [NEW]
+#### `src/library_page.h / library_page.cpp` ✅ DONE
 Library page:
 - Left panel: scrollable folder list with selection highlight
 - Right panel: dynamic-column grid of previews

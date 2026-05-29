@@ -107,6 +107,7 @@ bool App::Initialize(const AppConfig& config) {
 
     m_viewerPage.Initialize(this);
     m_thumbnailStrip.Initialize(this);
+    m_libraryPage.Initialize(this);
 
     // ── Load Initial Content ──────────────────────────────────────────────
     if (!config.initialFilePath.empty()) {
@@ -144,7 +145,8 @@ int App::Run() {
         // yield CPU time to other processes
         bool needsContinuousRender = m_animations.HasActiveAnimations()
                                    || m_thumbnailStrip.HasActiveAnimations()
-                                   || (m_animatedImage && !m_frameSequencer.IsPaused());
+                                   || (m_animatedImage && !m_frameSequencer.IsPaused())
+                                   || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused());
 
         if (!needsContinuousRender) {
             // Wait for next message or 16ms timeout (~60fps max idle rate)
@@ -169,8 +171,12 @@ void App::RenderFrame() {
     m_animations.Update(dt);
 
     // Update page animations
-    m_viewerPage.Update(dt);
-    m_thumbnailStrip.Update(dt);
+    if (m_currentPage == Page::Viewer) {
+        m_viewerPage.Update(dt);
+        m_thumbnailStrip.Update(dt);
+    } else if (m_currentPage == Page::Library) {
+        m_libraryPage.Update(dt);
+    }
 
     // Update animated image playback
     if (m_animatedImage && !m_frameSequencer.IsPaused()) {
@@ -205,8 +211,12 @@ void App::RenderFrame() {
 // ─── Draw Viewer Content ─────────────────────────────────────────────────────
 
 void App::DrawViewerContent() {
-    m_viewerPage.Draw(m_renderer);
-    m_thumbnailStrip.Draw(m_renderer);
+    if (m_currentPage == Page::Viewer) {
+        m_viewerPage.Draw(m_renderer);
+        m_thumbnailStrip.Draw(m_renderer);
+    } else if (m_currentPage == Page::Library) {
+        m_libraryPage.Draw(m_renderer);
+    }
 }
 
 // ─── Draw Image with Zoom/Pan/Rotate ─────────────────────────────────────────
@@ -438,6 +448,7 @@ void App::LoadImage(const std::wstring& path) {
     }
 
     m_thumbnailStrip.SyncSelection(m_currentIndex);
+    m_libraryPage.SyncCurrentFolderWithApp();
     m_window.RequestRedraw();
 }
 
@@ -461,6 +472,7 @@ void App::LoadFolder(const std::wstring& folderPath) {
 
     LogInfo(std::format(L"Folder loaded: {} ({} images)", folderPath, m_fileList.size()));
     m_thumbnailStrip.SetFileList(m_fileList);
+    m_libraryPage.SyncCurrentFolderWithApp();
 
     // If no image is loaded yet, load the first one
     if (!m_currentImage && !m_animatedImage && !m_fileList.empty()) {
@@ -489,6 +501,14 @@ void App::ResetView() {
     m_viewerPage.ResetView();
 }
 
+void App::SetPage(Page page) {
+    m_currentPage = page;
+    if (page == Page::Library) {
+        m_libraryPage.SyncCurrentFolderWithApp();
+    }
+    m_window.RequestRedraw();
+}
+
 // ─── Event Handlers ──────────────────────────────────────────────────────────
 
 void App::OnPaint() {
@@ -502,34 +522,65 @@ void App::OnResize(uint32_t width, uint32_t height) {
 }
 
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
-    if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
-    m_viewerPage.OnMouseMove(x, y, mods);
+    if (m_currentPage == Page::Library) {
+        if (m_libraryPage.OnMouseMove(x, y, mods)) return;
+    } else {
+        if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
+        m_viewerPage.OnMouseMove(x, y, mods);
+    }
 }
 
 void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
-    m_viewerPage.OnMouseDown(btn, x, y, mods);
+    if (m_currentPage == Page::Library) {
+        if (m_libraryPage.OnMouseDown(btn, x, y, mods)) return;
+    } else {
+        if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
+        m_viewerPage.OnMouseDown(btn, x, y, mods);
+    }
 }
 
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
-    m_viewerPage.OnMouseUp(btn, x, y, mods);
+    if (m_currentPage == Page::Library) {
+        if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
+    } else {
+        if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
+        m_viewerPage.OnMouseUp(btn, x, y, mods);
+    }
 }
 
 void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
-    if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
-    m_viewerPage.OnMouseWheel(delta, x, y, mods);
+    if (m_currentPage == Page::Library) {
+        if (m_libraryPage.OnMouseWheel(delta, x, y, mods)) return;
+    } else {
+        if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
+        m_viewerPage.OnMouseWheel(delta, x, y, mods);
+    }
 }
 
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
-    m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
+    if (m_currentPage == Page::Library) {
+        if (m_libraryPage.OnMouseDoubleClick(btn, x, y, mods)) return;
+    } else {
+        if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
+        m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
+    }
 }
 
 void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
-    m_viewerPage.OnKeyDown(vk, mods);
+    if (m_currentPage == Page::Viewer) {
+        m_viewerPage.OnKeyDown(vk, mods);
+    } else if (m_currentPage == Page::Library) {
+        m_libraryPage.OnKeyDown(vk, mods);
+    }
 
     switch (vk) {
+        case '2':
+            SetPage(Page::Viewer);
+            break;
+        case '4':
+            SetPage(Page::Library);
+            break;
+
         case VK_ESCAPE:
             if (m_window.IsFullscreen()) {
                 m_window.SetFullscreen(false);

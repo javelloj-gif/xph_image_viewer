@@ -136,18 +136,27 @@ class AnimationManager {
 public:
     /// Update all active animations. Call once per frame.
     void Update(double deltaTime) {
+        std::vector<std::pair<std::string, std::function<void()>>> completedCallbacks;
+
         for (auto it = m_animations.begin(); it != m_animations.end(); ) {
             it->second.Update(deltaTime);
             if (it->second.completed) {
-                // Notify completion callback if registered
+                // Find and move completion callback if registered
                 auto cbIt = m_completionCallbacks.find(it->first);
                 if (cbIt != m_completionCallbacks.end()) {
-                    cbIt->second();
+                    completedCallbacks.push_back({ it->first, std::move(cbIt->second) });
                     m_completionCallbacks.erase(cbIt);
                 }
                 it = m_animations.erase(it);
             } else {
                 ++it;
+            }
+        }
+
+        // Invoke callbacks outside the loop to avoid iterator invalidation
+        for (const auto& pair : completedCallbacks) {
+            if (pair.second) {
+                pair.second();
             }
         }
     }

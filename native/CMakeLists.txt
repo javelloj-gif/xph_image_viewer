@@ -32,6 +32,8 @@ set(SOURCES
     src/animation.cpp
     src/viewer_page.cpp
     src/thumbnail_strip.cpp
+    src/library_page.cpp
+    src/board_page.cpp
     src/pch.cpp
 )
 
@@ -45,6 +47,8 @@ set(HEADERS
     src/animation.h
     src/viewer_page.h
     src/thumbnail_strip.h
+    src/library_page.h
+    src/board_page.h
 )
 
 # ─── Resource Files ───────────────────────────────────────────────────────────

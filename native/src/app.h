@@ -22,8 +22,17 @@
 #include "animation.h"
 #include "viewer_page.h"
 #include "thumbnail_strip.h"
+#include "library_page.h"
 
 namespace kv {
+
+enum class Page {
+    Start = 1,
+    Viewer = 2,
+    Board = 3,
+    Library = 4,
+    Waterfall = 5
+};
 
 // ─── Application Configuration ───────────────────────────────────────────────
 
@@ -84,11 +93,13 @@ private:
     // ── Zoom / Pan ────────────────────────────────────────────────────────
     void ZoomToPoint(float factor, float screenX, float screenY);
     void ResetView();
+    void SetPage(Page page);
     RectF CalculateImageRect() const;
 
     // ── Subsystems ────────────────────────────────────────────────────────
     friend class ViewerPage;
     friend class ThumbnailStrip;
+    friend class LibraryPage;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -96,6 +107,12 @@ private:
     Timer               m_frameTimer;
     ViewerPage          m_viewerPage;
     ThumbnailStrip      m_thumbnailStrip;
+    LibraryPage         m_libraryPage;
+
+    // ── Routing & Folders State ───────────────────────────────────────────
+    Page                              m_currentPage = Page::Viewer;
+    std::vector<FolderInfo>           m_folders;
+    int                               m_currentFolderIdx = -1;
 
     // ── Image State ───────────────────────────────────────────────────────
     std::shared_ptr<ImageData>        m_currentImage;

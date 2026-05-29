@@ -345,6 +345,20 @@ void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback
     });
 }
 
+void ImageLoader::LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback) {
+    EnqueueTask([this, path, callback]() {
+        auto anim = DecodeAnimatedImage(path);
+
+        if (anim) {
+            std::lock_guard lock(m_pendingMutex);
+            m_pendingAnimatedTextures.push_back({ anim, callback });
+        } else if (callback) {
+            std::lock_guard lock(m_pendingMutex);
+            m_pendingAnimatedTextures.push_back({ nullptr, callback });
+        }
+    });
+}
+
 // ─── Process Pending Textures (Main Thread) ──────────────────────────────────
 // This is called once per frame on the main thread. It creates GPU textures
 // from the pixel data that background threads have decoded.
@@ -354,9 +368,11 @@ void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback
 
 void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     std::vector<PendingTexture> pending;
+    std::vector<PendingAnimatedTexture> pendingAnimated;
     {
         std::lock_guard lock(m_pendingMutex);
         pending.swap(m_pendingTextures);
+        pendingAnimated.swap(m_pendingAnimatedTextures);
     }
 
     for (auto& pt : pending) {
@@ -365,6 +381,15 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
         }
         if (pt.callback) {
             pt.callback(pt.image);
+        }
+    }
+
+    for (auto& pa : pendingAnimated) {
+        if (pa.anim && pa.anim->IsValid()) {
+            UploadAnimationToGpu(*pa.anim, renderer);
+        }
+        if (pa.callback) {
+            pa.callback(pa.anim);
         }
     }
 }

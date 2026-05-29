@@ -62,6 +62,7 @@ struct AnimatedImageData {
 // ─── Async Load Request ──────────────────────────────────────────────────────
 
 using ImageLoadCallback = std::function<void(std::shared_ptr<ImageData>)>;
+using AnimatedImageLoadCallback = std::function<void(std::shared_ptr<AnimatedImageData>)>;
 
 // ─── Image Loader Class ──────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ public:
     // is ready (still on the background thread — no GPU ops here).
 
     void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
+    void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback);
 
     /// Process completed async loads: creates GPU textures on the main thread.
     /// Call this once per frame from the main/render thread.
@@ -138,8 +140,14 @@ private:
         ImageLoadCallback callback;
     };
 
+    struct PendingAnimatedTexture {
+        std::shared_ptr<AnimatedImageData> anim;
+        AnimatedImageLoadCallback callback;
+    };
+
     std::mutex                     m_pendingMutex;
     std::vector<PendingTexture>    m_pendingTextures;
+    std::vector<PendingAnimatedTexture> m_pendingAnimatedTextures;
 
     // ── Thread Pool ───────────────────────────────────────────────────────
     std::vector<std::thread>       m_workers;
