@@ -1,0 +1,44 @@
+// ============================================================================
+// app.rc — Windows Resource Script
+// Krumassan Image Viewer — Native C++20
+// ============================================================================
+
+#include <winresrc.h>
+
+// ─── Application Manifest ────────────────────────────────────────────────────
+// Note: The manifest is embedded via CMake's LINK_FLAGS instead of via RC.
+// This avoids "duplicate resource" errors with MSVC's auto-manifest linking.
+
+// ─── Version Information ─────────────────────────────────────────────────────
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION    0,90,0,0
+    PRODUCTVERSION 0,90,0,0
+    FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+    FILEFLAGS      VS_FF_DEBUG
+#else
+    FILEFLAGS      0
+#endif
+    FILEOS         VOS_NT_WINDOWS32
+    FILETYPE       VFT_APP
+    FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"  // English (US), Unicode
+        BEGIN
+            VALUE "CompanyName",      "Sergei Krumas"
+            VALUE "FileDescription",  "Krumassan Image Viewer"
+            VALUE "FileVersion",      "0.90.0.0"
+            VALUE "InternalName",     "KrumassanViewer"
+            VALUE "LegalCopyright",   "Copyright (C) 2022-2026 Sergei Krumas. GPL v2+"
+            VALUE "OriginalFilename", "KrumassanViewer.exe"
+            VALUE "ProductName",      "Krumassan Image Viewer"
+            VALUE "ProductVersion",   "0.90.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04B0  // English (US), Unicode
+    END
+END
