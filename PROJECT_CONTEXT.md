@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & Phase 2 complete with bug fixes for Board note/node editing, image double-click to view, uniform scaling, link deletions, conditional default zoom, and double-click to toggle fullscreen in main viewer, 2026-05-29) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & Phase 2 complete with board, library, thumbnail strip, and viewer pages implemented, verified and updated by Antigravity Agent, 2026-05-29 18:35) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
