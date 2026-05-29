@@ -30,6 +30,8 @@ set(SOURCES
     src/renderer.cpp
     src/image_loader.cpp
     src/animation.cpp
+    src/viewer_page.cpp
+    src/thumbnail_strip.cpp
     src/pch.cpp
 )
 
@@ -41,6 +43,8 @@ set(HEADERS
     src/renderer.h
     src/image_loader.h
     src/animation.h
+    src/viewer_page.h
+    src/thumbnail_strip.h
 )
 
 # ─── Resource Files ───────────────────────────────────────────────────────────

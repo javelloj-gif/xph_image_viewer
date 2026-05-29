@@ -86,7 +86,7 @@ public:
     /// Load a single image. Returns pixel data; gpuBitmap is NOT created yet.
     /// Call renderer.CreateBitmapFromMemory() or UploadToGpu() separately.
     [[nodiscard]]
-    std::shared_ptr<ImageData> LoadSync(const std::wstring& path);
+    std::shared_ptr<ImageData> LoadSync(const std::wstring& path, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
 
     /// Load an animated image (GIF, animated WebP, APNG).
     /// Frame GPU bitmaps are NOT created; call UploadAnimationToGpu().
@@ -97,7 +97,7 @@ public:
     // Decoding runs on background threads. Callback fires when pixel data
     // is ready (still on the background thread — no GPU ops here).
 
-    void LoadAsync(const std::wstring& path, ImageLoadCallback callback);
+    void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
 
     /// Process completed async loads: creates GPU textures on the main thread.
     /// Call this once per frame from the main/render thread.
@@ -125,12 +125,12 @@ public:
 
 private:
     // ── WIC Decoding (runs on any thread) ─────────────────────────────────
-    std::shared_ptr<ImageData> DecodeImage(const std::wstring& path);
+    std::shared_ptr<ImageData> DecodeImage(const std::wstring& path, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
     std::shared_ptr<AnimatedImageData> DecodeAnimatedImage(const std::wstring& path);
 
     // ── WIC Helpers ───────────────────────────────────────────────────────
     ComPtr<IWICBitmapDecoder> CreateDecoder(const std::wstring& path);
-    bool DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out);
+    bool DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
 
     // ── Pending Texture Queue ─────────────────────────────────────────────
     struct PendingTexture {

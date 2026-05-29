@@ -146,17 +146,37 @@ ComPtr<IWICBitmapDecoder> ImageLoader::CreateDecoder(const std::wstring& path) {
 
 // ─── Decode Single Frame ─────────────────────────────────────────────────────
 
-bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out) {
+bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth, uint32_t targetHeight) {
     // Get frame dimensions
     UINT width = 0, height = 0;
     KV_HR_RETURN(frame->GetSize(&width, &height), L"GetSize");
+
+    UINT actualWidth = width;
+    UINT actualHeight = height;
+    ComPtr<IWICBitmapSource> source = frame;
+
+    if (targetWidth > 0 && targetHeight > 0) {
+        float scaleX = static_cast<float>(targetWidth) / width;
+        float scaleY = static_cast<float>(targetHeight) / height;
+        float scale = std::min(scaleX, scaleY);
+        actualWidth = static_cast<UINT>(width * scale);
+        actualHeight = static_cast<UINT>(height * scale);
+        if (actualWidth == 0) actualWidth = 1;
+        if (actualHeight == 0) actualHeight = 1;
+
+        ComPtr<IWICBitmapScaler> scaler;
+        KV_HR_RETURN(m_wicFactory->CreateBitmapScaler(&scaler), L"CreateBitmapScaler");
+        HRESULT hr = scaler->Initialize(frame, actualWidth, actualHeight, WICBitmapInterpolationModeFant);
+        KV_HR_RETURN(hr, L"BitmapScaler::Initialize");
+        source = scaler;
+    }
 
     // Convert to 32bpp BGRA premultiplied alpha (Direct2D's native format)
     ComPtr<IWICFormatConverter> converter;
     KV_HR_RETURN(m_wicFactory->CreateFormatConverter(&converter), L"CreateFormatConverter");
 
     HRESULT hr = converter->Initialize(
-        frame,
+        source.Get(),
         GUID_WICPixelFormat32bppPBGRA,   // premultiplied BGRA
         WICBitmapDitherTypeNone,
         nullptr, 0.0,
@@ -172,10 +192,10 @@ bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out) {
                     sourceFormat != GUID_WICPixelFormat8bppGray);
 
     // Copy pixels to our buffer
-    uint32_t stride = width * 4;
-    out.width  = width;
-    out.height = height;
-    out.pixels.resize(static_cast<size_t>(stride) * height);
+    uint32_t stride = actualWidth * 4;
+    out.width  = actualWidth;
+    out.height = actualHeight;
+    out.pixels.resize(static_cast<size_t>(stride) * actualHeight);
 
     hr = converter->CopyPixels(nullptr, stride, static_cast<UINT>(out.pixels.size()), out.pixels.data());
     KV_HR_RETURN(hr, L"CopyPixels");
@@ -185,11 +205,11 @@ bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out) {
 
 // ─── Synchronous Loading ─────────────────────────────────────────────────────
 
-std::shared_ptr<ImageData> ImageLoader::LoadSync(const std::wstring& path) {
-    return DecodeImage(path);
+std::shared_ptr<ImageData> ImageLoader::LoadSync(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
+    return DecodeImage(path, targetWidth, targetHeight);
 }
 
-std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path) {
+std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
     auto decoder = CreateDecoder(path);
     if (!decoder) return nullptr;
 
@@ -205,7 +225,7 @@ std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path) {
     auto image = std::make_shared<ImageData>();
     image->filePath = path;
 
-    if (!DecodeFrame(frame.Get(), *image)) {
+    if (!DecodeFrame(frame.Get(), *image, targetWidth, targetHeight)) {
         return nullptr;
     }
 
@@ -308,10 +328,10 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
 
 // ─── Asynchronous Loading ────────────────────────────────────────────────────
 
-void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback) {
+void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth, uint32_t targetHeight) {
     // Capture by value for the background thread
-    EnqueueTask([this, path, callback]() {
-        auto image = DecodeImage(path);
+    EnqueueTask([this, path, callback, targetWidth, targetHeight]() {
+        auto image = DecodeImage(path, targetWidth, targetHeight);
 
         if (image) {
             // Queue the decoded image for GPU texture creation on the main thread

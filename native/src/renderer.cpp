@@ -342,7 +342,8 @@ ID2D1SolidColorBrush* Renderer::GetBrush(const Color& color) {
 
 void Renderer::DrawBitmap(
     ID2D1Bitmap1* bitmap, const RectF& destRect,
-    float opacity, BitmapInterpolation interpolation)
+    float opacity, BitmapInterpolation interpolation,
+    const RectF* srcRect)
 {
     if (!bitmap) return;
 
@@ -356,12 +357,19 @@ void Renderer::DrawBitmap(
             mode = D2D1_INTERPOLATION_MODE_LINEAR; break;
     }
 
+    D2D1_RECT_F sRect;
+    const D2D1_RECT_F* pSRect = nullptr;
+    if (srcRect) {
+        sRect = srcRect->ToD2D();
+        pSRect = &sRect;
+    }
+
     m_d2dContext->DrawBitmap(
         bitmap,
         destRect.ToD2D(),
         opacity,
         mode,
-        nullptr  // source rect (null = entire bitmap)
+        pSRect
     );
 }
 

@@ -1,13 +1,13 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 | **Phase 1**: ✅ COMPLETE
+> **Last Updated**: 2026-05-29 | **Phase 1**: ✅ COMPLETE | **Phase 2 (Viewer Page & Thumbnail Strip)**: ✅ COMPLETE
 
 ## Implementation Status
 
 | Phase | Status | Evidence |
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
-| **Phase 2: Application Pages** | ⬜ Pending | viewer_page, thumbnail_strip, library, board, waterfall |
+| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page` and `thumbnail_strip` implemented & verified |
 | **Phase 3: Advanced Features** | ⬜ Pending | settings, library_data, IPC, gamepad, Explorer integration |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
@@ -196,19 +196,20 @@ DPI awareness manifest (PerMonitorV2), version info, Windows 10/11 compatibility
 
 ### Phase 2: Application Pages
 
-#### `src/viewer_page.h / viewer_page.cpp` [NEW]
+#### `src/viewer_page.h / viewer_page.cpp` ✅ DONE
 Viewer page (Picasa clone):
 - GPU-rendered image with zoom (1%–10,000%), pan, rotation
-- Zoom-to-cursor (if cursor inside image) / zoom-to-center (if outside)
-- Double-click reset/fit behavior
-- Rectangle selection magnifier (Ctrl+drag)
+- Zoom anchor locked to window center (ignores cursor)
+- Double-click reset/fit behavior (left uncorrected)
+- Key '1' toggle between actual 1:1 scale and fit-to-screen
+- Rectangle selection magnifier (Ctrl+drag) with spotlight animation
 - Animated content playback with progress bar
 - Rule-of-thirds overlay
-- Cyberpunk corner decorations
+- Cyberpunk corner decorations with exclude path geometries
 - Checkerboard under transparent images
 - WASD + arrow key movement
 
-#### `src/thumbnail_strip.h / thumbnail_strip.cpp` [NEW]
+#### `src/thumbnail_strip.h / thumbnail_strip.cpp` ✅ DONE
 Bottom thumbnail panel (replaces `control_panel.py`):
 - GPU-rendered thumbnail row with smooth scrolling animation
 - Centered-on-current logic

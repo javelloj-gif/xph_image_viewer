@@ -157,6 +157,11 @@ struct RectF {
     constexpr bool Intersects(const RectF& o) const {
         return left < o.right && right > o.left && top < o.bottom && bottom > o.top;
     }
+    constexpr PointF TopLeft()     const { return { left, top }; }
+    constexpr PointF TopRight()    const { return { right, top }; }
+    constexpr PointF BottomLeft()  const { return { left, bottom }; }
+    constexpr PointF BottomRight() const { return { right, bottom }; }
+
     D2D1_RECT_F ToD2D() const { return D2D1::RectF(left, top, right, bottom); }
 };
 

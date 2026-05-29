@@ -105,6 +105,9 @@ bool App::Initialize(const AppConfig& config) {
         m_window.SetFullscreen(true);
     }
 
+    m_viewerPage.Initialize(this);
+    m_thumbnailStrip.Initialize(this);
+
     // ── Load Initial Content ──────────────────────────────────────────────
     if (!config.initialFilePath.empty()) {
         LoadImage(config.initialFilePath);
@@ -140,6 +143,7 @@ int App::Run() {
         // If no animation is playing and no image is being loaded,
         // yield CPU time to other processes
         bool needsContinuousRender = m_animations.HasActiveAnimations()
+                                   || m_thumbnailStrip.HasActiveAnimations()
                                    || (m_animatedImage && !m_frameSequencer.IsPaused());
 
         if (!needsContinuousRender) {
@@ -163,6 +167,10 @@ void App::RenderFrame() {
 
     // Update animations
     m_animations.Update(dt);
+
+    // Update page animations
+    m_viewerPage.Update(dt);
+    m_thumbnailStrip.Update(dt);
 
     // Update animated image playback
     if (m_animatedImage && !m_frameSequencer.IsPaused()) {
@@ -189,7 +197,6 @@ void App::RenderFrame() {
 
     // Draw content based on current state
     DrawViewerContent();
-    DrawOverlayInfo();
     DrawCloseButton();
 
     m_renderer.EndFrame();
@@ -198,34 +205,8 @@ void App::RenderFrame() {
 // ─── Draw Viewer Content ─────────────────────────────────────────────────────
 
 void App::DrawViewerContent() {
-    ID2D1Bitmap1* bitmap = nullptr;
-
-    // Get the current frame's bitmap
-    if (m_animatedImage && !m_animatedImage->frames.empty()) {
-        int frameIdx = m_frameSequencer.GetCurrentFrame();
-        if (frameIdx >= 0 && frameIdx < static_cast<int>(m_animatedImage->frames.size())) {
-            bitmap = m_animatedImage->frames[frameIdx].gpuBitmap.Get();
-        }
-    } else if (m_currentImage && m_currentImage->HasGpuBitmap()) {
-        bitmap = m_currentImage->gpuBitmap.Get();
-    }
-
-    if (!bitmap) {
-        // No image loaded — show placeholder text
-        auto size = m_renderer.GetTargetSize().ToFloat();
-        RectF textRect = RectF::FromXYWH(0, 0, size.width, size.height);
-        m_renderer.DrawText(
-            L"Drop an image here or pass a file path as argument",
-            textRect,
-            Color::FromRGBA(180, 180, 180),
-            20.0f,
-            TextAlign::Center,
-            TextVAlign::Center
-        );
-        return;
-    }
-
-    DrawImageFitted(bitmap);
+    m_viewerPage.Draw(m_renderer);
+    m_thumbnailStrip.Draw(m_renderer);
 }
 
 // ─── Draw Image with Zoom/Pan/Rotate ─────────────────────────────────────────
@@ -456,6 +437,7 @@ void App::LoadImage(const std::wstring& path) {
         }
     }
 
+    m_thumbnailStrip.SyncSelection(m_currentIndex);
     m_window.RequestRedraw();
 }
 
@@ -478,6 +460,7 @@ void App::LoadFolder(const std::wstring& folderPath) {
     std::sort(m_fileList.begin(), m_fileList.end());
 
     LogInfo(std::format(L"Folder loaded: {} ({} images)", folderPath, m_fileList.size()));
+    m_thumbnailStrip.SetFileList(m_fileList);
 
     // If no image is loaded yet, load the first one
     if (!m_currentImage && !m_animatedImage && !m_fileList.empty()) {
@@ -499,24 +482,11 @@ void App::NavigateImage(int direction) {
 // ─── Zoom / Pan ──────────────────────────────────────────────────────────────
 
 void App::ZoomToPoint(float factor, float screenX, float screenY) {
-    // Zoom towards the mouse cursor position.
-    // The point under the cursor should stay fixed.
-    float oldZoom = m_zoom;
-    m_zoom *= factor;
-    m_zoom = std::clamp(m_zoom, 0.01f, 100.0f); // 1% to 10000%
-
-    // Adjust pan to keep the point under the cursor fixed
-    float actualFactor = m_zoom / oldZoom;
-    m_pan.x = screenX - (screenX - m_pan.x) * actualFactor;
-    m_pan.y = screenY - (screenY - m_pan.y) * actualFactor;
-
-    m_window.RequestRedraw();
+    m_viewerPage.ZoomToPoint(factor, screenX, screenY);
 }
 
 void App::ResetView() {
-    m_zoom = 1.0f;
-    m_pan = {};
-    m_rotation = 0.0f;
+    m_viewerPage.ResetView();
 }
 
 // ─── Event Handlers ──────────────────────────────────────────────────────────
@@ -532,60 +502,33 @@ void App::OnResize(uint32_t width, uint32_t height) {
 }
 
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
-    if (m_dragging) {
-        m_pan.x = m_panStart.x + (x - m_dragStart.x);
-        m_pan.y = m_panStart.y + (y - m_dragStart.y);
-        m_window.RequestRedraw();
-    }
+    if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
+    m_viewerPage.OnMouseMove(x, y, mods);
 }
 
 void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (btn == MouseButton::Left) {
-        // Check close button first
-        auto size = m_renderer.GetTargetSize().ToFloat();
-        RectF closeBtn = RectF::FromXYWH(size.width - 40, 8, 32, 32);
-        if (closeBtn.Contains(x, y)) {
-            m_window.Close();
-            return;
-        }
-
-        // Start dragging for pan
-        m_dragging = true;
-        m_dragStart = { x, y };
-        m_panStart = m_pan;
-    }
+    if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
+    m_viewerPage.OnMouseDown(btn, x, y, mods);
 }
 
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (btn == MouseButton::Left) {
-        m_dragging = false;
-    }
+    if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
+    m_viewerPage.OnMouseUp(btn, x, y, mods);
 }
 
 void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
-    if (mods.ctrl) {
-        // Ctrl+Wheel: navigate images
-        NavigateImage(delta > 0 ? -1 : 1);
-    } else {
-        // Wheel: zoom towards cursor (matching Picasa behavior)
-        float factor = (delta > 0) ? 1.15f : (1.0f / 1.15f);
-        ZoomToPoint(factor, x, y);
-    }
+    if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
+    m_viewerPage.OnMouseWheel(delta, x, y, mods);
 }
 
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (btn == MouseButton::Left) {
-        // Double-click: reset view or toggle fullscreen
-        if (m_zoom != 1.0f || m_pan.x != 0.0f || m_pan.y != 0.0f) {
-            ResetView();
-        } else {
-            m_window.ToggleFullscreen();
-        }
-        m_window.RequestRedraw();
-    }
+    if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
+    m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
 }
 
 void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    m_viewerPage.OnKeyDown(vk, mods);
+
     switch (vk) {
         case VK_ESCAPE:
             if (m_window.IsFullscreen()) {
@@ -620,14 +563,14 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         case VK_OEM_PLUS:
         case VK_ADD: {
             auto size = m_renderer.GetTargetSize().ToFloat();
-            ZoomToPoint(1.25f, size.width / 2, size.height / 2);
+            ZoomToPoint(1.07f, size.width / 2, size.height / 2);
             break;
         }
 
         case VK_OEM_MINUS:
         case VK_SUBTRACT: {
             auto size = m_renderer.GetTargetSize().ToFloat();
-            ZoomToPoint(0.8f, size.width / 2, size.height / 2);
+            ZoomToPoint(1.0f / 1.07f, size.width / 2, size.height / 2);
             break;
         }
 
@@ -649,7 +592,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             break;
 
         case 'R':
-            m_rotation += mods.shift ? -90.0f : 90.0f;
+            m_viewerPage.m_rotation += mods.shift ? -90.0f : 90.0f;
             m_window.RequestRedraw();
             break;
 

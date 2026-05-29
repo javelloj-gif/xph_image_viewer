@@ -78,7 +78,8 @@ public:
         ID2D1Bitmap1* bitmap,
         const RectF& destRect,
         float opacity = 1.0f,
-        BitmapInterpolation interpolation = BitmapInterpolation::Linear
+        BitmapInterpolation interpolation = BitmapInterpolation::Linear,
+        const RectF* srcRect = nullptr
     );
 
     void FillRect(const RectF& rect, const Color& color);
@@ -159,6 +160,9 @@ public:
     SizeU               GetTargetSize() const;
     bool                IsInitialized() const { return m_initialized; }
 
+    /// Get or create a solid color brush (cached for the current frame).
+    ID2D1SolidColorBrush* GetBrush(const Color& color);
+
 private:
     // ── Internal Setup ─────────────────────────────────────────────────────
     bool CreateDeviceResources(HWND hwnd, bool translucent);
@@ -170,8 +174,7 @@ private:
     /// Handle device lost: recreate all device-dependent resources.
     bool HandleDeviceLost(HWND hwnd, bool translucent);
 
-    /// Get or create a solid color brush (cached for the current frame).
-    ID2D1SolidColorBrush* GetBrush(const Color& color);
+
 
     // ── Device Resources ───────────────────────────────────────────────────
     ComPtr<ID3D11Device>            m_d3dDevice;

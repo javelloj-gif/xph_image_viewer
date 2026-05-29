@@ -1,4 +1,4 @@
-﻿# Krumassan Image Viewer — Complete Project Context
+# Krumassan Image Viewer — Complete Project Context
 
 > **Purpose**: This document provides full context for any agent or developer needing to understand, modify, or rewrite the Krumassan Image Viewer codebase.
 
@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete, 2026-05-29) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & Phase 2 Viewer Page and Thumbnail Strip complete, 2026-05-29) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
@@ -492,7 +492,7 @@ The project is being rewritten as a native C++20 application. See `NATIVE_CONVER
 | Phase | Status | Path |
 |---|---|---|
 | Phase 1: Core Engine | **COMPLETE** | `native/` |
-| Phase 2: Application Pages | Pending | — |
+| Phase 2: Application Pages | **IN PROGRESS** (Viewer Page complete) | `native/src/viewer_page.*` |
 | Phase 3: Advanced Features | Pending | — |
 | Phase 4: Packaging | Pending | — |
 

@@ -20,6 +20,8 @@
 #include "renderer.h"
 #include "image_loader.h"
 #include "animation.h"
+#include "viewer_page.h"
+#include "thumbnail_strip.h"
 
 namespace kv {
 
@@ -85,11 +87,15 @@ private:
     RectF CalculateImageRect() const;
 
     // ── Subsystems ────────────────────────────────────────────────────────
+    friend class ViewerPage;
+    friend class ThumbnailStrip;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
     AnimationManager    m_animations;
     Timer               m_frameTimer;
+    ViewerPage          m_viewerPage;
+    ThumbnailStrip      m_thumbnailStrip;
 
     // ── Image State ───────────────────────────────────────────────────────
     std::shared_ptr<ImageData>        m_currentImage;
