@@ -102,12 +102,15 @@ bool Window::Create(const WindowConfig& config) {
     }
 
     // ── DWM: Extend frame for translucent background ──────────────────────
+    // Commented out: When using DirectComposition with WS_EX_NOREDIRECTIONBITMAP,
+    // extending the frame with DwmExtendFrameIntoClientArea can cause the DWM
+    // to paint an opaque frame background, preventing true alpha transparency.
+    /*
     if (m_translucent) {
-        // Even with DirectComposition handling the actual transparency,
-        // extending the frame ensures DWM treats our window correctly
         MARGINS margins = { -1, -1, -1, -1 };
         DwmExtendFrameIntoClientArea(m_hwnd, &margins);
     }
+    */
 
     // ── File Drag-and-Drop ────────────────────────────────────────────────
     if (config.acceptDrops) {

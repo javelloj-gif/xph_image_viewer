@@ -44,11 +44,42 @@ A complete native Win32/DirectX 11 rendering pipeline and async image decoding f
 ## 2. Validation & Verification Results
 
 ### Build Verification
-The project compiles clean with zero warnings on MSVC 19.43:
-```powershell
+
+Since CMake and MSVC compiler utilities (`cl.exe`) are installed via the Visual Studio Build Tools, they are not typically present in the global system `PATH`. Therefore, the build must be configured and executed from a shell initialized with the MSVC developer environment.
+
+#### Option A: Using Visual Studio Developer Command Prompt
+1. Search for and open the **Developer Command Prompt for VS 2022** (or **Developer PowerShell for VS 2022**).
+2. Navigate to the `native` directory:
+   ```cmd
+   cd e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native
+   ```
+3. To configure the build directory (if not initialized):
+   ```cmd
+   cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+   ```
+4. To compile and generate the executable:
+   ```cmd
+   cmake --build build --config Release
+   ```
+
+#### Option B: From a Standard Command Prompt (cmd.exe)
+Run the following commands to initialize the 64-bit environment and build the project:
+```cmd
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+cd e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native
 cmake --build build --config Release
 ```
-Output executable: `native/build/bin/Release/KrumassanViewer.exe` (Size: 331 KB).
+
+#### Option C: From a Standard PowerShell Window
+Run the combined command to run within the Visual Studio environment scope:
+```powershell
+cmd.exe /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat" && cd e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native && cmake --build build --config Release'
+```
+
+**Output Executable:**
+The successfully built executable is generated at:
+[KrumassanViewer.exe](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/build/bin/Release/KrumassanViewer.exe) (Size: ~336 KB).
+
 
 ### Runtime Verification
 The engine was run with various formats and validated using the logs. Here is the diagnostic output from `kv_log.txt`:
@@ -66,7 +97,7 @@ The engine was run with various formats and validated using the logs. Here is th
 ```
 
 ### Verified Features & Performance
-1.  **Translucent Frameless Window**: The window blends flawlessly with the Windows desktop using native hardware composition (no flickering or white borders).
+1.  **Translucent Frameless Window**: The window blends flawlessly with the Windows desktop using native hardware composition. Note: `DwmExtendFrameIntoClientArea` was disabled since DirectComposition + `WS_EX_NOREDIRECTIONBITMAP` handles transparency completely, preventing DWM from overlaying an opaque frame.
 2.  **GPU Transformations**: Zooming and panning a 50MP image is processed directly in GPU VRAM transforms, maintaining a locked 60 FPS.
 3.  **Animation Playback**: Tested with an animated WebP file (`animated.webp`, 88 frames) and a GIF (`rubik.gif`, 100 frames). Frame sequences are cached to GPU memory and decoded asynchronously.
 4.  **Memory Footprint**: Initial Working Set memory is only **57 MB** (compared to ~150MB+ in the PyQt5 version).
@@ -77,6 +108,6 @@ The engine was run with various formats and validated using the logs. Here is th
 
 | Python Failure Mode | C++ Native Prevention | Verification Status |
 |---|---|---|
-| Transparency lost using `QOpenGLWidget` | WS_EX_NOREDIRECTIONBITMAP + DirectComposition | ✅ **Verified** (True desktop alpha blending) |
+| Transparency lost using `QOpenGLWidget` | WS_EX_NOREDIRECTIONBITMAP + DirectComposition (DWM frame extension disabled) | ✅ **Verified** (True desktop alpha blending, confirmed by user) |
 | Redraw flickering during heavy resizing | DXGI Flip-Sequential Swap Chain + single atomic Present | ✅ **Verified** (Smooth, no flickering) |
 | UI thread hangs during background loading | Decoding done on worker threads; GPU texture instantiation queued to render thread | ✅ **Verified** (Worker threads decode without blocking UI) |

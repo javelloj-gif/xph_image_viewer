@@ -340,9 +340,9 @@ void App::DrawCheckerboard(const RectF& rect) {
 void App::DrawOverlayInfo() {
     auto size = m_renderer.GetTargetSize().ToFloat();
 
-    // FPS counter (top-left)
-    auto fpsText = std::format(L"FPS: {:.0f}", m_currentFps);
-    RectF fpsRect = RectF::FromXYWH(10, 10, 200, 30);
+    // FPS counter and Opacity info (top-left)
+    auto fpsText = std::format(L"FPS: {:.0f} | Opacity: {:.2f} (Use PageUp / PageDown to adjust)", m_currentFps, m_backgroundOpacity);
+    RectF fpsRect = RectF::FromXYWH(10, 10, 500, 30);
     m_renderer.DrawText(fpsText, fpsRect, Color::FromRGBA(255, 255, 255, 180), 12.0f);
 
     // Image info (bottom-left)
@@ -623,12 +623,25 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             ZoomToPoint(1.25f, size.width / 2, size.height / 2);
             break;
         }
+
         case VK_OEM_MINUS:
         case VK_SUBTRACT: {
             auto size = m_renderer.GetTargetSize().ToFloat();
             ZoomToPoint(0.8f, size.width / 2, size.height / 2);
             break;
         }
+
+        case 'O':
+        case VK_PRIOR: // Page Up
+            m_backgroundOpacity = std::min(1.0f, m_backgroundOpacity + 0.05f);
+            m_window.RequestRedraw();
+            break;
+
+        case 'P':
+        case VK_NEXT: // Page Down
+            m_backgroundOpacity = std::max(0.0f, m_backgroundOpacity - 0.05f);
+            m_window.RequestRedraw();
+            break;
 
         case '0': case VK_NUMPAD0:
             ResetView();
