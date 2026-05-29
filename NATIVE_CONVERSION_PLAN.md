@@ -1,13 +1,13 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 18:35 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, and Board Pages complete, verified and updated by Antigravity Agent)
+> **Last Updated**: 2026-05-29 18:41 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, and Board Pages complete; Waterfall and Start Pages pending)
 
 ## Implementation Status
 
 | Phase | Status | Evidence |
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
-| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page` (with conditional default zoom), `thumbnail_strip`, `library_page`, and `board_page` implemented & verified |
+| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page`, `thumbnail_strip`, `library_page`, and `board_page` implemented; `waterfall_page` and `start_page` are pending |
 | **Phase 3: Advanced Features** | ⬜ Pending | settings, library_data, IPC, gamepad, Explorer integration |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
