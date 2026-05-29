@@ -56,6 +56,7 @@ struct WindowEvents {
     // Keyboard
     std::function<void(uint32_t vk, KeyModifiers)>    onKeyDown;
     std::function<void(uint32_t vk, KeyModifiers)>    onKeyUp;
+    std::function<void(wchar_t ch)>                   onChar;
 
     // File drop
     std::function<void(std::vector<std::wstring>)>    onFileDrop;

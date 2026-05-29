@@ -20,3 +20,4 @@ user_data/front_tracker.data.txt
 user_data/default_miltifolder_path.txt
 ips_utils_debug_input.data
 user_data/board_history.log
+native/build/

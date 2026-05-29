@@ -34,7 +34,7 @@ bool Window::Create(const WindowConfig& config) {
     if (!sWindowClassRegistered) {
         WNDCLASSEXW wc = {};
         wc.cbSize        = sizeof(wc);
-        wc.style         = CS_HREDRAW | CS_VREDRAW;
+        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wc.lpfnWndProc   = StaticWndProc;
         wc.hInstance     = GetModuleHandleW(nullptr);
         wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
@@ -444,6 +444,14 @@ LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     case WM_SYSKEYUP: {
         if (events.onKeyUp) {
             events.onKeyUp(static_cast<uint32_t>(wp), KeyModifiers::Current());
+        }
+        return 0;
+    }
+
+    case WM_CHAR: {
+        wchar_t ch = static_cast<wchar_t>(wp);
+        if (events.onChar) {
+            events.onChar(ch);
         }
         return 0;
     }

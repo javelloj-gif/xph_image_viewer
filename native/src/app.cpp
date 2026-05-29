@@ -82,6 +82,7 @@ bool App::Initialize(const AppConfig& config) {
     m_window.events.onMouseWheel = [this](float d, float x, float y, KeyModifiers m) { OnMouseWheel(d, x, y, m); };
     m_window.events.onMouseDoubleClick = [this](MouseButton b, float x, float y, KeyModifiers m) { OnMouseDoubleClick(b, x, y, m); };
     m_window.events.onKeyDown = [this](uint32_t vk, KeyModifiers m) { OnKeyDown(vk, m); };
+    m_window.events.onChar = [this](wchar_t ch) { OnChar(ch); };
     m_window.events.onFileDrop = [this](std::vector<std::wstring> f) { OnFileDrop(std::move(f)); };
 
     // ── Initialize Renderer ───────────────────────────────────────────────
@@ -108,6 +109,7 @@ bool App::Initialize(const AppConfig& config) {
     m_viewerPage.Initialize(this);
     m_thumbnailStrip.Initialize(this);
     m_libraryPage.Initialize(this);
+    m_boardPage.Initialize(this);
 
     // ── Load Initial Content ──────────────────────────────────────────────
     if (!config.initialFilePath.empty()) {
@@ -146,7 +148,8 @@ int App::Run() {
         bool needsContinuousRender = m_animations.HasActiveAnimations()
                                    || m_thumbnailStrip.HasActiveAnimations()
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
-                                   || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused());
+                                   || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused())
+                                   || (m_currentPage == Page::Board && m_boardPage.m_editingNoteIdx != -1);
 
         if (!needsContinuousRender) {
             // Wait for next message or 16ms timeout (~60fps max idle rate)
@@ -176,6 +179,8 @@ void App::RenderFrame() {
         m_thumbnailStrip.Update(dt);
     } else if (m_currentPage == Page::Library) {
         m_libraryPage.Update(dt);
+    } else if (m_currentPage == Page::Board) {
+        m_boardPage.Update(dt);
     }
 
     // Update animated image playback
@@ -216,6 +221,8 @@ void App::DrawViewerContent() {
         m_thumbnailStrip.Draw(m_renderer);
     } else if (m_currentPage == Page::Library) {
         m_libraryPage.Draw(m_renderer);
+    } else if (m_currentPage == Page::Board) {
+        m_boardPage.Draw(m_renderer);
     }
 }
 
@@ -505,6 +512,8 @@ void App::SetPage(Page page) {
     m_currentPage = page;
     if (page == Page::Library) {
         m_libraryPage.SyncCurrentFolderWithApp();
+    } else if (page == Page::Board) {
+        m_boardPage.OnEnterPage();
     }
     m_window.RequestRedraw();
 }
@@ -522,8 +531,12 @@ void App::OnResize(uint32_t width, uint32_t height) {
 }
 
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
+    m_mouseX = x;
+    m_mouseY = y;
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseMove(x, y, mods)) return;
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnMouseMove(x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
         m_viewerPage.OnMouseMove(x, y, mods);
@@ -531,8 +544,12 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
+    m_mouseX = x;
+    m_mouseY = y;
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseDown(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnMouseDown(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDown(btn, x, y, mods);
@@ -540,8 +557,12 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
+    m_mouseX = x;
+    m_mouseY = y;
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnMouseUp(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
         m_viewerPage.OnMouseUp(btn, x, y, mods);
@@ -549,8 +570,12 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
+    m_mouseX = x;
+    m_mouseY = y;
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseWheel(delta, x, y, mods)) return;
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnMouseWheel(delta, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
         m_viewerPage.OnMouseWheel(delta, x, y, mods);
@@ -558,8 +583,12 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
+    m_mouseX = x;
+    m_mouseY = y;
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseDoubleClick(btn, x, y, mods)) return;
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else {
         if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
@@ -571,11 +600,18 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         m_viewerPage.OnKeyDown(vk, mods);
     } else if (m_currentPage == Page::Library) {
         m_libraryPage.OnKeyDown(vk, mods);
+    } else if (m_currentPage == Page::Board) {
+        if (m_boardPage.OnKeyDown(vk, mods)) {
+            return;
+        }
     }
 
     switch (vk) {
         case '2':
             SetPage(Page::Viewer);
+            break;
+        case '3':
+            SetPage(Page::Board);
             break;
         case '4':
             SetPage(Page::Library);
@@ -655,8 +691,21 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     }
 }
 
+void App::OnChar(wchar_t ch) {
+    if (m_currentPage == Page::Board) {
+        m_boardPage.OnChar(ch);
+    }
+}
+
 void App::OnFileDrop(std::vector<std::wstring> files) {
     if (files.empty()) return;
+
+    if (m_currentPage == Page::Board) {
+        for (const auto& file : files) {
+            m_boardPage.OnFileDrop(file, m_mouseX, m_mouseY);
+        }
+        return;
+    }
 
     namespace fs = std::filesystem;
 

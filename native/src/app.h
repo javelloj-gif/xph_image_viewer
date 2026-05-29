@@ -23,6 +23,7 @@
 #include "viewer_page.h"
 #include "thumbnail_strip.h"
 #include "library_page.h"
+#include "board_page.h"
 
 namespace kv {
 
@@ -75,6 +76,7 @@ private:
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
     void OnKeyDown(uint32_t vk, KeyModifiers mods);
+    void OnChar(wchar_t ch);
     void OnFileDrop(std::vector<std::wstring> files);
 
     // ── Rendering ─────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ private:
     friend class ViewerPage;
     friend class ThumbnailStrip;
     friend class LibraryPage;
+    friend class BoardPage;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -108,6 +111,7 @@ private:
     ViewerPage          m_viewerPage;
     ThumbnailStrip      m_thumbnailStrip;
     LibraryPage         m_libraryPage;
+    BoardPage           m_boardPage;
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;
@@ -130,6 +134,8 @@ private:
     bool     m_dragging = false;
     PointF   m_dragStart;
     PointF   m_panStart;
+    float    m_mouseX = 0.0f;
+    float    m_mouseY = 0.0f;
 
     // ── Cached Values ─────────────────────────────────────────────────────
     ComPtr<ID2D1Bitmap1>  m_checkerboardBitmap;  // cached checkerboard pattern

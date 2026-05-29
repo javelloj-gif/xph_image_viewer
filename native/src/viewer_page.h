@@ -63,6 +63,7 @@ private:
     void UpdateRegionZoom(float curX, float curY);
     void FinishRegionZoom(float endX, float endY);
     void CancelRegionZoom();
+    float GetDefaultZoom() const;
 
     // ── Pointer to Parent Application ──────────────────────────────────────
     App* m_app = nullptr;

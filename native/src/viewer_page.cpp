@@ -561,34 +561,7 @@ void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) 
 
 void ViewerPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (btn == MouseButton::Left) {
-        // Double-click resets view, or if already reset, zooms to 100%
-        if (m_zoom != 1.0f || m_pan.x != 0.0f || m_pan.y != 0.0f) {
-            ResetView();
-        } else {
-            // Zoom to 100% centered at cursor/center
-            m_zoomAnchor = IsPointOverImage(x, y) ? PointF(x, y) : GetImageTransformedRect().Center();
-            
-            // Re-calculate zoom to actual image size (1.0f in local fit coordinates is not 100% screen pixel scale)
-            // Zoom factor to match actual texture size (imgW / fitW)
-            float imgW = 0.0f;
-            auto currentImage = m_app->m_currentImage;
-            auto animatedImage = m_app->m_animatedImage;
-            if (animatedImage && !animatedImage->frames.empty()) {
-                imgW = static_cast<float>(animatedImage->frames[0].width);
-            } else if (currentImage) {
-                imgW = static_cast<float>(currentImage->width);
-            }
-            
-            float fitW = CalculateImageRect().Width();
-            if (fitW > 0.0f && imgW > 0.0f) {
-                m_targetZoom = imgW / fitW;
-            } else {
-                m_targetZoom = 2.0f; // fallback
-            }
-
-            m_app->m_animations.Start("zoom", m_zoom, m_targetZoom, 0.25, Easing::EaseOutCubic);
-        }
-        m_app->m_window.RequestRedraw();
+        m_app->m_window.ToggleFullscreen();
     }
 }
 
@@ -652,8 +625,9 @@ void ViewerPage::ResetView() {
     m_app->m_animations.Cancel("pan_x");
     m_app->m_animations.Cancel("pan_y");
     m_app->m_animations.Cancel("region_zoom_factor");
-    m_zoom = 1.0f;
-    m_targetZoom = 1.0f;
+    float defaultZoom = GetDefaultZoom();
+    m_zoom = defaultZoom;
+    m_targetZoom = defaultZoom;
     m_pan = {};
     m_rotation = 0.0f;
     m_regionZoomActive = false;
@@ -855,6 +829,35 @@ bool ViewerPage::IsPointOverImage(float x, float y) const {
     D2D1_POINT_2F localPoint = D2D1::Point2F(x * invert._11 + y * invert._21 + invert._31,
                                              x * invert._12 + y * invert._22 + invert._32);
     return rect.Contains(localPoint.x, localPoint.y);
+}
+
+float ViewerPage::GetDefaultZoom() const {
+    auto currentImage = m_app->m_currentImage;
+    auto animatedImage = m_app->m_animatedImage;
+    if (!currentImage && !animatedImage) return 1.0f;
+
+    float imgW = 0.0f;
+    float imgH = 0.0f;
+    if (animatedImage && !animatedImage->frames.empty()) {
+        imgW = static_cast<float>(animatedImage->frames[0].width);
+        imgH = static_cast<float>(animatedImage->frames[0].height);
+    } else if (currentImage) {
+        imgW = static_cast<float>(currentImage->width);
+        imgH = static_cast<float>(currentImage->height);
+    } else {
+        return 1.0f;
+    }
+
+    auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    if (imgW > screenSize.width || imgH > screenSize.height) {
+        return 1.0f; // Fit to screen
+    } else {
+        float fitW = CalculateImageRect().Width();
+        if (fitW > 0.0f) {
+            return imgW / fitW; // 1:1 scale
+        }
+        return 1.0f;
+    }
 }
 
 } // namespace kv
