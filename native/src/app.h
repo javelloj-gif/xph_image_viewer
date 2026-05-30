@@ -16,6 +16,8 @@
 #pragma once
 
 #include "types.h"
+#include "settings.h"
+#include "library_data.h"
 #include "window.h"
 #include "renderer.h"
 #include "image_loader.h"
@@ -51,7 +53,7 @@ struct AppConfig {
 
 class App {
 public:
-    App() = default;
+    App();
     ~App() = default;
 
     // Non-copyable
@@ -105,11 +107,15 @@ private:
     friend class LibraryPage;
     friend class BoardPage;
     friend class WaterfallPage;
+    friend class LibraryData;
+    friend class Settings;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
     AnimationManager    m_animations;
     Timer               m_frameTimer;
+    Settings            m_settings;
+    LibraryData         m_libraryData;
     ViewerPage          m_viewerPage;
     ThumbnailStrip      m_thumbnailStrip;
     LibraryPage         m_libraryPage;
@@ -118,8 +124,8 @@ private:
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;
-    std::vector<FolderInfo>           m_folders;
-    int                               m_currentFolderIdx = -1;
+    std::vector<FolderInfo>&          m_folders;
+    int&                              m_currentFolderIdx;
 
     // ── Image State ───────────────────────────────────────────────────────
     std::shared_ptr<ImageData>        m_currentImage;

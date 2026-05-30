@@ -8,31 +8,11 @@
 #include "renderer.h"
 #include "image_loader.h"
 #include "animation.h"
+#include "library_data.h"
 
 namespace kv {
 
 class App; // Forward declaration
-
-struct PreviewItem {
-    std::wstring filePath;
-    std::shared_ptr<ImageData> texture = nullptr; // decoded 180px preview image
-    RectF rect = {};                    // layout rect in screen coordinates
-    bool isLoading = false;
-    bool loadFailed = false;
-};
-
-struct FolderInfo {
-    std::wstring folderPath;
-    std::wstring folderName;
-    std::vector<std::wstring> filePaths;
-    int currentIndex = 0;
-    
-    // Preview thumbnails loaded for this folder
-    std::vector<PreviewItem> previews;
-    bool previewsInitialized = false;
-    float scrollOffset = 0.0f;
-    float targetScrollOffset = 0.0f;
-};
 
 class LibraryPage {
 public:

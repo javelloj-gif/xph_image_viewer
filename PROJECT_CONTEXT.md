@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete; Phase 2 in progress: board, library, thumbnail strip, viewer, and waterfall pages implemented; start_page is pending, 2026-05-29 19:33) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & 2 complete; Phase 3 in progress: settings and library_data systems implemented; start_page and gamepad are skipped, 2026-05-29 20:36) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
@@ -474,6 +474,8 @@ image_viewer/
 │   └── boards/
 │
 ├── ARCHITECTURE.md               # Architecture notes
+├── NATIVE_CONVERSION_PLAN.md     # Phase-by-phase C++ rewrite plan
+├── NATIVE_USAGE_GUIDE.md         # Guide and functional testing instructions for C++ rewrite
 ├── MANUAL_TESTING.md             # Manual test checklist
 ├── CHANGELOG.md                  # Changelog (286KB)
 ├── README.md                     # English readme
@@ -492,8 +494,8 @@ The project is being rewritten as a native C++20 application. See `NATIVE_CONVER
 | Phase | Status | Path |
 |---|---|---|
 | Phase 1: Core Engine | **COMPLETE** | `native/` |
-| Phase 2: Application Pages | **IN PROGRESS** (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending) | `native/src/viewer_page.*`, `native/src/library_page.*`, `native/src/board_page.*` (Done), `native/src/waterfall_page.*` (Done), `native/src/start_page.*` (Pending) |
-| Phase 3: Advanced Features | Pending | — |
+| Phase 2: Application Pages | **COMPLETE** (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page skipped) | `native/src/viewer_page.*`, `native/src/library_page.*`, `native/src/board_page.*` (Done), `native/src/waterfall_page.*` (Done), `native/src/start_page.*` (Skipped) |
+| Phase 3: Advanced Features | **IN PROGRESS** (Settings and LibraryData implemented; Gamepad skipped; IPC, Explorer, Commenting, Tagging, and i18n pending) | `native/src/settings.*`, `native/src/library_data.*` (Done) |
 | Phase 4: Packaging | Pending | — |
 
 ### Native Project Structure (`native/`)

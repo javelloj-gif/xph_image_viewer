@@ -1,14 +1,14 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 19:33 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending)
+> **Last Updated**: 2026-05-29 20:36 | **Phase 1**: ✅ COMPLETE | **Phase 2**: ✅ COMPLETE | **Phase 3**: 🟨 IN PROGRESS (Settings and LibraryData implemented; Gamepad skipped)
 
 ## Implementation Status
 
 | Phase | Status | Evidence |
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
-| **Phase 2: Application Pages** | 🟨 **IN PROGRESS** | `viewer_page`, `thumbnail_strip`, `library_page`, `board_page`, and `waterfall_page` implemented; `start_page` is pending |
-| **Phase 3: Advanced Features** | ⬜ Pending | settings, library_data, IPC, gamepad, Explorer integration |
+| **Phase 2: Application Pages** | ✅ **COMPLETE** | `viewer_page`, `thumbnail_strip`, `library_page`, `board_page`, and `waterfall_page` implemented; `start_page` skipped |
+| **Phase 3: Advanced Features** | 🟨 **IN PROGRESS** | Settings and LibraryData systems implemented; Gamepad skipped; IPC, Explorer, Commenting, Tagging, and i18n pending |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
 ### Phase 1 Build Evidence
@@ -246,8 +246,8 @@ Waterfall/masonry layout page:
 - Modal viewer overlay (fixed nested D2D BeginFrame rendering bug)
 - Virtual scrolling (only render visible items)
 
-#### `src/start_page.h / start_page.cpp` [NEW]
-Start page:
+#### `src/start_page.h / start_page.cpp` [SKIPPED]
+Start page (Temporarily skipped in current phase, to be addressed later):
 - Desktop wallpaper as background
 - Language selector
 - Quick-action buttons
@@ -256,14 +256,14 @@ Start page:
 
 ### Phase 3: Advanced Features
 
-#### `src/settings.h / settings.cpp` [NEW]
+#### `src/settings.h / settings.cpp` ✅ DONE
 Settings system:
 - JSON storage (replaces `settings_handling.py`)
 - Dear ImGui settings window
 - All ~100+ settings from the current app
 - Postponed save (debounced writes)
 
-#### `src/library_data.h / library_data.cpp` [NEW]
+#### `src/library_data.h / library_data.cpp` ✅ DONE
 Data management (replaces `library_data.py`):
 - Folder/file/board data structures
 - Session save/load
@@ -276,11 +276,9 @@ Inter-process communication (replaces `app_copy_prevention.py` + `ipc_utils.py`)
 - Named pipe server/client for single-instance
 - Open-file requests from Explorer
 
-#### `src/gamepad.h / gamepad.cpp` [NEW]
+#### `src/gamepad.h / gamepad.cpp` [SKIPPED]
 Gamepad input (replaces `hidapi_adapter.py`):
-- XInput for standard gamepads
-- Raw HID for PS4 DualShock / ShanWan
-- Configurable button mapping
+- (Skipped: gamepad integration is marked as unnecessary and skipped)
 
 #### `src/explorer_integration.h / explorer_integration.cpp` [NEW]
 Windows Explorer integration (replaces `viewer_dll.cc`):

@@ -18,6 +18,12 @@
 
 namespace kv {
 
+App::App()
+    : m_folders(m_libraryData.m_folders),
+      m_currentFolderIdx(m_libraryData.m_currentFolderIdx)
+{
+}
+
 // ─── Sorted natural image extensions for binary_search ──────────────────────
 
 static bool IsImageExtension(const std::wstring& ext) {
@@ -60,6 +66,14 @@ AppConfig App::ParseCommandLine(int argc, wchar_t* argv[]) {
 // ─── Initialize ──────────────────────────────────────────────────────────────
 
 bool App::Initialize(const AppConfig& config) {
+    // Load Settings
+    m_settings.Load();
+
+    // Initialize Library Data
+    m_libraryData.Initialize(this);
+    m_libraryData.LoadFavorites();
+    m_libraryData.LoadSession();
+
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
     wndConfig.title       = L"Krumassan Image Viewer";
@@ -117,6 +131,9 @@ bool App::Initialize(const AppConfig& config) {
         LoadImage(config.initialFilePath);
     } else if (!config.initialFolderPath.empty()) {
         LoadFolder(config.initialFolderPath);
+    } else if (m_folders.empty()) {
+        // Try loading current directory if nothing else is specified or restored by session
+        LoadFolder(std::filesystem::current_path().wstring());
     }
 
     m_frameTimer.Reset();
@@ -431,6 +448,8 @@ void App::LoadImage(const std::wstring& path) {
             ResetView();
             m_window.SetTitle(std::format(L"Krumassan Viewer — {} ({} frames)",
                 fs::path(path).filename().wstring(), anim->FrameCount()));
+            
+            m_libraryData.AddToHistory(path);
             m_window.RequestRedraw();
             return;
         }
@@ -446,6 +465,8 @@ void App::LoadImage(const std::wstring& path) {
         ResetView();
         m_window.SetTitle(std::format(L"Krumassan Viewer — {} ({}×{})",
             fs::path(path).filename().wstring(), image->width, image->height));
+
+        m_libraryData.AddToHistory(path);
     } else {
         LogError(std::format(L"Failed to load: {}", path));
     }
@@ -460,38 +481,21 @@ void App::LoadImage(const std::wstring& path) {
         }
     }
 
+    if (m_currentFolderIdx >= 0 && m_currentFolderIdx < static_cast<int>(m_folders.size())) {
+        m_folders[m_currentFolderIdx].currentIndex = m_currentIndex;
+    }
+
     m_thumbnailStrip.SyncSelection(m_currentIndex);
     m_libraryPage.SyncCurrentFolderWithApp();
     m_window.RequestRedraw();
 }
 
 void App::LoadFolder(const std::wstring& folderPath) {
-    namespace fs = std::filesystem;
-    m_fileList.clear();
+    m_libraryData.AddFolder(folderPath);
 
-    try {
-        for (const auto& entry : fs::directory_iterator(folderPath)) {
-            if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
-                m_fileList.push_back(entry.path().wstring());
-            }
-        }
-    } catch (const fs::filesystem_error& e) {
-        LogError(std::format(L"Failed to scan folder: {}",
-            std::wstring(e.what(), e.what() + strlen(e.what()))));
-    }
-
-    // Sort by filename
-    std::sort(m_fileList.begin(), m_fileList.end());
-
-    LogInfo(std::format(L"Folder loaded: {} ({} images)", folderPath, m_fileList.size()));
     m_thumbnailStrip.SetFileList(m_fileList);
+    m_thumbnailStrip.SyncSelection(m_currentIndex);
     m_libraryPage.SyncCurrentFolderWithApp();
-
-    // If no image is loaded yet, load the first one
-    if (!m_currentImage && !m_animatedImage && !m_fileList.empty()) {
-        m_currentIndex = 0;
-        LoadImage(m_fileList[0]);
-    }
 }
 
 void App::NavigateImage(int direction) {
@@ -500,6 +504,10 @@ void App::NavigateImage(int direction) {
     m_currentIndex += direction;
     if (m_currentIndex < 0) m_currentIndex = static_cast<int>(m_fileList.size()) - 1;
     if (m_currentIndex >= static_cast<int>(m_fileList.size())) m_currentIndex = 0;
+
+    if (m_currentFolderIdx >= 0 && m_currentFolderIdx < static_cast<int>(m_folders.size())) {
+        m_folders[m_currentFolderIdx].currentIndex = m_currentIndex;
+    }
 
     LoadImage(m_fileList[m_currentIndex]);
 }
