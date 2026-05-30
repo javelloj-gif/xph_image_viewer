@@ -59,7 +59,6 @@ void WaterfallPage::Draw(Renderer& renderer) {
 
     if (m_viewerModal) {
         // Draw backplate: draw the waterfall grid dimmed down
-        renderer.BeginFrame(); // Backplate is drawn inside frame render
         
         // Draw grid
         DrawPreviewsGrid(renderer, RectF::FromXYWH(0, 0, size.width, size.height));

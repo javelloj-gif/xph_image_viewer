@@ -1,6 +1,6 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 18:41 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending)
+> **Last Updated**: 2026-05-29 19:33 | **Phase 1**: ✅ COMPLETE | **Phase 2**: 🟨 IN PROGRESS (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page pending)
 
 ## Implementation Status
 
@@ -243,7 +243,7 @@ Waterfall/masonry layout page:
 - Dynamic column count (Ctrl+wheel)
 - Configurable gaps (Ctrl+Shift+wheel)
 - Corner rounding (Alt+wheel)
-- Modal viewer overlay
+- Modal viewer overlay (fixed nested D2D BeginFrame rendering bug)
 - Virtual scrolling (only render visible items)
 
 #### `src/start_page.h / start_page.cpp` [NEW]

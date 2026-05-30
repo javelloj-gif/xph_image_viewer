@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete; Phase 2 in progress: board, library, thumbnail strip, viewer, and waterfall pages implemented; start_page is pending, 2026-05-29 18:41) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 complete; Phase 2 in progress: board, library, thumbnail strip, viewer, and waterfall pages implemented; start_page is pending, 2026-05-29 19:33) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
