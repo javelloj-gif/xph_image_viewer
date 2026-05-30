@@ -15,6 +15,8 @@
 #include "app.h"
 #include <algorithm>
 #include <ranges>
+#include "explorer_integration.h"
+#include "i18n.h"
 
 namespace kv {
 
@@ -68,11 +70,15 @@ AppConfig App::ParseCommandLine(int argc, wchar_t* argv[]) {
 bool App::Initialize(const AppConfig& config) {
     // Load Settings
     m_settings.Load();
+    I18n::Initialize(m_settings.ui_lang);
 
     // Initialize Library Data
     m_libraryData.Initialize(this);
     m_libraryData.LoadFavorites();
     m_libraryData.LoadSession();
+    m_commentsManager.Load();
+    m_tagManager.Load();
+    m_optionsMenu.Initialize(this);
 
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
@@ -87,6 +93,20 @@ bool App::Initialize(const AppConfig& config) {
         return false;
     }
 
+    // Enforce Single Instance
+    std::wstring initialPath = config.initialFilePath.empty() ? config.initialFolderPath : config.initialFilePath;
+    if (!m_ipc.Initialize(m_window.GetHwnd(), initialPath)) {
+        // Exit process immediately since it has been handled by existing instance
+        return false;
+    }
+
+    // Register system tray icon
+    ExplorerIntegration::RegisterTrayIcon(
+        m_window.GetHwnd(),
+        LoadIconW(nullptr, IDI_APPLICATION),
+        L"Krumassan Image Viewer"
+    );
+
     // ── Wire Events ───────────────────────────────────────────────────────
     m_window.events.onPaint = [this]() { OnPaint(); };
     m_window.events.onResize = [this](uint32_t w, uint32_t h) { OnResize(w, h); };
@@ -98,6 +118,31 @@ bool App::Initialize(const AppConfig& config) {
     m_window.events.onKeyDown = [this](uint32_t vk, KeyModifiers m) { OnKeyDown(vk, m); };
     m_window.events.onChar = [this](wchar_t ch) { OnChar(ch); };
     m_window.events.onFileDrop = [this](std::vector<std::wstring> f) { OnFileDrop(std::move(f)); };
+    m_window.events.onMouseLeave = [this]() { OnMouseLeave(); };
+    m_window.events.onIpcOpenPath = [this](const std::wstring& path) {
+        LoadImage(path);
+        if (m_window.IsFullscreen()) {
+            m_window.SetFullscreen(true);
+        } else {
+            m_window.Show();
+        }
+        SetForegroundWindow(m_window.GetHwnd());
+    };
+    m_window.events.onTrayIconEvent = [this](LPARAM lp) {
+        if (lp == WM_LBUTTONDBLCLK) {
+            m_window.Show();
+            SetForegroundWindow(m_window.GetHwnd());
+        } else if (lp == WM_RBUTTONUP) {
+            POINT pt;
+            GetCursorPos(&pt);
+            ExplorerIntegration::ShowTrayContextMenu(m_window.GetHwnd(), pt);
+        }
+    };
+    m_window.events.onCommand = [this](uint16_t id) {
+        if (id == 1002) { // Quit from tray
+            m_window.Close();
+        }
+    };
 
     // ── Initialize Renderer ───────────────────────────────────────────────
     if (!m_renderer.Initialize(m_window.GetHwnd(), config.translucent)) {
@@ -152,6 +197,7 @@ int App::Run() {
         // Process all pending messages without blocking
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
+                ExplorerIntegration::UnregisterTrayIcon(m_window.GetHwnd());
                 return static_cast<int>(msg.wParam);
             }
             TranslateMessage(&msg);
@@ -165,6 +211,7 @@ int App::Run() {
         // yield CPU time to other processes
         bool needsContinuousRender = m_animations.HasActiveAnimations()
                                    || m_thumbnailStrip.HasActiveAnimations()
+                                   || (m_currentPage == Page::Viewer && m_viewerPage.HasActiveAnimations())
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
                                    || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused())
                                    || (m_currentPage == Page::Board && m_boardPage.m_editingNoteIdx != -1)
@@ -230,6 +277,9 @@ void App::RenderFrame() {
     // Draw content based on current state
     DrawViewerContent();
     DrawCloseButton();
+    if (m_optionsMenu.IsVisible()) {
+        m_optionsMenu.Draw(m_renderer);
+    }
 
     m_renderer.EndFrame();
 }
@@ -256,10 +306,12 @@ void App::DrawImageFitted(ID2D1Bitmap1* bitmap) {
 
     auto imageRect = CalculateImageRect();
 
-    // Draw checkerboard under transparent images
+    // Draw checkerboard under transparent images (Disabled per requirements to remain transparent)
+    /*
     if (m_currentImage && m_currentImage->hasAlpha) {
         DrawCheckerboard(imageRect);
     }
+    */
 
     // Apply zoom/pan/rotation transforms
     auto center = imageRect.Center();
@@ -368,18 +420,27 @@ void App::DrawOverlayInfo() {
 
     // Image info (bottom-left)
     if (m_currentImage || m_animatedImage) {
+        float fitW = CalculateImageRect().Width();
+        float imgW = 1.0f;
+        if (m_animatedImage && !m_animatedImage->frames.empty()) {
+            imgW = static_cast<float>(m_animatedImage->frames[0].width);
+        } else if (m_currentImage) {
+            imgW = static_cast<float>(m_currentImage->width);
+        }
+        float displayZoom = (imgW > 0.0f && fitW > 0.0f) ? (m_zoom * fitW / imgW) : m_zoom;
+
         std::wstring info;
         if (m_animatedImage) {
             info = std::format(L"{} | Frame {}/{} | Zoom: {:.0f}%",
                 std::filesystem::path(m_animatedImage->filePath).filename().wstring(),
                 m_frameSequencer.GetCurrentFrame() + 1,
                 m_frameSequencer.GetFrameCount(),
-                m_zoom * 100.0f);
+                displayZoom * 100.0f);
         } else if (m_currentImage) {
             info = std::format(L"{} | {}×{} | Zoom: {:.0f}%",
                 std::filesystem::path(m_currentImage->filePath).filename().wstring(),
                 m_currentImage->width, m_currentImage->height,
-                m_zoom * 100.0f);
+                displayZoom * 100.0f);
         }
 
         if (!m_fileList.empty()) {
@@ -471,11 +532,15 @@ void App::LoadImage(const std::wstring& path) {
         LogError(std::format(L"Failed to load: {}", path));
     }
 
-    // Build file list from the image's parent folder
-    if (m_fileList.empty()) {
-        LoadFolder(fs::path(path).parent_path().wstring());
-        // Find current image in the list
-        auto it = std::find(m_fileList.begin(), m_fileList.end(), path);
+    // Find current image in the list
+    auto it = std::find(m_fileList.begin(), m_fileList.end(), path);
+    if (it != m_fileList.end()) {
+        m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
+    } else {
+        // Build file list from the image's parent folder
+        m_fileList.clear();
+        LoadFolder(fs::path(path).parent_path().wstring(), false);
+        it = std::find(m_fileList.begin(), m_fileList.end(), path);
         if (it != m_fileList.end()) {
             m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
         }
@@ -490,8 +555,8 @@ void App::LoadImage(const std::wstring& path) {
     m_window.RequestRedraw();
 }
 
-void App::LoadFolder(const std::wstring& folderPath) {
-    m_libraryData.AddFolder(folderPath);
+void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
+    m_libraryData.AddFolder(folderPath, false, loadImage);
 
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
@@ -549,6 +614,9 @@ void App::OnResize(uint32_t width, uint32_t height) {
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_optionsMenu.IsVisible()) {
+        if (m_optionsMenu.OnMouseMove(x, y, mods)) return;
+    }
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseMove(x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -564,6 +632,21 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
 void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+
+    if (m_optionsMenu.IsVisible()) {
+        if (m_optionsMenu.OnMouseDown(btn, x, y, mods)) return;
+    }
+
+    // Global close button check
+    if (btn == MouseButton::Left) {
+        auto size = m_renderer.GetTargetSize().ToFloat();
+        RectF closeBtn = RectF::FromXYWH(size.width - 40.0f, 8.0f, 32.0f, 32.0f);
+        if (closeBtn.Contains(x, y)) {
+            m_window.Close();
+            return;
+        }
+    }
+
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseDown(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -579,6 +662,9 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_optionsMenu.IsVisible()) {
+        if (m_optionsMenu.OnMouseUp(btn, x, y, mods)) return;
+    }
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -622,8 +708,13 @@ void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mod
 }
 
 void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (m_optionsMenu.IsVisible()) {
+        if (m_optionsMenu.OnKeyDown(vk, mods)) return;
+    }
     if (m_currentPage == Page::Viewer) {
-        m_viewerPage.OnKeyDown(vk, mods);
+        if (m_viewerPage.OnKeyDown(vk, mods)) {
+            return;
+        }
     } else if (m_currentPage == Page::Library) {
         m_libraryPage.OnKeyDown(vk, mods);
     } else if (m_currentPage == Page::Board) {
@@ -651,11 +742,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             break;
 
         case VK_ESCAPE:
-            if (m_window.IsFullscreen()) {
-                m_window.SetFullscreen(false);
-            } else {
-                m_window.Close();
-            }
+            m_window.Close();
             break;
 
         case VK_LEFT:
@@ -695,12 +782,19 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         }
 
         case 'O':
+        case VK_OEM_3: // Tilde key '~'
+            if (m_optionsMenu.IsVisible()) {
+                m_optionsMenu.Hide();
+            } else {
+                m_optionsMenu.Show();
+            }
+            break;
+
         case VK_PRIOR: // Page Up
             m_backgroundOpacity = std::min(1.0f, m_backgroundOpacity + 0.05f);
             m_window.RequestRedraw();
             break;
 
-        case 'P':
         case VK_NEXT: // Page Down
             m_backgroundOpacity = std::max(0.0f, m_backgroundOpacity - 0.05f);
             m_window.RequestRedraw();
@@ -758,6 +852,12 @@ void App::OnFileDrop(std::vector<std::wstring> files) {
         m_fileList.clear(); // will be rebuilt by LoadImage
         m_currentIndex = -1;
         LoadImage(files[0]);
+    }
+}
+
+void App::OnMouseLeave() {
+    if (m_currentPage == Page::Viewer) {
+        m_thumbnailStrip.HandleMouseLeave();
     }
 }
 

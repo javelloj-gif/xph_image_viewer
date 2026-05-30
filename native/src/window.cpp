@@ -290,6 +290,15 @@ LRESULT Window::HitTest(int x, int y) const {
     if (atTop)               return HTTOP;
     if (atBottom)            return HTBOTTOM;
 
+    // Custom close button region check (must return HTCLIENT so mouse events reach the app)
+    int localX = x - rc.left;
+    int localY = y - rc.top;
+    int width = rc.right - rc.left;
+    if (localX >= (width - 40) && localX <= (width - 8) &&
+        localY >= 8 && localY <= 40) {
+        return HTCLIENT;
+    }
+
     // Title bar area: top 32 DPI-scaled pixels act as drag handle
     // (unless the mouse is over a UI control — the app layer can override)
     int titleBarHeight = DpiScaleInt(32, m_dpi);
@@ -366,10 +375,23 @@ LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
     // ── Mouse Events ─────────────────────────────────────────────────────
     case WM_MOUSEMOVE: {
+        TRACKMOUSEEVENT tme = {};
+        tme.cbSize = sizeof(tme);
+        tme.dwFlags = TME_LEAVE;
+        tme.hwndTrack = m_hwnd;
+        TrackMouseEvent(&tme);
+
         float x = static_cast<float>(GET_X_LPARAM(lp));
         float y = static_cast<float>(GET_Y_LPARAM(lp));
         if (events.onMouseMove) {
             events.onMouseMove(x, y, KeyModifiers::Current());
+        }
+        return 0;
+    }
+
+    case WM_MOUSELEAVE: {
+        if (events.onMouseLeave) {
+            events.onMouseLeave();
         }
         return 0;
     }
@@ -474,6 +496,31 @@ LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
         if (events.onFileDrop && !files.empty()) {
             events.onFileDrop(std::move(files));
+        }
+        return 0;
+    }
+
+    case 5525: { // WM_IPC_OPEN_PATH (WM_USER + 4501)
+        std::wstring* pPath = reinterpret_cast<std::wstring*>(wp);
+        if (pPath) {
+            if (events.onIpcOpenPath) {
+                events.onIpcOpenPath(*pPath);
+            }
+            delete pPath;
+        }
+        return 0;
+    }
+
+    case 5526: { // WM_TRAY_ICON (WM_USER + 4502)
+        if (events.onTrayIconEvent) {
+            events.onTrayIconEvent(lp);
+        }
+        return 0;
+    }
+
+    case WM_COMMAND: {
+        if (events.onCommand) {
+            events.onCommand(LOWORD(wp));
         }
         return 0;
     }

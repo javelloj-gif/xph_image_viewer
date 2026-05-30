@@ -6,30 +6,103 @@ This guide describes how to build, run, and perform comprehensive functional tes
 
 ## 1. Building and Running
 
+### 📁 Directory Context & Preparation
+Before running any compilation commands, you must open your terminal (PowerShell or Command Prompt) and set the working directory to the project's root directory:
+```powershell
+# Verify your working directory is the project root:
+# e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer
+```
+> [!IMPORTANT]
+> All build commands listed below **must** be executed from this root directory (`image_viewer`). Do not run them from inside `native/` or `native/build/`.
+
+---
+
 ### Prerequisites
-- Windows 10 (Build 18362+) or Windows 11
-- Visual Studio 2022 with **C++ Build Tools** installed
-- CMake 3.20+ (included in Visual Studio C++ workload)
+- **Operating System**: Windows 10 (Build 18362+) or Windows 11
+- **Compiler**: Visual Studio 2022 (Build Tools, Community, Professional, or Enterprise edition) with the **"Desktop development with C++"** workload checked.
+- **Build System**: CMake 3.20+ (can be installed via the Visual Studio Installer as **"C++ CMake tools for Windows"** or standalone).
 
-### Build Commands
-To compile the project in **Release** configuration:
-1. Open PowerShell inside the project directory.
-2. Configure CMake:
-   ```powershell
-   & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -B native/build native
-   ```
-3. Compile with MSBuild:
-   ```powershell
-   & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release
-   ```
-The compiled executable will be written to:
-`native/build/bin/Release/KrumassanViewer.exe`
+---
 
-### Run Command
-You can run the viewer from command line by passing an initial image file or folder path:
+### 🚀 Step-by-Step Compilation Guide
+
+#### Option A: Using CMake & MSBuild on System `PATH` (Recommended)
+Use this option if you have registered CMake and MSBuild in your system environment variables.
+
+1. **Navigate to the Project Root**:
+   Make sure you are at `e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`.
+2. **Configure & Generate Build Files**:
+   This step parses the `CMakeLists.txt` file in `native/` and automatically creates the target output directories under `native/build/`.
+   ```powershell
+   cmake -S native -B native/build
+   ```
+3. **Compile the Release Executable**:
+   Build the generated Visual Studio solution (`.sln`) in `Release` configuration:
+   ```powershell
+   cmake --build native/build --config Release
+   ```
+
+---
+
+#### Option B: Using Direct Executable Paths (Absolute Paths)
+Use this option if CMake or MSBuild are not configured in your environment variables. Run these commands from the root directory `e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`.
+
+##### Step 1: Configuration and Project Generation
+This command runs CMake to generate the Visual Studio project solution inside `native/build/`. Choose the command matching your Visual Studio installation:
+
+*   **Visual Studio Build Tools 2022**:
+    ```powershell
+    & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+    ```
+*   **Visual Studio Community 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+    ```
+*   **Visual Studio Professional 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+    ```
+*   **Visual Studio Enterprise 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+    ```
+
+##### Step 2: Compiling the Solution
+This builds the C++ code to generate the executable. Run the command matching your Visual Studio installation:
+
+*   **Visual Studio Build Tools 2022**:
+    ```powershell
+    & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
+    ```
+*   **Visual Studio Community 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
+    ```
+*   **Visual Studio Professional 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
+    ```
+*   **Visual Studio Enterprise 2022**:
+    ```powershell
+    & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
+    ```
+
+---
+
+### 📂 Compiled Output Location
+After compilation completes successfully, the native binary is placed in:
+```text
+e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native\build\bin\Release\KrumassanViewer.exe
+```
+
+### 🏃 Running the Application
+From the project root directory (`e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`), execute:
 ```powershell
 ./native/build/bin/Release/KrumassanViewer.exe "./test/linux.png"
 ```
+You can replace `./test/linux.png` with any absolute or relative path to a supported image file or directory you want to browse.
+
+
 
 ---
 

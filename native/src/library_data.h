@@ -49,10 +49,10 @@ public:
     void Initialize(App* app);
 
     // ─── Folder Management ───────────────────────────────────────────────────
-    void AddFolder(const std::wstring& folderPath, bool libraryLoading = false);
+    void AddFolder(const std::wstring& folderPath, bool libraryLoading = false, bool loadImage = true);
     void RemoveFolder(int index);
     int GetCurrentFolderIndex() const { return m_currentFolderIdx; }
-    void SetCurrentFolderIndex(int index);
+    void SetCurrentFolderIndex(int index, bool loadImage = true);
     
     std::vector<FolderInfo>& GetFolders() { return m_folders; }
     const std::vector<FolderInfo>& GetFolders() const { return m_folders; }

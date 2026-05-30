@@ -18,6 +18,7 @@ void ThumbnailStrip::Initialize(App* app) {
     m_opacity = 0.0f;
     m_targetOpacity = 0.0f;
     m_selected.clear();
+    m_mouseMoveTimer = 0.0;
 }
 
 void ThumbnailStrip::SetFileList(const std::vector<std::wstring>& fileList) {
@@ -60,11 +61,18 @@ void ThumbnailStrip::SyncSelection(int currentIndex) {
 
 bool ThumbnailStrip::HasActiveAnimations() const {
     return std::abs(m_targetScrollX - m_scrollX) > 0.1f ||
-           std::abs(m_targetOpacity - m_opacity) > 0.01f;
+           std::abs(m_targetOpacity - m_opacity) > 0.01f ||
+           m_mouseMoveTimer > 0.0;
 }
 
 void ThumbnailStrip::Update(double dt) {
     if (m_thumbnails.empty()) return;
+
+    // Update mouse move timer
+    if (m_mouseMoveTimer > 0.0) {
+        m_mouseMoveTimer -= dt;
+        if (m_mouseMoveTimer < 0.0) m_mouseMoveTimer = 0.0;
+    }
 
     float lerpFactor = 1.0f - std::exp(-15.0f * static_cast<float>(dt));
     m_scrollX = std::lerp(m_scrollX, m_targetScrollX, lerpFactor);
@@ -80,9 +88,20 @@ void ThumbnailStrip::Update(double dt) {
         if (pt.x >= 0 && pt.x <= targetSize.width && pt.y >= 0 && pt.y <= targetSize.height) {
             if (pt.y >= targetSize.height - HEIGHT) {
                 m_targetOpacity = 1.0f;
+                m_mouseMoveTimer = 2.0; // Keep active while hovering
+            } else if (m_mouseMoveTimer > 0.0) {
+                m_targetOpacity = 1.0f;
             } else if (!m_draggingThumbnails && !m_groupSelecting) {
                 m_targetOpacity = 0.0f;
             }
+        } else if (m_mouseMoveTimer > 0.0) {
+            m_targetOpacity = 1.0f;
+        } else if (!m_draggingThumbnails && !m_groupSelecting) {
+            m_targetOpacity = 0.0f;
+        }
+    } else {
+        if (m_mouseMoveTimer > 0.0) {
+            m_targetOpacity = 1.0f;
         } else if (!m_draggingThumbnails && !m_groupSelecting) {
             m_targetOpacity = 0.0f;
         }
@@ -143,9 +162,9 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     float windowWidth = targetSize.width;
     float windowHeight = targetSize.height;
 
-    // 1. Draw backplate panel
-    RectF panelRect = RectF::FromXYWH(0, windowHeight - HEIGHT, windowWidth, HEIGHT);
-    renderer.FillRect(panelRect, Color::FromRGBA(20, 20, 20, static_cast<uint8_t>(220 * m_opacity)));
+    // 1. Draw backplate panel (Background removed for clean interface)
+    // RectF panelRect = RectF::FromXYWH(0, windowHeight - HEIGHT, windowWidth, HEIGHT);
+    // renderer.FillRect(panelRect, Color::FromRGBA(20, 20, 20, static_cast<uint8_t>(220 * m_opacity)));
 
     // 2. Draw filename/metadata text
     std::wstring labelText;
@@ -213,6 +232,10 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
             // Draw error placeholder text
             renderer.DrawText(L"?!", drawRect, Color::FromRGBA(200, 50, 50, static_cast<uint8_t>(200 * thumbOpacity)), 14.0f, TextAlign::Center, TextVAlign::Center);
         }
+
+        if (isSelected) {
+            renderer.DrawRect(drawRect, Color::FromRGBA(0, 180, 255, static_cast<uint8_t>(220 * m_opacity)), 2.0f);
+        }
     }
 
     // 4. Draw red insertion cursor indicator
@@ -247,19 +270,35 @@ bool ThumbnailStrip::IsMouseOver(float x, float y) const {
 }
 
 bool ThumbnailStrip::HandleMouseMove(float x, float y, KeyModifiers mods) {
-    if (m_thumbnails.empty() || m_opacity == 0.0f) return false;
+    if (m_thumbnails.empty()) return false;
 
     auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    if (y >= targetSize.height - HEIGHT) {
+        m_mouseMoveTimer = 2.0;
+        m_targetOpacity = 1.0f;
+    }
+
+    if (m_opacity == 0.0f) {
+        m_app->m_window.RequestRedraw();
+        return false;
+    }
+
     float windowWidth = targetSize.width;
     float windowHeight = targetSize.height;
 
-    // Detect hovered thumbnail
-    m_hoveredIndex = -1;
     float baseX = (windowWidth - THUMBNAIL_WIDTH) / 2.0f + m_scrollX;
     float relX = x - baseX;
-    int clickedIndex = static_cast<int>(std::floor(relX / THUMBNAIL_WIDTH));
-    if (clickedIndex >= 0 && clickedIndex < static_cast<int>(m_thumbnails.size())) {
-        m_hoveredIndex = clickedIndex;
+
+    // Detect hovered thumbnail
+    m_hoveredIndex = -1;
+    float thumbYStartSelected = windowHeight - HEIGHT + 30.0f - AUGMENTED_THUBNAIL_INCREMENT;
+    float thumbYEnd = windowHeight - HEIGHT + 30.0f + THUMBNAIL_WIDTH;
+
+    if (y >= thumbYStartSelected && y <= thumbYEnd) {
+        int clickedIndex = static_cast<int>(std::floor(relX / THUMBNAIL_WIDTH));
+        if (clickedIndex >= 0 && clickedIndex < static_cast<int>(m_thumbnails.size())) {
+            m_hoveredIndex = clickedIndex;
+        }
     }
 
     if (m_groupSelecting) {
@@ -400,6 +439,11 @@ bool ThumbnailStrip::HandleMouseWheel(float delta, float x, float y, KeyModifier
 
 bool ThumbnailStrip::HandleMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
     return IsMouseOver(x, y);
+}
+
+void ThumbnailStrip::HandleMouseLeave() {
+    m_hoveredIndex = -1;
+    m_app->m_window.RequestRedraw();
 }
 
 void ThumbnailStrip::Rearrange(int insertIndex) {

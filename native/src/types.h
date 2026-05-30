@@ -161,6 +161,9 @@ struct RectF {
     constexpr PointF TopRight()    const { return { right, top }; }
     constexpr PointF BottomLeft()  const { return { left, bottom }; }
     constexpr PointF BottomRight() const { return { right, bottom }; }
+    constexpr RectF Inset(float amount) const {
+        return { left + amount, top + amount, right - amount, bottom - amount };
+    }
 
     D2D1_RECT_F ToD2D() const { return D2D1::RectF(left, top, right, bottom); }
 };

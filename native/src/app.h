@@ -27,6 +27,11 @@
 #include "library_page.h"
 #include "board_page.h"
 #include "waterfall_page.h"
+#include "ipc.h"
+#include "commenting.h"
+#include "tagging.h"
+#include "options_menu.h"
+#include "i18n.h"
 
 namespace kv {
 
@@ -81,6 +86,7 @@ private:
     void OnKeyDown(uint32_t vk, KeyModifiers mods);
     void OnChar(wchar_t ch);
     void OnFileDrop(std::vector<std::wstring> files);
+    void OnMouseLeave();
 
     // ── Rendering ─────────────────────────────────────────────────────────
     void RenderFrame();
@@ -92,7 +98,7 @@ private:
 
     // ── Image Management ──────────────────────────────────────────────────
     void LoadImage(const std::wstring& path);
-    void LoadFolder(const std::wstring& folderPath);
+    void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
 
     // ── Zoom / Pan ────────────────────────────────────────────────────────
@@ -109,6 +115,7 @@ private:
     friend class WaterfallPage;
     friend class LibraryData;
     friend class Settings;
+    friend class OptionsMenu;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -121,6 +128,10 @@ private:
     LibraryPage         m_libraryPage;
     BoardPage           m_boardPage;
     WaterfallPage       m_waterfallPage;
+    Ipc                 m_ipc;
+    CommentsManager     m_commentsManager;
+    TagManager          m_tagManager;
+    OptionsMenu         m_optionsMenu;
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;

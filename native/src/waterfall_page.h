@@ -19,6 +19,7 @@ class App; // Forward declaration
 class WaterfallPage {
 public:
     friend class App;
+    friend class ViewerPage;
 
     WaterfallPage() = default;
     ~WaterfallPage() = default;

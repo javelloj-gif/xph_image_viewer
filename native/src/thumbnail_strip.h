@@ -52,13 +52,14 @@ public:
     bool HandleMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     bool HandleMouseWheel(float delta, float x, float y, KeyModifiers mods);
     bool HandleMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
+    void HandleMouseLeave();
 
     /// Returns true if scroll or opacity transitions are running
     bool HasActiveAnimations() const;
 
     // ── Layout Constants ────────────────────────────────────────────────────
-    static constexpr float THUMBNAIL_WIDTH = 50.0f;
-    static constexpr float AUGMENTED_THUBNAIL_INCREMENT = 20.0f;
+    static constexpr float THUMBNAIL_WIDTH = 60.0f;
+    static constexpr float AUGMENTED_THUBNAIL_INCREMENT = 24.0f;
     static constexpr float HEIGHT = 120.0f;
 
 private:
@@ -89,6 +90,7 @@ private:
 
     int    m_hoveredIndex = -1;
     int    m_insertIndex = -1; // -1 if not showing insertion cursor
+    double m_mouseMoveTimer = 0.0;
 };
 
 } // namespace kv

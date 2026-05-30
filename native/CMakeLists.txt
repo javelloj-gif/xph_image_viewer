@@ -20,6 +20,7 @@ add_compile_definitions(
     WINVER=0x0A00
     _WIN32_WINNT=0x0A00
     NTDDI_VERSION=0x0A000007   # NTDDI_WIN10_19H1
+    _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 )
 
 # ─── Source Files ──────────────────────────────────────────────────────────────
@@ -37,6 +38,12 @@ set(SOURCES
     src/waterfall_page.cpp
     src/settings.cpp
     src/library_data.cpp
+    src/i18n.cpp
+    src/ipc.cpp
+    src/explorer_integration.cpp
+    src/commenting.cpp
+    src/tagging.cpp
+    src/options_menu.cpp
     src/pch.cpp
 )
 
@@ -55,6 +62,12 @@ set(HEADERS
     src/waterfall_page.h
     src/settings.h
     src/library_data.h
+    src/i18n.h
+    src/ipc.h
+    src/explorer_integration.h
+    src/commenting.h
+    src/tagging.h
+    src/options_menu.h
 )
 
 # ─── Resource Files ───────────────────────────────────────────────────────────

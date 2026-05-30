@@ -52,6 +52,7 @@ struct WindowEvents {
     std::function<void(MouseButton, float x, float y, KeyModifiers)>      onMouseUp;
     std::function<void(float delta, float x, float y, KeyModifiers)>      onMouseWheel;
     std::function<void(MouseButton, float x, float y, KeyModifiers)>      onMouseDoubleClick;
+    std::function<void()>                                                 onMouseLeave;
 
     // Keyboard
     std::function<void(uint32_t vk, KeyModifiers)>    onKeyDown;
@@ -60,6 +61,13 @@ struct WindowEvents {
 
     // File drop
     std::function<void(std::vector<std::wstring>)>    onFileDrop;
+
+    // IPC open path
+    std::function<void(const std::wstring&)>          onIpcOpenPath;
+
+    // Tray and Command
+    std::function<void(LPARAM)>                       onTrayIconEvent;
+    std::function<void(uint16_t)>                     onCommand;
 
     // Close request: return true to allow close, false to cancel
     std::function<bool()>                             onCloseRequest;

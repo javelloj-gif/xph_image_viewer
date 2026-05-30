@@ -15,7 +15,7 @@
 | **Language** | Python 3.10+ (original) + C++20 (native rewrite in progress) |
 | **UI Framework** | PyQt5 (5.15.7) |
 | **Platform** | Windows 8.1/10/11 |
-| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1 & 2 complete; Phase 3 in progress: settings and library_data systems implemented; start_page and gamepad are skipped, 2026-05-29 20:36) |
+| **Status** | Prototype (Python) + Native C++20 rewrite in progress (Phase 1, 2, and 3 complete; Phase 3 includes Settings, LibraryData, IPC single-instance Named Pipe, COM Explorer integrations, Comments/Tagging storage & overlays, runtime translations, and visual Options Menu Modal; start_page and gamepad are skipped, 2026-05-30 01:55) |
 | **Inspiration** | Google Picasa Photo Viewer (discontinued Feb 2016) + PureRef |
 
 ---
@@ -485,7 +485,7 @@ image_viewer/
 
 ---
 
-## 12. Native C++ Rewrite Status (2026-05-29)
+## 12. Native C++ Rewrite Status (2026-05-30)
 
 The project is being rewritten as a native C++20 application. See `NATIVE_CONVERSION_PLAN.md` for the full plan.
 
@@ -495,7 +495,7 @@ The project is being rewritten as a native C++20 application. See `NATIVE_CONVER
 |---|---|---|
 | Phase 1: Core Engine | **COMPLETE** | `native/` |
 | Phase 2: Application Pages | **COMPLETE** (Viewer, Thumbnail Strip, Library, Board, and Waterfall Pages complete; Start Page skipped) | `native/src/viewer_page.*`, `native/src/library_page.*`, `native/src/board_page.*` (Done), `native/src/waterfall_page.*` (Done), `native/src/start_page.*` (Skipped) |
-| Phase 3: Advanced Features | **IN PROGRESS** (Settings and LibraryData implemented; Gamepad skipped; IPC, Explorer, Commenting, Tagging, and i18n pending) | `native/src/settings.*`, `native/src/library_data.*` (Done) |
+| Phase 3: Advanced Features | **COMPLETE** (Settings, LibraryData, IPC, Explorer integration, Commenting, Tagging, i18n, and visual Options Menu Modal complete; Gamepad skipped) | `native/src/settings.*`, `native/src/library_data.*`, `native/src/ipc.*`, `native/src/explorer_integration.*`, `native/src/commenting.*`, `native/src/tagging.*`, `native/src/i18n.*`, `native/src/options_menu.*` |
 | Phase 4: Packaging | Pending | — |
 
 ### Native Project Structure (`native/`)

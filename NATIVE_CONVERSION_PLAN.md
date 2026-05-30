@@ -1,6 +1,6 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-29 20:36 | **Phase 1**: ✅ COMPLETE | **Phase 2**: ✅ COMPLETE | **Phase 3**: 🟨 IN PROGRESS (Settings and LibraryData implemented; Gamepad skipped)
+> **Last Updated**: 2026-05-30 01:55 | **Phase 1**: ✅ COMPLETE | **Phase 2**: ✅ COMPLETE | **Phase 3**: ✅ **COMPLETE** (Settings, LibraryData, Zoom Overlay, Key Remap, Autohide modifications, global close button HitTest fix, thumbnail strip hover revert, zoom 1:1 correction, waterfall key 2 navigation, click-outside modal close, modal filename bar, selected thumbnail highlight, Key [1] toggle behavior reversion, WM_MOUSELEAVE window hover exit, thumbnail strip index sync, Escape key fullscreen close, IPC, Explorer integration, Commenting, Tagging, i18n, and visual Options Menu Modal implemented; Gamepad and Start Page skipped)
 
 ## Implementation Status
 
@@ -8,7 +8,7 @@
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
 | **Phase 2: Application Pages** | ✅ **COMPLETE** | `viewer_page`, `thumbnail_strip`, `library_page`, `board_page`, and `waterfall_page` implemented; `start_page` skipped |
-| **Phase 3: Advanced Features** | 🟨 **IN PROGRESS** | Settings and LibraryData systems implemented; Gamepad skipped; IPC, Explorer, Commenting, Tagging, and i18n pending |
+| **Phase 3: Advanced Features** | ✅ **COMPLETE** | Settings, LibraryData, IPC, COM Explorer window integration, Recycle Bin, Tray Icon, Commenting, Tagging, i18n, and visual Options Menu Modal implemented; Gamepad skipped |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
 ### Phase 1 Build Evidence

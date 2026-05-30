@@ -31,6 +31,7 @@ static RectF FitRectIntoRect(const RectF& source, const RectF& target) {
 void ViewerPage::Initialize(App* app) {
     m_app = app;
     ResetView();
+    m_lastZoom = m_zoom;
 }
 
 // ─── Update ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,26 @@ void ViewerPage::Update(double dt) {
         m_inputRectAnimated.right = m_inputRect.right + (m_projectedRect.right - m_inputRect.right) * m_regionStageFactor;
         m_inputRectAnimated.bottom = m_inputRect.bottom + (m_projectedRect.bottom - m_inputRect.bottom) * m_regionStageFactor;
     }
+
+    // 3. Process zoom text overlay timer & fadeout
+    if (std::abs(m_zoom - m_lastZoom) > 0.0001f) {
+        m_zoomTextOpacity = 1.0f;
+        m_zoomTextTimer = 1.5; // 1.5 seconds visibility
+        m_lastZoom = m_zoom;
+    }
+
+    if (m_zoomTextTimer > 0.0) {
+        m_zoomTextTimer -= dt;
+        if (m_zoomTextTimer <= 0.0) {
+            m_zoomTextTimer = 0.0;
+            m_zoomTextOpacity = 0.0f;
+        } else if (m_zoomTextTimer < 0.5) {
+            m_zoomTextOpacity = static_cast<float>(m_zoomTextTimer / 0.5);
+        } else {
+            m_zoomTextOpacity = 1.0f;
+        }
+        m_app->m_window.RequestRedraw();
+    }
 }
 
 // ─── Draw ────────────────────────────────────────────────────────────────────
@@ -119,6 +140,26 @@ void ViewerPage::Draw(Renderer& renderer) {
 
     // 2. Draw Magnifier Guide Overlay
     DrawRegionZoom(renderer);
+
+    // 3. Draw Zoom Text Overlay in center of screen
+    if (m_zoomTextOpacity > 0.0f) {
+        auto size = renderer.GetTargetSize().ToFloat();
+        float boxW = 140.0f;
+        float boxH = 50.0f;
+        RectF boxRect = RectF::FromXYWH(
+            (size.width - boxW) / 2.0f,
+            (size.height - boxH) / 2.0f,
+            boxW,
+            boxH
+        );
+        // Draw backplate
+        renderer.FillRoundedRect(boxRect, 8.0f, 8.0f, Color::Black(0.6f * m_zoomTextOpacity));
+        // Draw border
+        renderer.DrawRoundedRect(boxRect, 8.0f, 8.0f, Color::White(0.15f * m_zoomTextOpacity), 1.0f);
+        // Draw text
+        std::wstring zoomText = std::format(L"{:.0f}%", std::round(GetDisplayZoom() * 100.0f));
+        renderer.DrawText(zoomText, boxRect, Color::White(0.95f * m_zoomTextOpacity), 20.0f, TextAlign::Center, TextVAlign::Center);
+    }
 }
 
 // ─── Draw Image with Zoom/Pan/Rotate ─────────────────────────────────────────
@@ -127,11 +168,13 @@ void ViewerPage::DrawImageFitted(Renderer& renderer, ID2D1Bitmap1* bitmap) {
 
     auto imageRect = CalculateImageRect();
 
-    // 1. Draw checkerboard under transparent images
+    // 1. Draw checkerboard under transparent images (Disabled per requirements to remain transparent)
+    /*
     auto currentImage = m_app->m_currentImage;
     if (currentImage && currentImage->hasAlpha) {
         DrawCheckerboard(renderer, imageRect);
     }
+    */
 
     // 2. Apply viewport transform matrix (Translation * Scale * Rotation)
     auto center = imageRect.Center();
@@ -382,26 +425,35 @@ void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
     renderer.DrawText(fpsText, RectF::FromXYWH(15, 15, 500, 30), Color::FromRGBA(255, 255, 255, 180), 12.0f);
 
     // 2. Metadata (bottom-left)
-    if (m_showMetadata) {
+    bool isWaterfallModal = (m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal);
+    if (m_showMetadata || isWaterfallModal) {
         auto currentImage = m_app->m_currentImage;
         auto animatedImage = m_app->m_animatedImage;
 
         std::wstring info;
-        if (animatedImage) {
-            info = std::format(L"{} | Frame {}/{} | Zoom: {:.0f}%",
-                std::filesystem::path(animatedImage->filePath).filename().wstring(),
-                m_app->m_frameSequencer.GetCurrentFrame() + 1,
-                m_app->m_frameSequencer.GetFrameCount(),
-                m_zoom * 100.0f);
-        } else if (currentImage) {
-            info = std::format(L"{} | {}×{} | Zoom: {:.0f}%",
-                std::filesystem::path(currentImage->filePath).filename().wstring(),
-                currentImage->width, currentImage->height,
-                m_zoom * 100.0f);
-        }
+        if (isWaterfallModal) {
+            if (animatedImage) {
+                info = std::filesystem::path(animatedImage->filePath).filename().wstring();
+            } else if (currentImage) {
+                info = std::filesystem::path(currentImage->filePath).filename().wstring();
+            }
+        } else {
+            if (animatedImage) {
+                info = std::format(L"{} | Frame {}/{} | Zoom: {:.0f}%",
+                    std::filesystem::path(animatedImage->filePath).filename().wstring(),
+                    m_app->m_frameSequencer.GetCurrentFrame() + 1,
+                    m_app->m_frameSequencer.GetFrameCount(),
+                    GetDisplayZoom() * 100.0f);
+            } else if (currentImage) {
+                info = std::format(L"{} | {}×{} | Zoom: {:.0f}%",
+                    std::filesystem::path(currentImage->filePath).filename().wstring(),
+                    currentImage->width, currentImage->height,
+                    GetDisplayZoom() * 100.0f);
+            }
 
-        if (!m_app->m_fileList.empty()) {
-            info += std::format(L" | [{}/{}]", m_app->m_currentIndex + 1, m_app->m_fileList.size());
+            if (!m_app->m_fileList.empty()) {
+                info += std::format(L" | [{}/{}]", m_app->m_currentIndex + 1, m_app->m_fileList.size());
+            }
         }
 
         if (!info.empty()) {
@@ -410,7 +462,11 @@ void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
                 RectF::FromXYWH(5, size.height - 40, size.width - 10, 35),
                 6, 6, Color::Black(0.5f)
             );
-            renderer.DrawText(info, RectF::FromXYWH(15, size.height - 35, size.width - 30, 25), Color::White(0.9f), 13.0f, TextAlign::Left, TextVAlign::Center);
+            if (isWaterfallModal) {
+                renderer.DrawText(info, RectF::FromXYWH(15, size.height - 35, size.width - 30, 25), Color::White(0.9f), 13.0f, TextAlign::Center, TextVAlign::Center);
+            } else {
+                renderer.DrawText(info, RectF::FromXYWH(15, size.height - 35, size.width - 30, 25), Color::White(0.9f), 13.0f, TextAlign::Left, TextVAlign::Center);
+            }
         }
     }
 }
@@ -442,7 +498,8 @@ void ViewerPage::DrawRegionZoom(Renderer& renderer) {
         renderer.DrawLine(m_inputRect.BottomRight(), m_projectedRect.BottomRight(), Color::White(0.4f), 1.0f);
 
         // Display magnification level in center
-        int zoomPercent = static_cast<int>(std::ceil(m_zoomLevelText * 100.0f));
+        float displayZoomTarget = GetDisplayZoomForValue(m_zoomLevelText);
+        int zoomPercent = static_cast<int>(std::ceil(displayZoomTarget * 100.0f));
         std::wstring text = std::format(L"Zoom: {}%", zoomPercent);
         renderer.DrawText(text, RectF::FromXYWH(0, 0, targetSize.width, targetSize.height), Color::White(), 16.0f, TextAlign::Center, TextVAlign::Center);
     }
@@ -498,14 +555,6 @@ void ViewerPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 
 void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (btn == MouseButton::Left) {
-        // Trigger close button check first
-        auto size = m_app->m_renderer.GetTargetSize().ToFloat();
-        RectF closeBtn = RectF::FromXYWH(size.width - 40, 8, 32, 32);
-        if (closeBtn.Contains(x, y)) {
-            m_app->m_window.Close();
-            return;
-        }
-
         if (mods.ctrl) {
             // Start Region Zoom
             StartRegionZoom(x, y);
@@ -565,58 +614,91 @@ void ViewerPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifi
     }
 }
 
-void ViewerPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+bool ViewerPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     switch (vk) {
         case '1':
             Toggle1To1();
-            break;
+            return true;
         case 'C':
             m_showCyberpunk = !m_showCyberpunk;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         case 'T':
             m_showThirds = !m_showThirds;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         case 'M':
             m_showMetadata = !m_showMetadata;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         case 'I':
             m_invertImage = !m_invertImage;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         case 'P':
             m_pixelatedZoom = !m_pixelatedZoom;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         
         // Panning with WASD keys (Picasa experience)
         case 'W': {
             float move = mods.shift ? 100.0f : 15.0f;
             m_pan.y += move;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         }
         case 'S': {
             float move = mods.shift ? 100.0f : 15.0f;
             m_pan.y -= move;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         }
         case 'A': {
             float move = mods.shift ? 100.0f : 15.0f;
             m_pan.x += move;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
         }
         case 'D': {
             float move = mods.shift ? 100.0f : 15.0f;
             m_pan.x -= move;
             m_app->m_window.RequestRedraw();
-            break;
+            return true;
+        }
+
+        // Arrow Up / Down keys zoom in / out around the center (locked)
+        case VK_UP: {
+            float factor = 1.07f;
+            auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+            m_zoomAnchor = { targetSize.width / 2.0f, targetSize.height / 2.0f };
+            m_app->m_animations.Cancel("pan_x");
+            m_app->m_animations.Cancel("pan_y");
+            if (!m_app->m_animations.IsActive("zoom")) {
+                m_targetZoom = m_zoom;
+            }
+            m_targetZoom = m_targetZoom * factor;
+            m_targetZoom = std::clamp(m_targetZoom, 0.01f, 100.0f);
+            m_app->m_animations.Start("zoom", m_zoom, m_targetZoom, 0.20, Easing::EaseOutCubic);
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
+        case VK_DOWN: {
+            float factor = 1.0f / 1.07f;
+            auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+            m_zoomAnchor = { targetSize.width / 2.0f, targetSize.height / 2.0f };
+            m_app->m_animations.Cancel("pan_x");
+            m_app->m_animations.Cancel("pan_y");
+            if (!m_app->m_animations.IsActive("zoom")) {
+                m_targetZoom = m_zoom;
+            }
+            m_targetZoom = m_targetZoom * factor;
+            m_targetZoom = std::clamp(m_targetZoom, 0.01f, 100.0f);
+            m_app->m_animations.Start("zoom", m_zoom, m_targetZoom, 0.20, Easing::EaseOutCubic);
+            m_app->m_window.RequestRedraw();
+            return true;
         }
     }
+    return false;
 }
 
 // ─── Reset View ──────────────────────────────────────────────────────────────
@@ -633,7 +715,17 @@ void ViewerPage::ResetView() {
     m_regionZoomActive = false;
     m_regionZoomDefined = false;
     m_regionStageFactor = 0.0f;
+
+    // Reset zoom overlay state
+    m_zoomTextOpacity = 0.0f;
+    m_zoomTextTimer = 0.0;
+    m_lastZoom = defaultZoom;
+
     m_app->m_window.RequestRedraw();
+}
+
+bool ViewerPage::HasActiveAnimations() const {
+    return m_zoomTextTimer > 0.0 && m_zoomTextTimer < 0.5;
 }
 
 // ─── Toggle 1:1 Scale / Fit-To-Screen ────────────────────────────────────────
@@ -643,11 +735,20 @@ void ViewerPage::Toggle1To1() {
         return;
     }
 
-    // Check if the current view is NOT fit-to-screen.
-    // Fit-to-screen is defined as zoom == 1.0f and pan == {0,0}.
-    bool isFitToScreen = (std::abs(m_zoom - 1.0f) < 0.001f) && 
-                         (std::abs(m_pan.x) < 0.1f) && 
-                         (std::abs(m_pan.y) < 0.1f);
+    // Toggle 1:1 scale vs Fit-to-screen.
+    float imgW = 0.0f;
+    auto currentImage = m_app->m_currentImage;
+    auto animatedImage = m_app->m_animatedImage;
+    if (animatedImage && !animatedImage->frames.empty()) {
+        imgW = static_cast<float>(animatedImage->frames[0].width);
+    } else if (currentImage) {
+        imgW = static_cast<float>(currentImage->width);
+    }
+
+    float fitW = CalculateImageRect().Width();
+    float zoom1to1 = (fitW > 0.0f && imgW > 0.0f) ? (imgW / fitW) : 1.0f;
+
+    bool isAt1to1 = (std::abs(m_zoom - zoom1to1) < 0.005f);
 
     // Cancel any current animations
     m_app->m_animations.Cancel("zoom");
@@ -655,37 +756,20 @@ void ViewerPage::Toggle1To1() {
     m_app->m_animations.Cancel("pan_y");
     m_app->m_animations.Cancel("region_zoom_factor");
 
-    if (!isFitToScreen) {
-        // Transition back to fit-to-screen
+    if (isAt1to1) {
+        // If already at 1:1, transition to fit-to-screen (1.0f)
         m_targetZoom = 1.0f;
         m_app->m_animations.Start("zoom", m_zoom, 1.0f, 0.25, Easing::EaseOutCubic);
         m_app->m_animations.Start("pan_x", m_pan.x, 0.0f, 0.25, Easing::EaseOutCubic);
         m_app->m_animations.Start("pan_y", m_pan.y, 0.0f, 0.25, Easing::EaseOutCubic);
     } else {
-        // Toggle to 1:1 scale
-        float imgW = 0.0f;
-        auto currentImage = m_app->m_currentImage;
-        auto animatedImage = m_app->m_animatedImage;
-        if (animatedImage && !animatedImage->frames.empty()) {
-            imgW = static_cast<float>(animatedImage->frames[0].width);
-        } else if (currentImage) {
-            imgW = static_cast<float>(currentImage->width);
-        }
-
-        float fitW = CalculateImageRect().Width();
-        float targetZoomVal = 1.0f;
-        if (fitW > 0.0f && imgW > 0.0f) {
-            targetZoomVal = imgW / fitW;
-        } else {
-            targetZoomVal = 2.0f; // fallback
-        }
-
+        // If not at 1:1 (different from 100%), transition to 1:1 scale
         // Anchor at screen center
         auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
         m_zoomAnchor = { targetSize.width / 2.0f, targetSize.height / 2.0f };
 
-        m_targetZoom = targetZoomVal;
-        m_app->m_animations.Start("zoom", m_zoom, targetZoomVal, 0.25, Easing::EaseOutCubic);
+        m_targetZoom = zoom1to1;
+        m_app->m_animations.Start("zoom", m_zoom, zoom1to1, 0.25, Easing::EaseOutCubic);
         m_app->m_animations.Start("pan_x", m_pan.x, 0.0f, 0.25, Easing::EaseOutCubic);
         m_app->m_animations.Start("pan_y", m_pan.y, 0.0f, 0.25, Easing::EaseOutCubic);
     }
@@ -858,6 +942,29 @@ float ViewerPage::GetDefaultZoom() const {
         }
         return 1.0f;
     }
+}
+
+float ViewerPage::GetDisplayZoom() const {
+    return GetDisplayZoomForValue(m_zoom);
+}
+
+float ViewerPage::GetDisplayZoomForValue(float zoomValue) const {
+    auto currentImage = m_app->m_currentImage;
+    auto animatedImage = m_app->m_animatedImage;
+    if (!currentImage && !animatedImage) return 1.0f;
+
+    float imgW = 0.0f;
+    if (animatedImage && !animatedImage->frames.empty()) {
+        imgW = static_cast<float>(animatedImage->frames[0].width);
+    } else if (currentImage) {
+        imgW = static_cast<float>(currentImage->width);
+    }
+    if (imgW <= 0.0f) return 1.0f;
+
+    float fitW = CalculateImageRect().Width();
+    if (fitW <= 0.0f) return 1.0f;
+
+    return zoomValue * (fitW / imgW);
 }
 
 } // namespace kv

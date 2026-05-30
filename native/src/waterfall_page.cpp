@@ -512,6 +512,13 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 
 bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (m_viewerModal) {
+        if (btn == MouseButton::Left && !m_app->m_viewerPage.IsPointOverImage(x, y)) {
+            m_viewerModal = false;
+            m_waterfallBlockActiveItem = true;
+            m_unblockTimer = 1.0;
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
         m_app->m_viewerPage.OnMouseDown(btn, x, y, mods);
         return true;
     }
@@ -704,6 +711,12 @@ bool WaterfallPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyMod
 
 bool WaterfallPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     if (m_viewerModal) {
+        if (vk == '2' || vk == VK_NUMPAD2) {
+            m_viewerModal = false;
+            m_app->SetPage(Page::Viewer);
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
         if (vk == VK_ESCAPE || vk == VK_RETURN || vk == VK_SPACE || vk == 'F') {
             // Escape/Enter leaves modal viewer
             if (vk == VK_ESCAPE || vk == VK_RETURN) {

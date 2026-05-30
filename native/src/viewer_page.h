@@ -38,7 +38,7 @@ public:
     void OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
-    void OnKeyDown(uint32_t vk, KeyModifiers mods);
+    bool OnKeyDown(uint32_t vk, KeyModifiers mods);
 
     // ── View Control ───────────────────────────────────────────────────────
     void ResetView();
@@ -47,6 +47,9 @@ public:
     RectF CalculateImageRect() const;
     RectF GetImageTransformedRect() const;
     bool IsPointOverImage(float x, float y) const;
+    bool HasActiveAnimations() const;
+    float GetDisplayZoom() const;
+    float GetDisplayZoomForValue(float zoomValue) const;
 
 private:
     // ── Drawing Helpers ────────────────────────────────────────────────────
@@ -107,6 +110,11 @@ private:
     bool   m_showMetadata = true;
     bool   m_invertImage = false;
     bool   m_pixelatedZoom = false; // smooth (Linear/HighQuality) at all times if false
+
+    // ── Zoom Text Overlay State ────────────────────────────────────────────
+    float  m_zoomTextOpacity = 0.0f;
+    double m_zoomTextTimer = 0.0;
+    float  m_lastZoom = 1.0f;
 };
 
 } // namespace kv

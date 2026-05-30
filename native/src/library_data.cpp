@@ -47,7 +47,7 @@ std::wstring LibraryData::GetFavoritesFilePath() const {
     return (exeDir / "fav.txt").wstring();
 }
 
-void LibraryData::AddFolder(const std::wstring& folderPath, bool libraryLoading) {
+void LibraryData::AddFolder(const std::wstring& folderPath, bool libraryLoading, bool loadImage) {
     namespace fs = std::filesystem;
     
     // Check if duplicate
@@ -55,12 +55,12 @@ void LibraryData::AddFolder(const std::wstring& folderPath, bool libraryLoading)
     for (size_t i = 0; i < m_folders.size(); ++i) {
         if (fs::path(m_folders[i].folderPath).lexically_normal().wstring() == normPath) {
             if (!libraryLoading) {
-                SetCurrentFolderIndex(static_cast<int>(i));
+                SetCurrentFolderIndex(static_cast<int>(i), loadImage);
             }
             return;
         }
     }
-
+    
     FolderInfo folder;
     folder.folderPath = folderPath;
     folder.folderName = fs::path(folderPath).filename().wstring();
@@ -92,7 +92,7 @@ void LibraryData::AddFolder(const std::wstring& folderPath, bool libraryLoading)
     m_folders.push_back(std::move(folder));
 
     if (!libraryLoading) {
-        SetCurrentFolderIndex(static_cast<int>(m_folders.size() - 1));
+        SetCurrentFolderIndex(static_cast<int>(m_folders.size() - 1), loadImage);
         SaveSession();
     }
 }
@@ -115,7 +115,7 @@ void LibraryData::RemoveFolder(int index) {
     }
 }
 
-void LibraryData::SetCurrentFolderIndex(int index) {
+void LibraryData::SetCurrentFolderIndex(int index, bool loadImage) {
     if (index < -1 || index >= static_cast<int>(m_folders.size())) return;
     
     m_currentFolderIdx = index;
@@ -123,7 +123,7 @@ void LibraryData::SetCurrentFolderIndex(int index) {
         auto& folder = m_folders[m_currentFolderIdx];
         m_app->m_fileList = folder.filePaths;
         m_app->m_currentIndex = folder.currentIndex;
-        if (!folder.filePaths.empty()) {
+        if (loadImage && !folder.filePaths.empty()) {
             m_app->LoadImage(folder.filePaths[folder.currentIndex]);
         }
     }
