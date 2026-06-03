@@ -1,6 +1,6 @@
 # Native Windows 11 x64 Image Viewer — Conversion Plan
 
-> **Last Updated**: 2026-05-30 01:55 | **Phase 1**: ✅ COMPLETE | **Phase 2**: ✅ COMPLETE | **Phase 3**: ✅ **COMPLETE** (Settings, LibraryData, Zoom Overlay, Key Remap, Autohide modifications, global close button HitTest fix, thumbnail strip hover revert, zoom 1:1 correction, waterfall key 2 navigation, click-outside modal close, modal filename bar, selected thumbnail highlight, Key [1] toggle behavior reversion, WM_MOUSELEAVE window hover exit, thumbnail strip index sync, Escape key fullscreen close, IPC, Explorer integration, Commenting, Tagging, i18n, and visual Options Menu Modal implemented; Gamepad and Start Page skipped)
+> **Last Updated**: 2026-06-03 08:40 | **Phase 1**: ✅ COMPLETE | **Phase 2**: ✅ COMPLETE | **Phase 3**: ✅ COMPLETE (Settings, LibraryData, Zoom Overlay, Key Remap, Autohide modifications, global close button HitTest fix, thumbnail strip hover revert, zoom 1:1 correction, waterfall key 2 navigation, click-outside modal close, modal filename bar, selected thumbnail highlight, Key [1] toggle behavior reversion, WM_MOUSELEAVE window hover exit, thumbnail strip index sync, Escape key fullscreen close, IPC, Explorer integration, Commenting, i18n, visual Options Menu Modal, settings toggle for single-instance enforcement, and **XMP Tagging metadata system with multithreaded search and binary cache** completely implemented; **ghost process bug definitively fixed via poison-pill IPC shutdown pattern**; Gamepad and Start Page skipped)
 
 ## Implementation Status
 
@@ -8,7 +8,7 @@
 |---|---|---|
 | **Phase 1: Core Engine** | ✅ **COMPLETE** | `KrumassanViewer.exe` 331KB — JPEG/AVIF/GIF/WebP all verified |
 | **Phase 2: Application Pages** | ✅ **COMPLETE** | `viewer_page`, `thumbnail_strip`, `library_page`, `board_page`, and `waterfall_page` implemented; `start_page` skipped |
-| **Phase 3: Advanced Features** | ✅ **COMPLETE** | Settings, LibraryData, IPC, COM Explorer window integration, Recycle Bin, Tray Icon, Commenting, Tagging, i18n, and visual Options Menu Modal implemented; Gamepad skipped |
+| **Phase 3: Advanced Features** | ✅ **COMPLETE** | Settings, LibraryData, IPC, COM Explorer window integration, Recycle Bin, Tray Icon, Commenting, Tagging (Core reader/writer, multithreaded search, and persistent binary caching completely implemented), i18n, visual Options Menu Modal, and settings toggle for single-instance enforcement; Gamepad skipped |
 | **Phase 4: Packaging** | ⬜ Pending | Installer, file associations, MSIX |
 
 ### Phase 1 Build Evidence
@@ -273,8 +273,9 @@ Data management (replaces `library_data.py`):
 
 #### `src/ipc.h / ipc.cpp` [NEW]
 Inter-process communication (replaces `app_copy_prevention.py` + `ipc_utils.py`):
-- Named pipe server/client for single-instance
-- Open-file requests from Explorer
+- Named pipe server/client for single-instance enforcement
+- Open-file requests from Explorer (PostMessage WM_IPC_OPEN_PATH)
+- Ghost process bug **definitively fixed** (2026-05-30): Previous overlapped I/O + CancelIoEx approach had a race condition where CancelIoEx could fire hEvent before the shutdown event, causing the server thread to loop back and create a NEW pipe handle that was never cancelled → `join()` deadlocked → ghost process. **New architecture**: synchronous `PIPE_WAIT` server with "poison-pill" shutdown — `Shutdown()` sets `m_running=false` then connects a local client sending `kShutdownSentinel`; the server thread reads it, recognizes it, and exits the loop cleanly. Zero race conditions, zero `CancelIoEx`, zero `atomic<HANDLE>`. Stress-tested with 5 rapid consecutive second-instance launches.
 
 #### `src/gamepad.h / gamepad.cpp` [SKIPPED]
 Gamepad input (replaces `hidapi_adapter.py`):
@@ -290,8 +291,8 @@ Windows Explorer integration (replaces `viewer_dll.cc`):
 #### `src/commenting.h / commenting.cpp` [NEW]
 Image commenting system (replaces `commenting.py`).
 
-#### `src/tagging.h / tagging.cpp` [NEW]
-Image tagging system (replaces `tagging.py`).
+#### `src/tagging.h / tagging.cpp` [COMPLETE]
+XMP-based metadata tagging system (replaces `tagging.py`). The core reading/writing functionality (including raw PNG iTXt chunk and JPEG APP1 segment injection), high-performance multithreaded tag search, and persistent binary indexing cache (`user_data/xmp_tag_cache.bin`) are fully implemented and verified via unit tests.
 
 #### `src/i18n.h / i18n.cpp` [NEW]
 Internationalization (replaces `i18n_l10n_tools.py`):

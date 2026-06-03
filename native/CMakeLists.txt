@@ -26,48 +26,73 @@ add_compile_definitions(
 # ─── Source Files ──────────────────────────────────────────────────────────────
 set(SOURCES
     src/main.cpp
-    src/app.cpp
-    src/window.cpp
-    src/renderer.cpp
-    src/image_loader.cpp
-    src/animation.cpp
-    src/viewer_page.cpp
-    src/thumbnail_strip.cpp
-    src/library_page.cpp
-    src/board_page.cpp
-    src/waterfall_page.cpp
-    src/settings.cpp
-    src/library_data.cpp
-    src/i18n.cpp
-    src/ipc.cpp
-    src/explorer_integration.cpp
-    src/commenting.cpp
-    src/tagging.cpp
-    src/options_menu.cpp
-    src/pch.cpp
+    src/core/app.cpp
+    src/core/window.cpp
+    src/core/settings.cpp
+    src/core/single_instance_ipc.cpp
+    src/rendering/renderer.cpp
+    src/rendering/animation_controller.cpp
+    src/rendering/animation_curve.cpp
+    src/loader/image_loader.cpp
+    src/loader/frame_sequencer.cpp
+    src/metadata/comments_manager.cpp
+    src/metadata/xmp_tag_manager.cpp
+    src/metadata/metadata_cache.cpp
+    src/metadata/png_chunk_injector.cpp
+    src/metadata/jpeg_segment_injector.cpp
+    src/metadata/wic_metadata_reader_writer.cpp
+    src/metadata/async_directory_scanner.cpp
+    src/library/folder_data_manager.cpp
+    src/library/library_page.cpp
+    src/board/board_page.cpp
+    src/board/board_canvas.cpp
+    src/board/board_item_renderer.cpp
+    src/board/board_selection_manager.cpp
+    src/board/board_text_editor.cpp
+    src/board/board_serializer.cpp
+    src/viewer/viewer_page.cpp
+    src/waterfall/waterfall_page.cpp
+    src/ui/thumbnail_strip.cpp
+    src/ui/options_menu.cpp
+    src/shell/shell_integrator.cpp
+    src/i18n/i18n_engine.cpp
+    src/common/pch.cpp
 )
 
 set(HEADERS
-    src/pch.h
-    src/types.h
-    src/app.h
-    src/window.h
-    src/renderer.h
-    src/image_loader.h
-    src/animation.h
-    src/viewer_page.h
-    src/thumbnail_strip.h
-    src/library_page.h
-    src/board_page.h
-    src/waterfall_page.h
-    src/settings.h
-    src/library_data.h
-    src/i18n.h
-    src/ipc.h
-    src/explorer_integration.h
-    src/commenting.h
-    src/tagging.h
-    src/options_menu.h
+    src/common/pch.h
+    src/common/types.h
+    src/core/app.h
+    src/core/window.h
+    src/core/settings.h
+    src/core/single_instance_ipc.h
+    src/rendering/renderer.h
+    src/rendering/animation_controller.h
+    src/rendering/animation_curve.h
+    src/loader/image_loader.h
+    src/loader/frame_sequencer.h
+    src/metadata/comments_manager.h
+    src/metadata/xmp_tag_manager.h
+    src/metadata/metadata_cache.h
+    src/metadata/png_chunk_injector.h
+    src/metadata/jpeg_segment_injector.h
+    src/metadata/wic_metadata_reader_writer.h
+    src/metadata/async_directory_scanner.h
+    src/library/folder_data_manager.h
+    src/library/library_page.h
+    src/board/board_page.h
+    src/board/board_canvas.h
+    src/board/board_item.h
+    src/board/board_item_renderer.h
+    src/board/board_selection_manager.h
+    src/board/board_text_editor.h
+    src/board/board_serializer.h
+    src/viewer/viewer_page.h
+    src/waterfall/waterfall_page.h
+    src/ui/thumbnail_strip.h
+    src/ui/options_menu.h
+    src/shell/shell_integrator.h
+    src/i18n/i18n_engine.h
 )
 
 # ─── Resource Files ───────────────────────────────────────────────────────────
@@ -83,7 +108,7 @@ add_executable(${PROJECT_NAME} WIN32
 )
 
 # ─── Precompiled Header ──────────────────────────────────────────────────────
-target_precompile_headers(${PROJECT_NAME} PRIVATE src/pch.h)
+target_precompile_headers(${PROJECT_NAME} PRIVATE src/common/pch.h)
 
 # ─── Include Directories ─────────────────────────────────────────────────────
 target_include_directories(${PROJECT_NAME} PRIVATE src)
@@ -150,4 +175,53 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         "${CMAKE_SOURCE_DIR}/../test"
         "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test"
     COMMENT "Copying test images..."
+)
+
+# ─── Tagging Tests Executable ────────────────────────────────────────────────
+add_executable(tagging_tests
+    src/metadata/xmp_tag_manager.cpp
+    src/metadata/metadata_cache.cpp
+    src/metadata/png_chunk_injector.cpp
+    src/metadata/jpeg_segment_injector.cpp
+    src/metadata/wic_metadata_reader_writer.cpp
+    src/metadata/async_directory_scanner.cpp
+    src/loader/image_loader.cpp
+    src/common/pch.cpp
+    src/tagging_tests.cpp
+)
+target_precompile_headers(tagging_tests PRIVATE src/common/pch.h)
+target_include_directories(tagging_tests PRIVATE src)
+if(MSVC)
+    target_compile_options(tagging_tests PRIVATE
+        /W4
+        /WX-          # No warnings-as-errors for test harness code
+        /permissive-
+        /utf-8
+        /MP
+        /EHsc
+        /wd4100       # unreferenced formal parameter (common in test callbacks)
+        /wd4189       # local variable initialized but not referenced
+    )
+endif()
+target_link_libraries(tagging_tests PRIVATE
+    ole32.lib
+    windowscodecs.lib
+    user32.lib
+    gdi32.lib
+    d2d1.lib
+    dwrite.lib
+    d3d11.lib
+    dxgi.lib
+    dcomp.lib
+    dwmapi.lib
+    winmm.lib
+    shell32.lib
+    advapi32.lib
+)
+# Copy test images to test output for tagging_tests
+add_custom_command(TARGET tagging_tests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/../test"
+        "$<TARGET_FILE_DIR:tagging_tests>/test"
+    COMMENT "Copying test images for tagging_tests..."
 )
