@@ -118,6 +118,7 @@ These keys work globally across all screens of the application:
 *   **`Arrow Right` / `Arrow Down` / `End`**: Navigate to the next image in the folder.
 *   **`0` / `Numpad 0`**: Reset active view transform (zoom, pan, and rotation) back to default.
 *   **`O` / `~` (Tilde)**: Toggle settings menu modal overlay.
+*   **`T`**: Toggle XMP tagging modal overlay (manage tags, ratings, and Dublin Core metadata).
 
 ---
 
@@ -148,7 +149,8 @@ The Viewer Page acts as the primary single-image viewing screen:
 *   **`Down Arrow` / `-` / `Numpad -`**: Zoom out (centered locked at the screen center).
 *   **`Space`**: Pause / Resume animated image playback (GIF/APNG/animated WebP).
 *   **`C`**: Toggle Cyberpunk frame corners.
-*   **`T`**: Toggle Rule-of-thirds grid.
+*   **`G`**: Toggle Rule-of-thirds grid.
+*   **`T`**: Toggle XMP tagging modal overlay.
 *   **`M`**: Toggle file info/metadata overlay.
 *   **`I`**: Toggle Invert colors filter.
 *   **`P`**: Toggle Pixelated (Nearest Neighbor) vs Smooth (High-Quality Cubic) interpolation on zoom.
@@ -278,3 +280,52 @@ Tags/keywords are stored within the image file headers using the standard Dublin
   - The binary cache file is saved back to disk once the search is complete.
 - **Search Cancellation (`CancelSearch()`)**:
   - Safely flags cancellation via atomics and joins the worker/search threads to prevent resources from being leaked or causing destructor exceptions.
+
+### 🖥️ Tagging UI Modal ([TaggingModal](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.h))
+The tag management UI is implemented in [tagging_modal.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.cpp). It features a full-screen blurred dark overlay and a central dialog box with:
+- **Two-Column Available Tags Layout**: The left panel displays a double-column grid of tags read from the folder's `xmpTags.json` file. Clicking a tag selects it (supports `Ctrl` multi-selection), and double-clicking copies it to the image. A copy button `>` copies all selected tags at once.
+- **Interactive Scrollbars**: The available tags list and the active tags grid feature hoverable and draggable scrollbars. Clicking and dragging the scrollbar thumb allows fluid scrolling through large lists.
+- **Editable Metadata Fields**: The right panel displays the image's tags grid, a star rating control, and text input boxes to edit standard metadata: *Title*, *Creator*, and *Description*.
+- **Space Character Caret Fix**: To prevent DirectWrite from ignoring trailing spaces in text fields, any space character `L' '` is temporarily replaced with a non-breaking space `L'\u00A0'` during measurement, ensuring the input cursor advances naturally.
+
+### 🔄 Windows Explorer Keywords Synchronization
+To guarantee that image tags are visible within the standard Windows Explorer file properties (the "Tags" / "Etiquetas" column) and vice-versa, the visualizer integrates with the Windows property system:
+- **Linking `propsys.lib`**: Both `KrumassanViewer` and `tagging_tests` target link against the system `propsys.lib` library configured in [CMakeLists.txt](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/CMakeLists.txt).
+- **COM Property Store**: Writing tags triggers `IPropertyStore` via `SHGetPropertyStoreFromParsingName` using `PKEY_Keywords` to write properties directly back to the operating system's index.
+- **Bidirectional Sync**: If the XMP block of a file is empty or missing when loaded, [XmpTagManager](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/xmp_tag_manager.cpp) falls back to read the Windows `System.Keywords` list, enabling offline tag recovery and cross-app tagging consistency.
+
+---
+
+## 9. Running Unit Tests
+
+The native tagging subsystem contains an isolated test suite to verify XML/iTXt injections, cache persistence, and search cancellation.
+
+### 🔨 Compiling the Tests Target
+To compile the test executable, you must target `tagging_tests`. Run this from the project root directory:
+```powershell
+$cmake = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+# Configure the project
+& $cmake -S native -B native/build
+# Compile only the tagging_tests target
+& $cmake --build native/build --config Release --target tagging_tests
+```
+*(Note: Replace the `$cmake` path above with your corresponding Visual Studio installation path, e.g. Community or Professional edition, if different.)*
+
+### 🏃 Executing the Tests
+Once compiled, the binary is located at:
+```text
+e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native\build\bin\Release\tagging_tests.exe
+```
+Execute it from the project root directory:
+```powershell
+./native/build/bin/Release/tagging_tests.exe
+```
+
+### 🔬 Test Cases Coverage
+The [tagging_tests.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/tagging_tests.cpp) file implements the following automated validations:
+1. **Test 1: JPEG Read/Write Tags**: Validates custom APP1/XMP marker injection and retrieval on JPEGs.
+2. **Test 2: PNG Read/Write Tags (iTXt)**: Validates raw `iTXt` chunk injection, CRC32 recalculation, and tag replacement.
+3. **Test 3: Cache Persistence**: Checks binary cache serialization (`xmp_tag_cache.bin`) and high-performance search hits.
+4. **Test 4: Search Cancellation**: Assures thread-pool background workers terminate safely on search cancel commands.
+5. **Test 5: Read/Write Extended Metadata (JPEG/PNG)**: Verifies rating numbers, titles, creators, and descriptions are read/written correctly.
+6. **(Planned) Test 6: Windows Keywords Sync**: Asserts that tags modified in the visualizer match `PKEY_Keywords` in `IPropertyStore`, and tags added via Windows Explorer are successfully synced.

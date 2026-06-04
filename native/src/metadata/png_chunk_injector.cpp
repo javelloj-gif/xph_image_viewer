@@ -10,6 +10,8 @@
 #include <filesystem>
 #include <algorithm>
 #include <cstring>
+#include <thread>
+#include <chrono>
 
 namespace kv {
 
@@ -41,24 +43,63 @@ uint32_t PngChunkInjector::ComputeCrc32(const uint8_t* data, size_t length) {
     return crc ^ 0xFFFFFFFFUL;
 }
 
-std::string PngChunkInjector::BuildXmpXmlUtf8(const std::vector<std::wstring>& tags) {
+std::string PngChunkInjector::BuildXmpXmlUtf8(
+    const std::vector<std::wstring>& tags,
+    const std::wstring& title,
+    const std::wstring& creator,
+    const std::wstring& description,
+    int rating
+) {
     std::wstring xml =
         L"<?xpacket begin='\uFEFF' id='W5M0MpCehiHzreSzNTczkc9d'?>\n"
         L"<x:xmpmeta xmlns:x='adobe:ns:meta/' x:xmptk='XMP Core 5.1.2'>\n"
         L" <rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'>\n"
-        L"  <rdf:Description rdf:about='' xmlns:dc='http://purl.org/dc/elements/1.1/'>\n"
-        L"   <dc:subject>\n"
-        L"    <rdf:Bag>\n";
-    for (const auto& tag : tags) {
-        xml += L"     <rdf:li>" + tag + L"</rdf:li>\n";
+        L"  <rdf:Description rdf:about=''\n"
+        L"    xmlns:dc='http://purl.org/dc/elements/1.1/'\n"
+        L"    xmlns:xmp='http://ns.adobe.com/xap/1.0/'>\n";
+
+    if (!tags.empty()) {
+        xml += L"   <dc:subject>\n"
+               L"    <rdf:Bag>\n";
+        for (const auto& tag : tags) {
+            xml += L"     <rdf:li>" + tag + L"</rdf:li>\n";
+        }
+        xml += L"    </rdf:Bag>\n"
+               L"   </dc:subject>\n";
     }
-    xml +=
-        L"    </rdf:Bag>\n"
-        L"   </dc:subject>\n"
-        L"  </rdf:Description>\n"
-        L" </rdf:RDF>\n"
-        L"</x:xmpmeta>\n"
-        L"<?xpacket end='w'?>";
+
+    if (!title.empty()) {
+        xml += L"   <dc:title>\n"
+               L"    <rdf:Alt>\n"
+               L"     <rdf:li xml:lang='x-default'>" + title + L"</rdf:li>\n"
+               L"    </rdf:Alt>\n"
+               L"   </dc:title>\n";
+    }
+
+    if (!creator.empty()) {
+        xml += L"   <dc:creator>\n"
+               L"    <rdf:Seq>\n"
+               L"     <rdf:li>" + creator + L"</rdf:li>\n"
+               L"    </rdf:Seq>\n"
+               L"   </dc:creator>\n";
+    }
+
+    if (!description.empty()) {
+        xml += L"   <dc:description>\n"
+               L"    <rdf:Alt>\n"
+               L"     <rdf:li xml:lang='x-default'>" + description + L"</rdf:li>\n"
+               L"    </rdf:Alt>\n"
+               L"   </dc:description>\n";
+    }
+
+    if (rating > 0) {
+        xml += L"   <xmp:Rating>" + std::to_wstring(rating) + L"</xmp:Rating>\n";
+    }
+
+    xml += L"  </rdf:Description>\n"
+           L" </rdf:RDF>\n"
+           L"</x:xmpmeta>\n"
+           L"<?xpacket end='w'?>";
 
     int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, xml.c_str(), static_cast<int>(xml.size()), nullptr, 0, nullptr, nullptr);
     if (sizeNeeded <= 0) return {};
@@ -81,7 +122,14 @@ uint32_t PngChunkInjector::ReadBE32(const uint8_t* data) {
          | (static_cast<uint32_t>(data[3]) <<  0);
 }
 
-bool PngChunkInjector::InjectPngITxtChunk(const std::wstring& filePath, const std::vector<std::wstring>& tags) {
+bool PngChunkInjector::InjectPngITxtChunk(
+    const std::wstring& filePath, 
+    const std::vector<std::wstring>& tags,
+    const std::wstring& title,
+    const std::wstring& creator,
+    const std::wstring& description,
+    int rating
+) {
     std::ifstream inFile(filePath, std::ios::binary);
     if (!inFile) {
         LogError(std::format(L"InjectPngITxtChunk: Cannot open file for reading: {}", filePath));
@@ -148,9 +196,10 @@ bool PngChunkInjector::InjectPngITxtChunk(const std::wstring& filePath, const st
         return false;
     }
 
+    bool hasAnyMetadata = !tags.empty() || !title.empty() || !creator.empty() || !description.empty() || rating > 0;
     std::vector<uint8_t> newITXtChunk;
-    if (!tags.empty()) {
-        std::string xmpXml = BuildXmpXmlUtf8(tags);
+    if (hasAnyMetadata) {
+        std::string xmpXml = BuildXmpXmlUtf8(tags, title, creator, description, rating);
         if (xmpXml.empty()) {
             LogError(L"InjectPngITxtChunk: Failed to build XMP XML UTF-8 string");
             return false;
@@ -203,13 +252,22 @@ bool PngChunkInjector::InjectPngITxtChunk(const std::wstring& filePath, const st
         outFile.write(reinterpret_cast<const char*>(afterIDAT.data()), afterIDAT.size());
     outFile.close();
 
-    try {
-        std::filesystem::remove(filePath);
-        std::filesystem::rename(tempPath, filePath);
-    } catch (const std::exception& e) {
-        std::string whatStr = e.what();
-        std::wstring whatWStr(whatStr.begin(), whatStr.end());
-        LogError(std::format(L"InjectPngITxtChunk: Failed to replace original file: {}", whatWStr));
+    bool replaced = false;
+    for (int retry = 0; retry < 10; ++retry) {
+        try {
+            if (std::filesystem::exists(filePath)) {
+                std::filesystem::remove(filePath);
+            }
+            std::filesystem::rename(tempPath, filePath);
+            replaced = true;
+            break;
+        } catch (...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+
+    if (!replaced) {
+        LogError(std::format(L"InjectPngITxtChunk: Failed to replace original file after retries: {}", filePath));
         std::filesystem::remove(tempPath);
         return false;
     }

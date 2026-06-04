@@ -112,7 +112,7 @@ void ViewerPage::Draw(Renderer& renderer) {
         auto size = renderer.GetTargetSize().ToFloat();
         RectF textRect = RectF::FromXYWH(0, 0, size.width, size.height);
         renderer.DrawText(
-            L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nC - Cyberpunk Corners | T - Rule of Thirds",
+            L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nC - Cyberpunk Corners | G - Rule of Thirds",
             textRect,
             Color::FromRGBA(180, 180, 180),
             20.0f,
@@ -592,7 +592,7 @@ bool ViewerPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             m_app->m_settings.Save();
             m_app->m_window.RequestRedraw();
             return true;
-        case 'T':
+        case 'G':
             m_app->m_settings.show_thirds = !m_app->m_settings.show_thirds;
             m_app->m_settings.Save();
             m_app->m_window.RequestRedraw();

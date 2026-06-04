@@ -15,7 +15,7 @@
 | **Language** | C++20 (MSVC x64 compiler) |
 | **UI Backend** | Direct2D 1.3 / Direct3D 11 / DirectWrite / DirectComposition |
 | **Platform** | Windows 10 (Build 18362+) / Windows 11 |
-| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD completamente implementados. El sistema de tagging XMP (`tagging.cpp`) está implementado con sus 4 componentes principales: `ReadTags`, `WriteTags`, `SearchTagsAsync` y `LoadCache`/`SaveCache`. Se implementó la inyección raw de chunks PNG (iTXt) y segmentos JPEG (APP1/XMP) para bypassear las limitaciones del encoder WIC. Los bugs de deadlock por mutex, problemas de encoding en consola, discrepancias de mayúsculas/minúsculas en rutas y crashes del destructor de hilos han sido completamente resueltos, y todos los tests pasan con éxito. Phase 4 (Packaging/Installer) pendiente. |
+| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP (`tagging.cpp` / `xmp_tag_manager.cpp`) soporta lectura/escritura de etiquetas, calificaciones por estrellas (`xmp:Rating`) y metadatos Dublin Core (`dc:title`, `dc:creator`, `dc:description`), así como metadatos de dispositivo. Se implementó la inyección raw de chunks PNG (iTXt) y segmentos JPEG (APP1/XMP) para bypassear las limitaciones del encoder WIC. Se reasignaron los atajos de teclado del visor (regla de tercios a la tecla `G` y modal de tagging a la tecla `T`). Se implementó la barra de scroll interactiva en `TaggingModal`, el soporte de espacios al escribir etiquetas y la sincronización bidireccional con `System.Keywords` de Windows. Phase 4 (Packaging/Installer) pendiente. |
 | **Inspiration** | Google Picasa Photo Viewer + PureRef |
 
 ---
@@ -117,6 +117,19 @@ Sorted by lines of code:
 - **The Decision**: Render only the visible subsets of large directory files inside the Waterfall and Thumbnail Strip views. Evict unused textures using a Least-Recently-Used (LRU) policy.
 - **Why**: Keeps memory usage low and rendering loops tight even when scanning directories with 20,000+ images.
 - **Implementation**: Found in `WaterfallPage` and `ThumbnailStrip`.
+
+### Mitigating Performance Pitfalls (Lessons from Legacy Version)
+- **Preserving the Translucent Background**: Windows blending with the desktop background using native hardware composition is forced by initializing the Win32 window with the `WS_EX_NOREDIRECTIONBITMAP` extended style, extending the frame into the client area via `DwmExtendFrameIntoClientArea`, clearing the DXGI Swap Chain render target with zero alpha (`{ 0.0f, 0.0f, 0.0f, 0.0f }`), and drawing transparent backgrounds.
+- **Eliminating Flickering and Tearing**: Use Flip-Model presentation (`DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL`). Render all elements (images, boards, grid lines, text overlays) to an off-screen Direct2D render target buffer, and call `IDXGISwapChain::Present` exactly once per frame (VSync-aligned) to update the screen atomically.
+- **Guaranteeing High Performance**: Upload all decoded images to GPU VRAM as `ID2D1Bitmap1` textures immediately after loading. Scaling, translations, and rotations are computed on the GPU via hardware vertex transforms. Frustum culling on the Board Page ensures only items intersecting the viewport are drawn.
+- **Robust and Async Thumbnail Loading**: All file decoding (via WIC) occurs on background worker threads. Once decoded, pass raw pixel data to the main thread via a thread-safe queue, and let the main thread instantiate the `ID2D1Bitmap1` texture to isolate GPU texture creation and prevent driver context issues.
+
+### Scaling Strategy for Large Directories (20,000+ Images)
+- **Asynchronous Incremental Directory Scanning**: `std::filesystem::directory_iterator` scans inside a background worker thread. Paths are discovered incrementally and posted in batches (e.g., 100 paths) back to the main UI thread via thread-safe callbacks to prevent blocking the Win32 message pump. Sorting is executed on the background thread once scanning completes.
+- **UI Virtualization (DIP Viewport Mapping)**: Compute layout boundaries using arithmetic virtualization (cell index calculations based on scroll offsets: `first_visible = scroll_pos / cell_width`). Only vertices and rendering calls for items currently within the viewport bounds are processed.
+- **Priority-Based Bounded Task Queue**: The `ImageLoader` worker queue is bounded and prioritizes tasks dynamically. Tasks for items leaving the viewport before loading starts are automatically cancelled or deprioritized.
+- **LRU GPU Texture Cache (VRAM Management)**: Impose a strict Least Recently Used (LRU) limit on `ID2D1Bitmap1` textures. Limit thumbnail cache memory (e.g., 1000 active thumbnail textures) and full-size image VRAM cache (e.g., 5-10 high-resolution textures). Release texture handles when the limit is exceeded.
+- **Metadata Database & Binary File Indices**: Cache file properties (timestamps, sizes, dimensions) in a fast in-memory map or a compact binary index. File sorting actions query the memory-cache directly, completing in under 10ms.
 
 ---
 
@@ -306,11 +319,24 @@ Todas las pruebas de metadatos XMP en `tagging_tests.exe` pasan exitosamente:
 
 ---
 
-## 11. Appendix: Plan de Refactorización de Estructura y Buenas Prácticas (Junio 3, 2026)
+## 11. Appendix: Trabajo completado en la Sesión (Junio 4, 2026)
 
-Se ha redactado y guardado en [implementation_plan.md](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/implementation_plan.md) un plan completo de refactorización estructural del proyecto para su posterior ejecución.
-Este plan contempla:
-1. **Agrupación por dominio**: Clasificación de los archivos fuente planos de `native/src/` en subcarpetas (`core/`, `rendering/`, `loader/`, `metadata/`, `library/`, `board/`, `viewer/`, `waterfall/`, `ui/`, `shell/`, `i18n/`, `common/`).
-2. **Eliminación de clases spaghetti (>1000 líneas)**: Desacoplamiento de `board_page.cpp` y `tagging.cpp` en componentes modulares con responsabilidad única y de tamaño acotado (ej. `BoardCanvas`, `BoardSelectionManager`, `BoardTextEditor`, `BoardSerializer`, `PngChunkInjector`, `JpegSegmentInjector`, `MetadataCache`, `AsyncDirectoryScanner`).
-3. **Nombres y descripciones de clases**: Estandarización de las cabeceras descriptivas de todas las clases usando placeholders (`[IMAGE_VIEWER_APP_NAME]`) en lugar del nombre real de la aplicación, exceptuando la clase `main.cpp` que mantiene la mención original ("based on Krumassan's Image Viewer").
+Se implementaron y verificaron con éxito las tareas especificadas en el [implementation_plan.md](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/implementation_plan.md):
+1. **Corrección de persistencia de guardado**: Se modificó el orden en `App::Initialize` para inicializar el pool de hilos de `ImageLoader` antes de `XmpTagManager`, garantizando la disponibilidad del WIC factory. Se eliminó la inicialización tardía duplicada.
+2. **Evitar caché de metadatos de WIC**: Se enlazó `shlwapi.lib` y se reescribieron los lectores de WIC (`ReadTags` y `ReadMetadataExtended` en `WicMetadataReaderWriter` y `GetFileStats` en `TaggingModal`) para cargar imágenes a través de streams con `SHCreateStreamOnFileEx`, previniendo que WIC retenga datos cacheados obsoletos al guardar metadatos.
+3. **Caché rápida de consulta**: Se integró en `XmpTagManager::ReadTags` la validación por marca de tiempo frente al archivo de caché en memoria de `MetadataCache` para retornar inmediatamente los tags si no ha habido modificaciones.
+4. **TaggingModal en Doble Columna**: Se rediseñó la visualización de la lista de etiquetas del panel izquierdo en `TaggingModal::DrawTagsTab` a un grid de 2 columnas, con las correspondientes adaptaciones de coordenadas en los eventos de mouse (`OnMouseMove` y `OnMouseDown`).
+5. **Correcciones del modo Waterfall**:
+   - Se ajustó `WaterfallPage::OnKeyDown` para retornar el resultado del visor de imagen secundario, permitiendo que eventos no manejados por este (como pulsar `'T'`) se propaguen correctamente hacia arriba.
+   - Se actualizó `WaterfallPage::OnMouseMove` para guardar `m_hoveredOriginalPath` de forma incondicional al pasar el cursor sobre cualquier preview, no solo los formatos animados.
+6. **Interactividad de Scroll en `TaggingModal`**: Se implementó el arrastre vertical interactivo sobre el track de scroll (12px de ancho en el borde derecho de cada panel) mapeando proporcionalmente el movimiento en delta-Y con los límites de scroll.
+7. **Soporte para Espacios en Etiquetas**: Se corrigió de forma global en `Renderer::MeasureText` el cálculo de ancho para incluir espacios finales reemplazándolos con espacios de no-rompimiento (`L'\u00A0'`), solucionando el bug de visualización de caret.
+8. **Sincronización Bidireccional con Windows Keywords**: Se enlazó `propsys.lib` en `CMakeLists.txt` y se implementó la sincronización nativa mediante `IPropertyStore` (`PKEY_Keywords`) al escribir etiquetas, con lectura de fallback en `ReadTags`.
+
+---
+
+## 12. Appendix: Plan de Trabajo Pendiente (Siguiente Sesión)
+1. **Fase 4: Packaging / Instalador**: Diseñar y empaquetar la aplicación nativa para distribución en sistemas Windows.
+
+
 

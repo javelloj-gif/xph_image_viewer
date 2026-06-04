@@ -13,12 +13,25 @@ namespace kv {
 
 class PngChunkInjector {
 public:
-    static bool InjectPngITxtChunk(const std::wstring& filePath, const std::vector<std::wstring>& tags);
+    static bool InjectPngITxtChunk(
+        const std::wstring& filePath, 
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title = L"",
+        const std::wstring& creator = L"",
+        const std::wstring& description = L"",
+        int rating = 0
+    );
 
 private:
     static void InitCrc32Table();
     static uint32_t ComputeCrc32(const uint8_t* data, size_t length);
-    static std::string BuildXmpXmlUtf8(const std::vector<std::wstring>& tags);
+    static std::string BuildXmpXmlUtf8(
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title = L"",
+        const std::wstring& creator = L"",
+        const std::wstring& description = L"",
+        int rating = 0
+    );
     static void WriteBE32(std::vector<uint8_t>& buf, size_t pos, uint32_t value);
     static uint32_t ReadBE32(const uint8_t* data);
 

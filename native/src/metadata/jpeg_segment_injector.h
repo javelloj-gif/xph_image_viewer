@@ -12,10 +12,23 @@ namespace kv {
 
 class JpegSegmentInjector {
 public:
-    static bool InjectJpegXmpSegment(const std::wstring& filePath, const std::vector<std::wstring>& tags);
+    static bool InjectJpegXmpSegment(
+        const std::wstring& filePath, 
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title = L"",
+        const std::wstring& creator = L"",
+        const std::wstring& description = L"",
+        int rating = 0
+    );
 
 private:
-    static std::string BuildXmpXmlUtf8(const std::vector<std::wstring>& tags);
+    static std::string BuildXmpXmlUtf8(
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title = L"",
+        const std::wstring& creator = L"",
+        const std::wstring& description = L"",
+        int rating = 0
+    );
 };
 
 } // namespace kv

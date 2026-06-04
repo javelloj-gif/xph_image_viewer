@@ -1,0 +1,25 @@
+{
+  "Anatomy": [
+    "small",
+    "medium",
+    "large"
+  ],
+  "Clothing": [
+    "suit",
+    "uniform",
+    "dress"
+  ],
+  "Type": [
+    "square",
+    "triangle",
+    "circle"
+  ],
+  "Subject": [
+    "main",
+    "secondary"
+  ],
+  "Extra": [
+    "food",
+    "sweat"
+  ]
+}

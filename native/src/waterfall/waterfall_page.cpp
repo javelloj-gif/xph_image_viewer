@@ -482,8 +482,8 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
         if (m_hoveredPreviewIdx != -1) {
             auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
             std::wstring path = folder.previews[m_hoveredPreviewIdx].filePath;
+            m_hoveredOriginalPath = path;
             if (ImageLoader::IsAnimatedFormat(path)) {
-                m_hoveredOriginalPath = path;
                 m_hoveredOriginalAnim = nullptr;
                 m_hoveredOriginalLoading = true;
                 
@@ -500,6 +500,9 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
                         m_app->m_window.RequestRedraw();
                     }
                 });
+            } else {
+                m_hoveredOriginalAnim = nullptr;
+                m_hoveredOriginalLoading = false;
             }
         } else {
             m_hoveredOriginalPath = L"";
@@ -752,8 +755,7 @@ bool WaterfallPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 return true;
             }
         }
-        m_app->m_viewerPage.OnKeyDown(vk, mods);
-        return true;
+        return m_app->m_viewerPage.OnKeyDown(vk, mods);
     }
 
     // Normal mode keys

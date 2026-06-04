@@ -380,10 +380,15 @@ PointF Renderer::MeasureText(
     auto textFormat = CreateTextFormat(fontFamily, fontSize);
     if (!textFormat) return { 0.0f, 0.0f };
 
+    std::wstring measureText(text);
+    for (auto& c : measureText) {
+        if (c == L' ') c = L'\u00A0';
+    }
+
     ComPtr<IDWriteTextLayout> textLayout;
     HRESULT hr = m_dwriteFactory->CreateTextLayout(
-        text.data(),
-        static_cast<UINT32>(text.size()),
+        measureText.data(),
+        static_cast<UINT32>(measureText.size()),
         textFormat.Get(),
         10000.0f, // Max width
         1000.0f,  // Max height

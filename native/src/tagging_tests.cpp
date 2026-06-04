@@ -13,6 +13,10 @@
 #include <thread>
 #include <fcntl.h>
 #include <io.h>
+#include <propsys.h>
+#include <propkey.h>
+#include <propvarutil.h>
+#pragma comment(lib, "propsys.lib")
 
 using namespace kv;
 
@@ -200,6 +204,134 @@ void TestSearchCancellation(IWICImagingFactory2* factory, const std::wstring& te
     std::wcout << L"[TEST 4] PASSED." << std::endl;
 }
 
+// ─── Test 5: Read/Write Extended Metadata (JPEG/PNG) ──────────────────────────
+
+void TestReadWriteMetadataExtended(XmpTagManager& manager, const std::wstring& testFilePath) {
+    std::wcout << L"[TEST 5] Read/Write Extended Metadata: " << testFilePath << std::endl;
+
+    std::vector<std::wstring> tags = { L"ext-test-1", L"ext-test-2" };
+    std::wstring title = L"Custom Title Value";
+    std::wstring creator = L"John Doe";
+    std::wstring description = L"This is a long description with spaces and punctuation.";
+    int rating = 4;
+
+    bool writeOk = manager.WriteMetadataExtended(testFilePath, tags, title, creator, description, rating);
+    ASSERT_TRUE(writeOk);
+
+    // Read back extended metadata
+    std::wstring readTitle, readCreator, readDescription, readMake, readModel;
+    int readRating = 0;
+    bool readOk = manager.ReadMetadataExtended(testFilePath, readTitle, readCreator, readDescription, readRating, readMake, readModel);
+    ASSERT_TRUE(readOk);
+
+    std::wcout << L"  Read Title:       " << readTitle << std::endl;
+    std::wcout << L"  Read Creator:     " << readCreator << std::endl;
+    std::wcout << L"  Read Description: " << readDescription << std::endl;
+    std::wcout << L"  Read Rating:      " << readRating << std::endl;
+
+    ASSERT_TRUE(readTitle == title);
+    ASSERT_TRUE(readCreator == creator);
+    ASSERT_TRUE(readDescription == description);
+    ASSERT_TRUE(readRating == rating);
+
+    // Read back tags to make sure they weren't lost and match
+    std::vector<std::wstring> readTags;
+    bool readTagsOk = manager.ReadTags(testFilePath, readTags);
+    ASSERT_TRUE(readTagsOk);
+    ASSERT_TRUE(readTags.size() == tags.size());
+    for (const auto& tag : tags) {
+        auto it = std::find_if(readTags.begin(), readTags.end(),
+            [&tag](const std::wstring& t) { return _wcsicmp(t.c_str(), tag.c_str()) == 0; });
+        ASSERT_TRUE(it != readTags.end());
+    }
+
+    std::wcout << L"[TEST 5] PASSED." << std::endl;
+}
+
+// ─── Test 6: Windows Property Store Keywords Sync ────────────────────────────
+
+void TestWindowsKeywordsSync(XmpTagManager& manager, const std::wstring& testFilePath) {
+    std::wcout << L"[TEST 6] Windows Property Store Keywords Sync..." << std::endl;
+
+    std::vector<std::wstring> tags = { L"win-sync-1", L"win-sync-2", L"explorer-tag" };
+
+    // Write tags which internally triggers SyncToWindowsKeywords
+    bool writeOk = manager.WriteTags(testFilePath, tags);
+    ASSERT_TRUE(writeOk);
+
+    // Verify directly using IPropertyStore that keywords were written correctly
+    std::vector<std::wstring> readWinKeywords;
+    HRESULT hr = S_OK;
+    {
+        ComPtr<IPropertyStore> pStore;
+        hr = SHGetPropertyStoreFromParsingName(testFilePath.c_str(), nullptr, GPS_DEFAULT, IID_PPV_ARGS(&pStore));
+        ASSERT_TRUE(SUCCEEDED(hr));
+
+        PROPVARIANT var;
+        PropVariantInit(&var);
+        hr = pStore->GetValue(PKEY_Keywords, &var);
+        ASSERT_TRUE(SUCCEEDED(hr));
+
+        if (var.vt == (VT_VECTOR | VT_LPWSTR)) {
+            for (ULONG i = 0; i < var.calpwstr.cElems; ++i) {
+                if (var.calpwstr.pElems[i]) {
+                    readWinKeywords.push_back(var.calpwstr.pElems[i]);
+                }
+            }
+        }
+        PropVariantClear(&var);
+    }
+
+    std::wcout << L"  Windows Keywords written: " << readWinKeywords.size() << std::endl;
+    for (size_t i = 0; i < readWinKeywords.size(); ++i) {
+        std::wcout << L"    [" << i << L"]: " << readWinKeywords[i] << std::endl;
+    }
+
+    ASSERT_TRUE(readWinKeywords.size() == tags.size());
+    for (const auto& tag : tags) {
+        auto it = std::find_if(readWinKeywords.begin(), readWinKeywords.end(),
+            [&tag](const std::wstring& t) { return _wcsicmp(t.c_str(), tag.c_str()) == 0; });
+        ASSERT_TRUE(it != readWinKeywords.end());
+    }
+
+    // Now test fallback reading: we write some words to Windows Keywords directly,
+    // clear memory cache entry, and read them back through manager.ReadTags
+    std::wstring destJpegSync = std::filesystem::path(testFilePath).parent_path().wstring() + L"\\temp_sync_test.jpg";
+    std::filesystem::copy_file(testFilePath, destJpegSync, std::filesystem::copy_options::overwrite_existing);
+
+    std::filesystem::path cleanJpeg = std::filesystem::path(testFilePath).parent_path() / L"noname.jpg";
+    std::filesystem::copy_file(cleanJpeg, destJpegSync, std::filesystem::copy_options::overwrite_existing);
+
+    // Now write to Windows Property Store directly
+    {
+        ComPtr<IPropertyStore> pStoreWrite;
+        hr = SHGetPropertyStoreFromParsingName(destJpegSync.c_str(), nullptr, GPS_READWRITE, IID_PPV_ARGS(&pStoreWrite));
+        ASSERT_TRUE(SUCCEEDED(hr));
+
+        std::vector<PCWSTR> ptrs = { L"direct-win-1", L"direct-win-2" };
+        PROPVARIANT varWrite;
+        PropVariantInit(&varWrite);
+        hr = InitPropVariantFromStringVector(ptrs.data(), static_cast<ULONG>(ptrs.size()), &varWrite);
+        ASSERT_TRUE(SUCCEEDED(hr));
+        hr = pStoreWrite->SetValue(PKEY_Keywords, varWrite);
+        ASSERT_TRUE(SUCCEEDED(hr));
+        hr = pStoreWrite->Commit();
+        ASSERT_TRUE(SUCCEEDED(hr));
+        PropVariantClear(&varWrite);
+    }
+
+    // Read back via manager.ReadTags (which should fallback to PKEY_Keywords)
+    std::vector<std::wstring> fallbackTags;
+    bool fallbackOk = manager.ReadTags(destJpegSync, fallbackTags);
+    ASSERT_TRUE(fallbackOk);
+    ASSERT_TRUE(fallbackTags.size() == 2);
+    ASSERT_TRUE(_wcsicmp(fallbackTags[0].c_str(), L"direct-win-1") == 0);
+    ASSERT_TRUE(_wcsicmp(fallbackTags[1].c_str(), L"direct-win-2") == 0);
+
+    std::filesystem::remove(destJpegSync);
+    std::wcout << L"[TEST 6] PASSED." << std::endl;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 int wmain() {
@@ -263,6 +395,9 @@ int wmain() {
         TestReadWriteTagsPng(manager, destPng.wstring());
         TestCachePersistence(factory.Get(), destPng.wstring());
         TestSearchCancellation(factory.Get(), destPng.wstring());
+        TestReadWriteMetadataExtended(manager, destJpeg.wstring());
+        TestReadWriteMetadataExtended(manager, destPng.wstring());
+        TestWindowsKeywordsSync(manager, destJpeg.wstring());
 
         std::wcout << std::endl;
         std::wcout << L"========================================" << std::endl;

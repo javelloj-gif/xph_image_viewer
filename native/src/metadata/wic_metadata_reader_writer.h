@@ -19,6 +19,39 @@ public:
         std::vector<std::wstring>& outTags
     );
 
+    static bool ReadMetadataExtended(
+        IWICImagingFactory2* wicFactory,
+        const std::wstring& filePath,
+        std::wstring& outTitle,
+        std::wstring& outCreator,
+        std::wstring& outDescription,
+        int& outRating,
+        std::wstring& outDeviceMake,
+        std::wstring& outDeviceModel
+    );
+
+    static bool WriteMetadataExtendedFast(
+        IWICImagingFactory2* wicFactory,
+        const std::wstring& filePath,
+        GUID containerFormat,
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title,
+        const std::wstring& creator,
+        const std::wstring& description,
+        int rating
+    );
+
+    static bool WriteMetadataExtendedTranscode(
+        IWICImagingFactory2* wicFactory,
+        const std::wstring& filePath,
+        GUID containerFormat,
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title,
+        const std::wstring& creator,
+        const std::wstring& description,
+        int rating
+    );
+
     static bool WriteTagsFast(
         IWICImagingFactory2* wicFactory,
         const std::wstring& filePath,
@@ -44,6 +77,14 @@ private:
     static bool WritePngXmp(
         IWICMetadataQueryWriter* pQueryWriter,
         const std::vector<std::wstring>& tags
+    );
+    static bool ReadStringProperty(IWICMetadataQueryReader* pReader, const std::wstring& path, std::wstring& outVal);
+    static std::wstring RemoveQualifier(std::wstring path);
+    static bool WriteStringVectorProperty(
+        IWICImagingFactory2* wicFactory,
+        IWICMetadataQueryWriter* pWriter,
+        const std::wstring& pathWithQualifier,
+        const std::wstring& val
     );
 };
 

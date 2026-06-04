@@ -21,6 +21,7 @@
 #include "metadata/comments_manager.h"
 #include "metadata/xmp_tag_manager.h"
 #include "ui/options_menu.h"
+#include "ui/tagging_modal.h"
 #include "i18n/i18n_engine.h"
 
 namespace kv {
@@ -113,6 +114,7 @@ private:
     friend class FolderDataManager;
     friend class Settings;
     friend class OptionsMenu;
+    friend class TaggingModal;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -129,6 +131,7 @@ private:
     CommentsManager     m_commentsManager;
     XmpTagManager       m_tagManager;
     OptionsMenu         m_optionsMenu;
+    TaggingModal        m_taggingModal;
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;

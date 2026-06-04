@@ -85,10 +85,20 @@ InitResult App::Initialize(const AppConfig& config) {
     trace("Session loaded");
     m_commentsManager.Load();
     trace("Comments loaded");
+    // Initialize Image Loader early to provide WIC Factory to TagManager
+    if (!m_imageLoader.Initialize(4)) {
+        LogError(L"Failed to initialize image loader");
+        trace("Failed to initialize image loader");
+        return InitResult::Failed;
+    }
+    trace("ImageLoader initialized");
+
     m_tagManager.Initialize(m_imageLoader.GetWicFactory());
     trace("Tags loaded");
     m_optionsMenu.Initialize(this);
     trace("OptionsMenu initialized");
+    m_taggingModal.Initialize(this);
+    trace("TaggingModal initialized");
 
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
@@ -170,12 +180,6 @@ InitResult App::Initialize(const AppConfig& config) {
     // ── Initialize Renderer ───────────────────────────────────────────────
     if (!m_renderer.Initialize(m_window.GetHwnd(), config.translucent)) {
         LogError(L"Failed to initialize renderer");
-        return InitResult::Failed;
-    }
-
-    // ── Initialize Image Loader ───────────────────────────────────────────
-    if (!m_imageLoader.Initialize(4)) {
-        LogError(L"Failed to initialize image loader");
         return InitResult::Failed;
     }
 
@@ -312,6 +316,9 @@ void App::RenderFrame() {
     DrawCloseButton();
     if (m_optionsMenu.IsVisible()) {
         m_optionsMenu.Draw(m_renderer);
+    }
+    if (m_taggingModal.IsVisible()) {
+        m_taggingModal.Draw(m_renderer);
     }
 
     m_renderer.EndFrame();
@@ -642,6 +649,9 @@ void App::OnResize(uint32_t width, uint32_t height) {
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_taggingModal.IsVisible()) {
+        if (m_taggingModal.OnMouseMove(x, y, mods)) return;
+    }
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseMove(x, y, mods)) return;
     }
@@ -661,6 +671,9 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
 
+    if (m_taggingModal.IsVisible()) {
+        if (m_taggingModal.OnMouseDown(btn, x, y, mods)) return;
+    }
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseDown(btn, x, y, mods)) return;
     }
@@ -691,6 +704,9 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_taggingModal.IsVisible()) {
+        if (m_taggingModal.OnMouseUp(btn, x, y, mods)) return;
+    }
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseUp(btn, x, y, mods)) return;
     }
@@ -709,6 +725,9 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
 void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_taggingModal.IsVisible()) {
+        if (m_taggingModal.OnMouseWheel(delta, x, y, mods)) return;
+    }
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseWheel(delta, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -737,6 +756,9 @@ void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mod
 }
 
 void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (m_taggingModal.IsVisible()) {
+        if (m_taggingModal.OnKeyDown(vk, mods)) return;
+    }
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnKeyDown(vk, mods)) return;
     }
@@ -821,6 +843,39 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             }
             break;
 
+        case 'T':
+            if (m_taggingModal.IsVisible()) {
+                m_taggingModal.Hide();
+            } else {
+                std::wstring selectedPath = L"";
+                if (m_currentPage == Page::Viewer) {
+                    if (m_currentImage) selectedPath = m_currentImage->filePath;
+                    else if (m_animatedImage) selectedPath = m_animatedImage->filePath;
+                } else if (m_currentPage == Page::Library) {
+                    if (m_libraryPage.m_hoveredPreviewIdx != -1) {
+                        selectedPath = m_libraryPage.m_hoveredOriginalPath;
+                    }
+                } else if (m_currentPage == Page::Waterfall) {
+                    if (m_waterfallPage.m_viewerModal) {
+                        if (m_currentImage) selectedPath = m_currentImage->filePath;
+                        else if (m_animatedImage) selectedPath = m_animatedImage->filePath;
+                    } else if (m_waterfallPage.m_hoveredPreviewIdx != -1) {
+                        selectedPath = m_waterfallPage.m_hoveredOriginalPath;
+                    }
+                } else if (m_currentPage == Page::Board) {
+                    for (const auto& item : m_boardPage.m_items) {
+                        if (item.selected && item.type == BoardItemType::Image && !item.filePath.empty()) {
+                            selectedPath = item.filePath;
+                            break;
+                        }
+                    }
+                }
+                if (!selectedPath.empty() && ImageLoader::IsSupported(selectedPath)) {
+                    m_taggingModal.Show(selectedPath);
+                }
+            }
+            break;
+
         case VK_PRIOR: // Page Up
             m_settings.window_opacity = std::min(1.0f, m_settings.window_opacity + 0.05f);
             m_settings.Save();
@@ -852,6 +907,10 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
 }
 
 void App::OnChar(wchar_t ch) {
+    if (m_taggingModal.IsVisible()) {
+        m_taggingModal.OnChar(ch);
+        return;
+    }
     if (m_currentPage == Page::Board) {
         m_boardPage.OnChar(ch);
     }

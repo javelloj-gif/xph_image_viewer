@@ -23,9 +23,29 @@ public:
     XmpTagManager& operator=(const XmpTagManager&) = delete;
 
     void Initialize(IWICImagingFactory2* wicFactory);
+    IWICImagingFactory2* GetWicFactory() const { return m_wicFactory; }
 
     bool ReadTags(const std::wstring& filePath, std::vector<std::wstring>& outTags);
     bool WriteTags(const std::wstring& filePath, const std::vector<std::wstring>& tags);
+
+    bool ReadMetadataExtended(
+        const std::wstring& filePath, 
+        std::wstring& outTitle, 
+        std::wstring& outCreator, 
+        std::wstring& outDescription, 
+        int& outRating,
+        std::wstring& outDeviceMake,
+        std::wstring& outDeviceModel
+    );
+
+    bool WriteMetadataExtended(
+        const std::wstring& filePath, 
+        const std::vector<std::wstring>& tags,
+        const std::wstring& title, 
+        const std::wstring& creator, 
+        const std::wstring& description, 
+        int rating
+    );
 
     bool LoadCache();
     bool SaveCache();
@@ -41,6 +61,8 @@ public:
     bool IsSearchRunning() const;
 
 private:
+    void SyncToWindowsKeywords(const std::wstring& filePath, const std::vector<std::wstring>& tags);
+
     IWICImagingFactory2* m_wicFactory = nullptr;
     MetadataCache m_cache;
     AsyncDirectoryScanner m_scanner;

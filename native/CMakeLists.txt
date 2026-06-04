@@ -54,6 +54,7 @@ set(SOURCES
     src/waterfall/waterfall_page.cpp
     src/ui/thumbnail_strip.cpp
     src/ui/options_menu.cpp
+    src/ui/tagging_modal.cpp
     src/shell/shell_integrator.cpp
     src/i18n/i18n_engine.cpp
     src/common/pch.cpp
@@ -91,6 +92,7 @@ set(HEADERS
     src/waterfall/waterfall_page.h
     src/ui/thumbnail_strip.h
     src/ui/options_menu.h
+    src/ui/tagging_modal.h
     src/shell/shell_integrator.h
     src/i18n/i18n_engine.h
 )
@@ -140,6 +142,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     shell32.lib
     ole32.lib
     advapi32.lib
+    shlwapi.lib
+    propsys.lib
 
     # Direct3D 11 & DXGI
     d3d11.lib
@@ -217,6 +221,8 @@ target_link_libraries(tagging_tests PRIVATE
     winmm.lib
     shell32.lib
     advapi32.lib
+    shlwapi.lib
+    propsys.lib
 )
 # Copy test images to test output for tagging_tests
 add_custom_command(TARGET tagging_tests POST_BUILD
