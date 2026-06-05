@@ -602,6 +602,32 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
         POINT pt;
         if (GetCursorPos(&pt)) {
             HMENU hMenu = CreatePopupMenu();
+
+            auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+            float cxp = size.width / 2.0f;
+
+            bool isOverPreviews = (x > cxp + CENTER_OFFSET);
+            bool isOverFolders = (x < cxp - CENTER_OFFSET);
+
+            if (isOverPreviews && m_hoveredPreviewIdx != -1) {
+                AppendMenuW(hMenu, MF_STRING, 10, L"Send to Board Workspace");
+                AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+            } else if (isOverFolders && m_hoveredFolderIdx != -1) {
+                AppendMenuW(hMenu, MF_STRING, 11, L"Remove Folder from List");
+                AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+            }
+
+            HMENU hSortSub = CreatePopupMenu();
+            int currentMode = m_app->m_settings.sort_mode;
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 20, L"Name (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 21, L"Name (Descending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 22, L"Date (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 23, L"Date (Descending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 24, L"Size (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 25, L"Size (Descending)");
+            AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
+            AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+
             AppendMenuW(hMenu, MF_STRING, 1, L"Settings...");
             AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
             AppendMenuW(hMenu, MF_STRING, 3, L"Exit");
@@ -617,6 +643,36 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
             } else if (selected == 3) {
                 m_app->m_isQuitting = true;
                 m_app->m_window.Close();
+            } else if (selected >= 20 && selected <= 25) {
+                m_app->ApplySortMode(selected - 20);
+            } else if (selected == 10) {
+                if (m_app->m_currentFolderIdx >= 0 && m_app->m_currentFolderIdx < static_cast<int>(m_app->m_folders.size())) {
+                    auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
+                    if (m_hoveredPreviewIdx >= 0 && m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {
+                        std::wstring imgPath = folder.filePaths[m_hoveredPreviewIdx];
+                        m_app->LoadImage(imgPath);
+                        m_app->SetPage(Page::Board);
+                    }
+                }
+            } else if (selected == 11) {
+                if (m_hoveredFolderIdx >= 0 && m_hoveredFolderIdx < static_cast<int>(m_app->m_folders.size())) {
+                    bool wasActive = (m_hoveredFolderIdx == m_app->m_currentFolderIdx);
+                    m_app->m_libraryData.RemoveFolder(m_hoveredFolderIdx);
+                    if (wasActive) {
+                        if (m_app->m_currentFolderIdx >= 0) {
+                            SetCurrentFolder(m_app->m_currentFolderIdx);
+                        } else {
+                            m_app->m_fileList.clear();
+                            m_app->m_currentIndex = -1;
+                            m_app->m_currentImage = nullptr;
+                            m_app->m_animatedImage = nullptr;
+                            m_app->m_thumbnailStrip.SetFileList({});
+                        }
+                    }
+                    m_hoveredFolderIdx = -1;
+                    CalculateLayout();
+                    m_app->m_window.RequestRedraw();
+                }
             }
         }
         return true;
@@ -749,7 +805,81 @@ bool LibraryPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModif
     return false;
 }
 
-void LibraryPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+bool LibraryPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (vk == '3') {
+        if (m_app->m_currentFolderIdx >= 0 && m_app->m_currentFolderIdx < static_cast<int>(m_app->m_folders.size())) {
+            auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
+            if (m_hoveredPreviewIdx >= 0 && m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {
+                std::wstring imgPath = folder.filePaths[m_hoveredPreviewIdx];
+                m_app->LoadImage(imgPath);
+                m_app->SetPage(Page::Board);
+                return true;
+            }
+        }
+    }
+
+    if (vk != VK_PRIOR && vk != VK_NEXT) return false;
+
+    auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+    float cxp = size.width / 2.0f;
+
+    POINT pt;
+    bool overFolders = true;
+    if (GetCursorPos(&pt) && ScreenToClient(m_app->m_window.GetHwnd(), &pt)) {
+        if (pt.x > cxp + CENTER_OFFSET) {
+            overFolders = false;
+        }
+    }
+
+    float scrollAmount = size.height - 100.0f;
+    if (vk == VK_PRIOR) { // Page Up
+        if (overFolders) {
+            m_targetFoldersScrollY += scrollAmount;
+            float contentHeight = m_app->m_folders.size() * FOLDER_ITEM_HEIGHT + 20.0f;
+            float maxScroll = contentHeight - size.height;
+            m_targetFoldersScrollY = std::clamp(m_targetFoldersScrollY, -maxScroll, 0.0f);
+            if (contentHeight <= size.height) m_targetFoldersScrollY = 0.0f;
+        } else if (m_app->m_currentFolderIdx >= 0) {
+            auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
+            float rightContentHeight = 0.0f;
+            for (const auto& item : folder.previews) {
+                if (item.rect.bottom > rightContentHeight) {
+                    rightContentHeight = item.rect.bottom;
+                }
+            }
+            rightContentHeight += 20.0f;
+            folder.targetScrollOffset += scrollAmount;
+            float maxScroll = rightContentHeight - size.height;
+            folder.targetScrollOffset = std::clamp(folder.targetScrollOffset, -maxScroll, 0.0f);
+            if (rightContentHeight <= size.height) folder.targetScrollOffset = 0.0f;
+        }
+        m_app->m_window.RequestRedraw();
+        return true;
+    } else if (vk == VK_NEXT) { // Page Down
+        if (overFolders) {
+            m_targetFoldersScrollY -= scrollAmount;
+            float contentHeight = m_app->m_folders.size() * FOLDER_ITEM_HEIGHT + 20.0f;
+            float maxScroll = contentHeight - size.height;
+            m_targetFoldersScrollY = std::clamp(m_targetFoldersScrollY, -maxScroll, 0.0f);
+            if (contentHeight <= size.height) m_targetFoldersScrollY = 0.0f;
+        } else if (m_app->m_currentFolderIdx >= 0) {
+            auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
+            float rightContentHeight = 0.0f;
+            for (const auto& item : folder.previews) {
+                if (item.rect.bottom > rightContentHeight) {
+                    rightContentHeight = item.rect.bottom;
+                }
+            }
+            rightContentHeight += 20.0f;
+            folder.targetScrollOffset -= scrollAmount;
+            float maxScroll = rightContentHeight - size.height;
+            folder.targetScrollOffset = std::clamp(folder.targetScrollOffset, -maxScroll, 0.0f);
+            if (rightContentHeight <= size.height) folder.targetScrollOffset = 0.0f;
+        }
+        m_app->m_window.RequestRedraw();
+        return true;
+    }
+    return false;
 }
 
 void LibraryPage::DrawCheckerboard(Renderer& renderer, const RectF& rect) {

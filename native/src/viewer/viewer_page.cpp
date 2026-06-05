@@ -91,6 +91,19 @@ void ViewerPage::Update(double dt) {
         }
         m_app->m_window.RequestRedraw();
     }
+
+    m_mouseInactivityTimer += dt;
+    if (m_mouseInactivityTimer >= 2.0) {
+        if (m_metadataOpacity > 0.0f) {
+            m_metadataOpacity = std::max(0.0f, m_metadataOpacity - static_cast<float>(dt * 2.0));
+            m_app->m_window.RequestRedraw();
+        }
+    } else {
+        if (m_metadataOpacity < 1.0f) {
+            m_metadataOpacity = std::min(1.0f, m_metadataOpacity + static_cast<float>(dt * 4.0));
+            m_app->m_window.RequestRedraw();
+        }
+    }
 }
 
 void ViewerPage::Draw(Renderer& renderer) {
@@ -196,9 +209,12 @@ RectF ViewerPage::CalculateImageRect() const {
     }
 
     auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    float scaleX = screenSize.width / imgW;
-    float scaleY = screenSize.height / imgH;
-    float scale = std::min(scaleX, scaleY);
+    float scale = 1.0f;
+    if (imgW > screenSize.width || imgH > screenSize.height) {
+        float scaleX = screenSize.width / imgW;
+        float scaleY = screenSize.height / imgH;
+        scale = std::min(scaleX, scaleY);
+    }
 
     float fitW = imgW * scale;
     float fitH = imgH * scale;
@@ -404,17 +420,19 @@ void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
             float barH = 30.0f;
             float barX = (size.width - barW) / 2.0f;
 
-            // Offset the island upward if the thumbnail strip is visible
-            float stripOpacity = m_app->m_thumbnailStrip.GetOpacity();
-            float bottomOffset = 15.0f + stripOpacity * (ThumbnailStrip::HEIGHT - 15.0f);
-            float barY = size.height - barH - bottomOffset;
+            if (m_metadataOpacity > 0.0f) {
+                // Offset the island upward if the thumbnail strip is visible
+                float stripOpacity = m_app->m_thumbnailStrip.GetOpacity();
+                float bottomOffset = 15.0f + stripOpacity * (ThumbnailStrip::HEIGHT - 15.0f);
+                float barY = size.height - barH - bottomOffset;
 
-            RectF barRect = RectF::FromXYWH(barX, barY, barW, barH);
-            renderer.FillRoundedRect(barRect, 6.0f, 6.0f, Color::Black(0.6f));
-            renderer.DrawRoundedRect(barRect, 6.0f, 6.0f, Color::White(0.15f), 1.0f);
+                RectF barRect = RectF::FromXYWH(barX, barY, barW, barH);
+                renderer.FillRoundedRect(barRect, 6.0f, 6.0f, Color::Black(0.6f * m_metadataOpacity));
+                renderer.DrawRoundedRect(barRect, 6.0f, 6.0f, Color::White(0.15f * m_metadataOpacity), 1.0f);
 
-            RectF textRect = RectF::FromXYWH(barX + paddingH, barY + paddingV, textWidth, barH - paddingV * 2.0f);
-            renderer.DrawText(info, textRect, Color::White(0.9f), 13.0f, TextAlign::Center, TextVAlign::Center);
+                RectF textRect = RectF::FromXYWH(barX + paddingH, barY + paddingV, textWidth, barH - paddingV * 2.0f);
+                renderer.DrawText(info, textRect, Color::White(0.9f * m_metadataOpacity), 13.0f, TextAlign::Center, TextVAlign::Center);
+            }
         }
     }
 }
@@ -481,6 +499,10 @@ void ViewerPage::DrawRegionZoom(Renderer& renderer) {
 }
 
 void ViewerPage::OnMouseMove(float x, float y, KeyModifiers mods) {
+    m_mouseInactivityTimer = 0.0;
+    if (m_metadataOpacity < 1.0f) {
+        m_app->m_window.RequestRedraw();
+    }
     if (m_regionZoomActive && !m_regionZoomDefined) {
         UpdateRegionZoom(x, y);
     } else if (m_dragging) {
@@ -491,6 +513,10 @@ void ViewerPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 }
 
 void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
+    m_mouseInactivityTimer = 0.0;
+    if (m_metadataOpacity < 1.0f) {
+        m_app->m_window.RequestRedraw();
+    }
     if (btn == MouseButton::Right) {
         POINT pt;
         if (GetCursorPos(&pt)) {
@@ -530,6 +556,10 @@ void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mod
 }
 
 void ViewerPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
+    m_mouseInactivityTimer = 0.0;
+    if (m_metadataOpacity < 1.0f) {
+        m_app->m_window.RequestRedraw();
+    }
     if (btn == MouseButton::Left) {
         if (m_regionZoomActive && !m_regionZoomDefined) {
             FinishRegionZoom(x, y);
@@ -539,6 +569,10 @@ void ViewerPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods)
 }
 
 void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
+    m_mouseInactivityTimer = 0.0;
+    if (m_metadataOpacity < 1.0f) {
+        m_app->m_window.RequestRedraw();
+    }
     bool shouldZoom = m_app->m_settings.zoom_on_mousewheel ? !mods.ctrl : mods.ctrl;
     if (!shouldZoom) {
         m_app->NavigateImage(delta > 0 ? -1 : 1);
@@ -687,6 +721,9 @@ void ViewerPage::ResetView() {
     m_zoomTextOpacity = 0.0f;
     m_zoomTextTimer = 0.0;
     m_lastZoom = defaultZoom;
+
+    m_metadataOpacity = 1.0f;
+    m_mouseInactivityTimer = 0.0;
 
     m_app->m_window.RequestRedraw();
 }
@@ -915,32 +952,7 @@ bool ViewerPage::IsPointOverImage(float x, float y) const {
 }
 
 float ViewerPage::GetDefaultZoom() const {
-    auto currentImage = m_app->m_currentImage;
-    auto animatedImage = m_app->m_animatedImage;
-    if (!currentImage && !animatedImage) return 1.0f;
-
-    float imgW = 0.0f;
-    float imgH = 0.0f;
-    if (animatedImage && !animatedImage->frames.empty()) {
-        imgW = static_cast<float>(animatedImage->frames[0].width);
-        imgH = static_cast<float>(animatedImage->frames[0].height);
-    } else if (currentImage) {
-        imgW = static_cast<float>(currentImage->width);
-        imgH = static_cast<float>(currentImage->height);
-    } else {
-        return 1.0f;
-    }
-
-    auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    if (imgW > screenSize.width || imgH > screenSize.height) {
-        return 1.0f;
-    } else {
-        float fitW = CalculateImageRect().Width();
-        if (fitW > 0.0f) {
-            return imgW / fitW;
-        }
-        return 1.0f;
-    }
+    return 1.0f;
 }
 
 float ViewerPage::GetDisplayZoom() const {

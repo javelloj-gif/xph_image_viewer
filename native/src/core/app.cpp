@@ -384,9 +384,12 @@ RectF App::CalculateImageRect() const {
     }
 
     auto screenSize = m_renderer.GetTargetSize().ToFloat();
-    float scaleX = screenSize.width / imgW;
-    float scaleY = screenSize.height / imgH;
-    float scale = std::min(scaleX, scaleY);
+    float scale = 1.0f;
+    if (imgW > screenSize.width || imgH > screenSize.height) {
+        float scaleX = screenSize.width / imgW;
+        float scaleY = screenSize.height / imgH;
+        scale = std::min(scaleX, scaleY);
+    }
 
     float fitW = imgW * scale;
     float fitH = imgH * scale;
@@ -586,6 +589,9 @@ void App::LoadImage(const std::wstring& path) {
 
     m_thumbnailStrip.SyncSelection(m_currentIndex);
     m_libraryPage.SyncCurrentFolderWithApp();
+    if (!m_window.IsFullscreen()) {
+        AdjustWindowToImage();
+    }
     m_window.RequestRedraw();
 }
 
@@ -595,6 +601,192 @@ void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
     m_libraryPage.SyncCurrentFolderWithApp();
+}
+
+void App::ApplySortMode(int mode) {
+    m_settings.sort_mode = mode;
+    m_settings.Save();
+
+    for (size_t i = 0; i < m_folders.size(); ++i) {
+        m_libraryData.SortFolder(static_cast<int>(i), static_cast<FolderDataManager::SortMode>(mode));
+    }
+
+    if (m_currentFolderIdx >= 0 && m_currentFolderIdx < static_cast<int>(m_folders.size())) {
+        auto& folder = m_folders[m_currentFolderIdx];
+        m_fileList = folder.filePaths;
+
+        std::wstring currentPath = L"";
+        if (m_currentImage) {
+            currentPath = m_currentImage->filePath;
+        } else if (m_animatedImage) {
+            currentPath = m_animatedImage->filePath;
+        }
+
+        if (!currentPath.empty()) {
+            auto it = std::find(m_fileList.begin(), m_fileList.end(), currentPath);
+            if (it != m_fileList.end()) {
+                m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
+                folder.currentIndex = m_currentIndex;
+            }
+        }
+    }
+
+    m_thumbnailStrip.SetFileList(m_fileList);
+    m_thumbnailStrip.SyncSelection(m_currentIndex);
+
+    m_libraryPage.CalculateLayout();
+    m_waterfallPage.CalculateLayout();
+
+    m_window.RequestRedraw();
+}
+
+void App::DeleteImage(const std::wstring& path) {
+    for (auto& folder : m_folders) {
+        auto itPath = std::find(folder.filePaths.begin(), folder.filePaths.end(), path);
+        if (itPath != folder.filePaths.end()) {
+            size_t idx = std::distance(folder.filePaths.begin(), itPath);
+            folder.filePaths.erase(itPath);
+            if (idx < folder.previews.size()) {
+                folder.previews.erase(folder.previews.begin() + idx);
+            }
+            if (folder.currentIndex >= static_cast<int>(folder.filePaths.size())) {
+                folder.currentIndex = std::max(0, static_cast<int>(folder.filePaths.size()) - 1);
+            }
+        }
+    }
+
+    bool wasActive = false;
+    std::wstring activePath = L"";
+    if (m_currentImage) {
+        activePath = m_currentImage->filePath;
+    } else if (m_animatedImage) {
+        activePath = m_animatedImage->filePath;
+    }
+
+    if (activePath == path) {
+        wasActive = true;
+    }
+
+    auto itFileList = std::find(m_fileList.begin(), m_fileList.end(), path);
+    if (itFileList != m_fileList.end()) {
+        m_fileList.erase(itFileList);
+    }
+
+    if (wasActive) {
+        m_currentImage = nullptr;
+        m_animatedImage = nullptr;
+        m_frameSequencer.Reset();
+
+        if (!m_fileList.empty()) {
+            if (m_currentIndex >= static_cast<int>(m_fileList.size())) {
+                m_currentIndex = 0;
+            }
+            LoadImage(m_fileList[m_currentIndex]);
+        } else {
+            m_currentIndex = -1;
+            ResetView();
+            m_window.SetTitle(L"Krumassan Viewer");
+            m_waterfallPage.m_viewerModal = false;
+        }
+    } else {
+        if (!m_fileList.empty() && !activePath.empty()) {
+            auto it = std::find(m_fileList.begin(), m_fileList.end(), activePath);
+            if (it != m_fileList.end()) {
+                m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
+            } else {
+                m_currentIndex = -1;
+            }
+        } else {
+            m_currentIndex = -1;
+        }
+    }
+
+    m_thumbnailStrip.SetFileList(m_fileList);
+    m_thumbnailStrip.SyncSelection(m_currentIndex);
+
+    m_libraryPage.CalculateLayout();
+    m_waterfallPage.CalculateLayout();
+
+    m_window.RequestRedraw();
+}
+
+void App::AdjustWindowToImage() {
+    if (!m_currentImage && !m_animatedImage) return;
+
+    float imgW = 0.0f;
+    float imgH = 0.0f;
+    if (m_animatedImage && !m_animatedImage->frames.empty()) {
+        imgW = static_cast<float>(m_animatedImage->frames[0].width);
+        imgH = static_cast<float>(m_animatedImage->frames[0].height);
+    } else if (m_currentImage) {
+        imgW = static_cast<float>(m_currentImage->width);
+        imgH = static_cast<float>(m_currentImage->height);
+    }
+
+    if (imgW <= 0.0f || imgH <= 0.0f) return;
+
+    HMONITOR hMon = MonitorFromWindow(m_window.GetHwnd(), MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi = { sizeof(mi) };
+    GetMonitorInfoW(hMon, &mi);
+
+    int workAreaWidth = mi.rcWork.right - mi.rcWork.left;
+    int workAreaHeight = mi.rcWork.bottom - mi.rcWork.top;
+
+    // Minimum client size is 512x512
+    int clientW = std::max(512, static_cast<int>(imgW));
+    int clientH = std::max(512, static_cast<int>(imgH));
+    float aspect = imgW / imgH;
+
+    // Maximum client area calculation considering non-client area (borders, caption)
+    int maxClientW = workAreaWidth;
+    int maxClientH = workAreaHeight;
+    if (!m_window.IsFrameless()) {
+        DWORD style = GetWindowLongW(m_window.GetHwnd(), GWL_STYLE);
+        DWORD exStyle = GetWindowLongW(m_window.GetHwnd(), GWL_EXSTYLE);
+        RECT ncRect = { 0, 0, 0, 0 };
+        AdjustWindowRectEx(&ncRect, style, FALSE, exStyle);
+        int ncW = ncRect.right - ncRect.left;
+        int ncH = ncRect.bottom - ncRect.top;
+        maxClientW = std::max(100, workAreaWidth - ncW);
+        maxClientH = std::max(100, workAreaHeight - ncH);
+    }
+
+    // Scale down client area preserving aspect ratio if it exceeds maximum client area
+    if (clientW > maxClientW || clientH > maxClientH) {
+        float maxAspect = static_cast<float>(maxClientW) / maxClientH;
+        if (aspect > maxAspect) {
+            clientW = maxClientW;
+            clientH = static_cast<int>(clientW / aspect);
+        } else {
+            clientH = maxClientH;
+            clientW = static_cast<int>(clientH * aspect);
+        }
+        clientW = std::max(512, clientW);
+        clientH = std::max(512, clientH);
+    }
+
+    // Calculate window size from client size
+    int targetW = clientW;
+    int targetH = clientH;
+    if (!m_window.IsFrameless()) {
+        RECT rc = { 0, 0, clientW, clientH };
+        DWORD style = GetWindowLongW(m_window.GetHwnd(), GWL_STYLE);
+        DWORD exStyle = GetWindowLongW(m_window.GetHwnd(), GWL_EXSTYLE);
+        AdjustWindowRectEx(&rc, style, FALSE, exStyle);
+        targetW = rc.right - rc.left;
+        targetH = rc.bottom - rc.top;
+    }
+
+    // Clamp final window size to work area bounds
+    if (targetW > workAreaWidth) targetW = workAreaWidth;
+    if (targetH > workAreaHeight) targetH = workAreaHeight;
+
+    // Centering window in work area
+    int targetX = mi.rcWork.left + (workAreaWidth - targetW) / 2;
+    int targetY = mi.rcWork.top + (workAreaHeight - targetH) / 2;
+
+    SetWindowPos(m_window.GetHwnd(), nullptr, targetX, targetY, targetW, targetH,
+                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
 void App::NavigateImage(int direction) {
@@ -643,6 +835,17 @@ void App::OnPaint() {
 
 void App::OnResize(uint32_t width, uint32_t height) {
     m_renderer.Resize(width, height);
+    
+    bool isFullscreen = m_window.IsFullscreen();
+    bool wasFullscreen = m_wasFullscreen;
+    m_wasFullscreen = isFullscreen;
+    
+    if (wasFullscreen && !isFullscreen) {
+        AdjustWindowToImage();
+    }
+    if (m_optionsMenu.IsVisible()) {
+        m_optionsMenu.BuildControls();
+    }
     m_window.RequestRedraw();
 }
 
@@ -763,11 +966,16 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         if (m_optionsMenu.OnKeyDown(vk, mods)) return;
     }
     if (m_currentPage == Page::Viewer) {
+        if (m_thumbnailStrip.IsMouseOver(m_mouseX, m_mouseY) && m_thumbnailStrip.HandleKeyDown(vk, mods)) {
+            return;
+        }
         if (m_viewerPage.OnKeyDown(vk, mods)) {
             return;
         }
     } else if (m_currentPage == Page::Library) {
-        m_libraryPage.OnKeyDown(vk, mods);
+        if (m_libraryPage.OnKeyDown(vk, mods)) {
+            return;
+        }
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnKeyDown(vk, mods)) {
             return;
@@ -779,6 +987,49 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     }
 
     switch (vk) {
+        case VK_DELETE: {
+            std::wstring targetPath = L"";
+            if (m_currentPage == Page::Viewer) {
+                if (m_currentImage) targetPath = m_currentImage->filePath;
+                else if (m_animatedImage) targetPath = m_animatedImage->filePath;
+            } else if (m_currentPage == Page::Library) {
+                if (m_libraryPage.m_hoveredPreviewIdx != -1 && m_currentFolderIdx >= 0) {
+                    auto& folder = m_folders[m_currentFolderIdx];
+                    if (m_libraryPage.m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {
+                        targetPath = folder.filePaths[m_libraryPage.m_hoveredPreviewIdx];
+                    }
+                }
+            } else if (m_currentPage == Page::Waterfall) {
+                if (m_waterfallPage.m_viewerModal) {
+                    if (m_currentImage) targetPath = m_currentImage->filePath;
+                    else if (m_animatedImage) targetPath = m_animatedImage->filePath;
+                } else if (m_waterfallPage.m_hoveredPreviewIdx != -1 && m_currentFolderIdx >= 0) {
+                    auto& folder = m_folders[m_currentFolderIdx];
+                    if (m_waterfallPage.m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {
+                        targetPath = folder.filePaths[m_waterfallPage.m_hoveredPreviewIdx];
+                    }
+                }
+            }
+
+            if (!targetPath.empty()) {
+                bool isFullscreen = m_window.IsFullscreen();
+                int result = MessageBoxW(m_window.GetHwnd(),
+                    L"¿Estás seguro de que deseas enviar esta imagen a la Papelera de reciclaje?",
+                    L"Eliminar Imagen",
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                
+                if (isFullscreen && !m_window.IsFullscreen()) {
+                    m_window.SetFullscreen(true);
+                }
+
+                if (result == IDYES) {
+                    if (ShellIntegrator::SendFileToRecycleBin(targetPath)) {
+                        DeleteImage(targetPath);
+                    }
+                }
+            }
+            break;
+        }
         case '2':
             SetPage(Page::Viewer);
             break;

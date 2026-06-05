@@ -45,6 +45,7 @@ public:
     bool show_thirds = false;
     bool show_cyberpunk = false;
     bool show_metadata = true;
+    int sort_mode = 0;
 
     /// Load settings from user_data/settings.json. Returns false on failure (e.g. file missing).
     bool Load();

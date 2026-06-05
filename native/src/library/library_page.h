@@ -40,7 +40,7 @@ public:
     bool OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
     bool OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
-    void OnKeyDown(uint32_t vk, KeyModifiers mods);
+    bool OnKeyDown(uint32_t vk, KeyModifiers mods);
 
     // ── Public Helpers ──────────────────────────────────────────────────────
     void AddFolder(const std::wstring& path);

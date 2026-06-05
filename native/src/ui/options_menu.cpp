@@ -389,7 +389,6 @@ bool OptionsMenu::OnMouseMove(float x, float y, KeyModifiers mods) {
             float pct = (x - item.rect.left) / item.rect.Width();
             pct = std::clamp(pct, 0.0f, 1.0f);
             *item.pFloatVal = item.minVal + pct * (item.maxVal - item.minVal);
-            m_app->m_settings.Save();
             m_app->m_window.RequestRedraw();
         }
         return true;
@@ -470,6 +469,9 @@ bool OptionsMenu::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
 bool OptionsMenu::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (!m_visible) return false;
 
+    if (m_draggingSlider) {
+        m_app->m_settings.Save();
+    }
     m_draggingSlider = false;
     m_activeIdx = -1;
     return true;

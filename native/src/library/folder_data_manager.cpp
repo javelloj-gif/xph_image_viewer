@@ -88,6 +88,9 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
 
     m_folders.push_back(std::move(folder));
 
+    int currentSortMode = m_app ? m_app->m_settings.sort_mode : 0;
+    SortFolder(static_cast<int>(m_folders.size() - 1), static_cast<SortMode>(currentSortMode));
+
     if (!libraryLoading) {
         SetCurrentFolderIndex(static_cast<int>(m_folders.size() - 1), loadImage);
         SaveSession();

@@ -13,6 +13,7 @@ namespace kv {
 class App; // Forward declaration
 
 class OptionsMenu {
+    friend class App;
 public:
     OptionsMenu() = default;
     ~OptionsMenu() = default;

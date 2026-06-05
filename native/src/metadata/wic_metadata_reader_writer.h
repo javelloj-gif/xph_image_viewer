@@ -86,6 +86,31 @@ private:
         const std::wstring& pathWithQualifier,
         const std::wstring& val
     );
+
+    static Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> GetFrameDecoder(
+        IWICImagingFactory2* wicFactory,
+        const std::wstring& filePath,
+        Microsoft::WRL::ComPtr<IWICBitmapDecoder>& outDecoder
+    );
+
+    static bool CreateStringVectorPropVariant(
+        const std::vector<std::wstring>& strings,
+        PROPVARIANT& outVar
+    );
+
+    static bool InitializeTranscoder(
+        IWICImagingFactory2* wicFactory,
+        const std::wstring& tempPath,
+        GUID containerFormat,
+        IWICBitmapFrameDecode* pFrame,
+        Microsoft::WRL::ComPtr<IWICBitmapEncoder>& outEncoder,
+        Microsoft::WRL::ComPtr<IWICBitmapFrameEncode>& outFrameEncode
+    );
+
+    static bool ReplaceFileWithTemp(
+        const std::wstring& filePath,
+        const std::wstring& tempPath
+    );
 };
 
 } // namespace kv

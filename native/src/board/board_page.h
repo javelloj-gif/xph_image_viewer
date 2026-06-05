@@ -20,7 +20,7 @@ public:
     friend class App;
 
     BoardPage() = default;
-    ~BoardPage() = default;
+    ~BoardPage();
 
     BoardPage(const BoardPage&) = delete;
     BoardPage& operator=(const BoardPage&) = delete;
@@ -63,6 +63,18 @@ private:
     void StartLinking(int fromIdx);
     float DistanceToLineSegment(const PointF& p, const PointF& a, const PointF& b) const;
 
+    // Helpers
+    RectF GetSearchModalBounds() const;
+    void UpdateFilteredSuggestions();
+    void SelectSuggestion(const std::wstring& suggestion);
+    void DrawSearchModal(Renderer& renderer);
+    void DrawScanProgressBar(Renderer& renderer);
+    void DrawToastNotification(Renderer& renderer);
+    void LoadSuggestionsFromDirectory(const std::filesystem::path& activeDir);
+    void StartDirectoryTagScan(const std::filesystem::path& activeDir);
+    void PerformTagQueryAndInsert();
+    std::filesystem::path GetActiveDirectory() const;
+
     App* m_app = nullptr;
 
     // Subsystem components
@@ -77,6 +89,25 @@ private:
     bool m_linkingMode = false;
     int m_linkingFromIdx = -1;
     PointF m_linkingCurrentMousePos = {}; // Screen coordinates
+
+    // Search Modal State
+    bool m_searchVisible = false;
+    std::wstring m_searchText;
+    std::vector<std::wstring> m_suggestions;
+    std::vector<std::wstring> m_filteredSuggestions;
+    int m_hoveredSuggestionIdx = -1;
+    int m_hoveredSearchButton = 0; // 0 = None, 1 = Search, 2 = Close
+
+    // Tag Scanning / Indexing State (CTRL+L)
+    bool m_scanningTags = false;
+    std::atomic<size_t> m_scanCurrent{ 0 };
+    size_t m_scanTotal = 0;
+    std::wstring m_scanDir;
+    std::thread m_scanThread;
+
+    // Toast notification
+    std::wstring m_toastMessage;
+    double m_toastTimeRemaining = 0.0;
 };
 
 } // namespace kv

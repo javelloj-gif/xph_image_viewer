@@ -54,6 +54,7 @@ public:
     bool HandleMouseWheel(float delta, float x, float y, KeyModifiers mods);
     bool HandleMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
     void HandleMouseLeave();
+    bool HandleKeyDown(uint32_t vk, KeyModifiers mods);
 
     /// Returns true if scroll or opacity transitions are running
     bool HasActiveAnimations() const;

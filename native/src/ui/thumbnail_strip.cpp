@@ -513,11 +513,17 @@ void ThumbnailStrip::Rearrange(int insertIndex) {
 
 void ThumbnailStrip::ShowContextMenu(float screenX, float screenY) {
     HMENU hMenu = CreatePopupMenu();
-    AppendMenuW(hMenu, MF_STRING, 1, L"Original order");
-    AppendMenuW(hMenu, MF_STRING, 2, L"Sort by filename (ascending)");
-    AppendMenuW(hMenu, MF_STRING, 3, L"Sort by filename (descending)");
-    AppendMenuW(hMenu, MF_STRING, 4, L"Sort by date (ascending)");
-    AppendMenuW(hMenu, MF_STRING, 5, L"Sort by date (descending)");
+    HMENU hSortSub = CreatePopupMenu();
+    int currentMode = m_app->m_settings.sort_mode;
+
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 10, L"Name (Ascending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 11, L"Name (Descending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 12, L"Date (Ascending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 13, L"Date (Descending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 14, L"Size (Ascending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 15, L"Size (Descending)");
+
+    AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hMenu, MF_STRING, 6, L"Save order metadata to disk");
     AppendMenuW(hMenu, MF_STRING, 7, L"Toggle fullscreen mode");
@@ -529,23 +535,8 @@ void ThumbnailStrip::ShowContextMenu(float screenX, float screenY) {
 
     if (selected == 0) return;
 
-    if (selected == 1 || selected == 2) {
-        std::sort(m_app->m_fileList.begin(), m_app->m_fileList.end());
-    } else if (selected == 3) {
-        std::sort(m_app->m_fileList.begin(), m_app->m_fileList.end(), std::greater<std::wstring>());
-    } else if (selected == 4 || selected == 5) {
-        namespace fs = std::filesystem;
-        auto compareAsc = [](const std::wstring& a, const std::wstring& b) {
-            try { return fs::last_write_time(a) < fs::last_write_time(b); } catch (...) { return a < b; }
-        };
-        auto compareDesc = [](const std::wstring& a, const std::wstring& b) {
-            try { return fs::last_write_time(a) > fs::last_write_time(b); } catch (...) { return a > b; }
-        };
-        if (selected == 4) {
-            std::sort(m_app->m_fileList.begin(), m_app->m_fileList.end(), compareAsc);
-        } else {
-            std::sort(m_app->m_fileList.begin(), m_app->m_fileList.end(), compareDesc);
-        }
+    if (selected >= 10 && selected <= 15) {
+        m_app->ApplySortMode(selected - 10);
     } else if (selected == 6) {
         if (!m_app->m_fileList.empty()) {
             namespace fs = std::filesystem;
@@ -564,15 +555,26 @@ void ThumbnailStrip::ShowContextMenu(float screenX, float screenY) {
     } else if (selected == 7) {
         m_app->m_window.ToggleFullscreen();
     }
+}
 
-    SetFileList(m_app->m_fileList);
-    if (m_app->m_currentImage) {
-        auto it = std::find(m_app->m_fileList.begin(), m_app->m_fileList.end(), m_app->m_currentImage->filePath);
-        if (it != m_app->m_fileList.end()) {
-            m_app->m_currentIndex = static_cast<int>(std::distance(m_app->m_fileList.begin(), it));
-        }
+bool ThumbnailStrip::HandleKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (m_thumbnails.empty() || m_opacity == 0.0f) return false;
+
+    auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    float windowWidth = targetSize.width;
+    float tw = GetThumbnailWidth();
+    float maxScroll = -tw * (m_thumbnails.size() - 1);
+
+    if (vk == VK_PRIOR) { // Page Up
+        m_targetScrollX = std::min(0.0f, m_targetScrollX + (windowWidth - tw * 2.0f));
+        m_app->m_window.RequestRedraw();
+        return true;
+    } else if (vk == VK_NEXT) { // Page Down
+        m_targetScrollX = std::max(maxScroll, m_targetScrollX - (windowWidth - tw * 2.0f));
+        m_app->m_window.RequestRedraw();
+        return true;
     }
-    m_app->m_window.RequestRedraw();
+    return false;
 }
 
 } // namespace kv

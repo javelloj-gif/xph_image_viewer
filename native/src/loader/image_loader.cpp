@@ -234,15 +234,54 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
     anim->filePath = path;
     anim->frames.reserve(frameCount);
 
+    UINT globalW = 0;
+    UINT globalH = 0;
+    ComPtr<IWICMetadataQueryReader> globalMeta;
+    if (SUCCEEDED(decoder->GetMetadataQueryReader(&globalMeta))) {
+        PROPVARIANT varW, varH;
+        PropVariantInit(&varW);
+        PropVariantInit(&varH);
+        if (SUCCEEDED(globalMeta->GetMetadataByName(L"/logscrdesc/Width", &varW)) && varW.vt == VT_UI2) {
+            globalW = varW.uiVal;
+        }
+        if (SUCCEEDED(globalMeta->GetMetadataByName(L"/logscrdesc/Height", &varH)) && varH.vt == VT_UI2) {
+            globalH = varH.uiVal;
+        }
+        PropVariantClear(&varW);
+        PropVariantClear(&varH);
+
+        PROPVARIANT loops;
+        PropVariantInit(&loops);
+        if (SUCCEEDED(globalMeta->GetMetadataByName(L"/appext/Data", &loops))) {
+            anim->loopCount = 0;
+        }
+        PropVariantClear(&loops);
+    }
+
+    if (globalW == 0 || globalH == 0) {
+        ComPtr<IWICBitmapFrameDecode> firstFrame;
+        if (SUCCEEDED(decoder->GetFrame(0, &firstFrame))) {
+            firstFrame->GetSize(&globalW, &globalH);
+        }
+    }
+    if (globalW == 0 || globalH == 0) {
+        globalW = 1;
+        globalH = 1;
+    }
+
+    std::vector<uint32_t> canvas(static_cast<size_t>(globalW) * globalH, 0);
+    std::vector<uint32_t> prevCanvas = canvas;
+
+    uint8_t prevDisposal = 0;
+    UINT prevLeft = 0, prevTop = 0, prevW = 0, prevH = 0;
+
     for (UINT i = 0; i < frameCount; ++i) {
         ComPtr<IWICBitmapFrameDecode> frame;
         hr = decoder->GetFrame(i, &frame);
         if (FAILED(hr)) continue;
 
-        AnimationFrame af;
-
-        UINT w = 0, h = 0;
-        frame->GetSize(&w, &h);
+        UINT localW = 0, localH = 0;
+        frame->GetSize(&localW, &localH);
 
         ComPtr<IWICFormatConverter> converter;
         if (FAILED(m_wicFactory->CreateFormatConverter(&converter))) continue;
@@ -250,42 +289,114 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
                 WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeMedianCut)))
             continue;
 
-        af.width = w;
-        af.height = h;
-        uint32_t stride = w * 4;
-        af.pixels.resize(static_cast<size_t>(stride) * h);
-        if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(af.pixels.size()),
-                af.pixels.data())))
+        uint32_t stride = localW * 4;
+        std::vector<uint8_t> localPixels(static_cast<size_t>(stride) * localH);
+        if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(localPixels.size()),
+                localPixels.data())))
             continue;
+
+        UINT left = 0, top = 0;
+        uint8_t disposal = 0;
+        double delayMs = 100.0;
 
         ComPtr<IWICMetadataQueryReader> metadata;
         if (SUCCEEDED(frame->GetMetadataQueryReader(&metadata))) {
-            PROPVARIANT delay;
-            PropVariantInit(&delay);
+            PROPVARIANT val;
+            PropVariantInit(&val);
 
-            if (SUCCEEDED(metadata->GetMetadataByName(L"/grctlext/Delay", &delay))) {
-                if (delay.vt == VT_UI2) {
-                    af.delayMs = static_cast<double>(delay.uiVal) * 10.0;
+            if (SUCCEEDED(metadata->GetMetadataByName(L"/imgdesc/Left", &val)) && val.vt == VT_UI2) {
+                left = val.uiVal;
+            }
+            PropVariantClear(&val);
+
+            if (SUCCEEDED(metadata->GetMetadataByName(L"/imgdesc/Top", &val)) && val.vt == VT_UI2) {
+                top = val.uiVal;
+            }
+            PropVariantClear(&val);
+
+            if (SUCCEEDED(metadata->GetMetadataByName(L"/grctlext/Disposal", &val)) && val.vt == VT_UI1) {
+                disposal = val.bVal;
+            }
+            PropVariantClear(&val);
+
+            if (SUCCEEDED(metadata->GetMetadataByName(L"/grctlext/Delay", &val))) {
+                if (val.vt == VT_UI2) {
+                    delayMs = static_cast<double>(val.uiVal) * 10.0;
                 }
             }
-
-            PropVariantClear(&delay);
+            PropVariantClear(&val);
         }
 
-        if (af.delayMs < 20.0) af.delayMs = 100.0;
+        if (delayMs < 20.0) delayMs = 100.0;
+
+        if (i > 0) {
+            if (prevDisposal == 2) {
+                for (UINT dy = 0; dy < prevH; ++dy) {
+                    for (UINT dx = 0; dx < prevW; ++dx) {
+                        UINT tx = prevLeft + dx;
+                        UINT ty = prevTop + dy;
+                        if (tx < globalW && ty < globalH) {
+                            canvas[static_cast<size_t>(ty) * globalW + tx] = 0;
+                        }
+                    }
+                }
+            } else if (prevDisposal == 3) {
+                canvas = prevCanvas;
+            }
+        }
+
+        prevCanvas = canvas;
+
+        for (UINT dy = 0; dy < localH; ++dy) {
+            for (UINT dx = 0; dx < localW; ++dx) {
+                UINT tx = left + dx;
+                UINT ty = top + dy;
+                if (tx >= globalW || ty >= globalH) continue;
+
+                size_t srcIdx = (static_cast<size_t>(dy) * localW + dx) * 4;
+                size_t destIdx = static_cast<size_t>(ty) * globalW + tx;
+
+                uint8_t sb = localPixels[srcIdx + 0];
+                uint8_t sg = localPixels[srcIdx + 1];
+                uint8_t sr = localPixels[srcIdx + 2];
+                uint8_t sa = localPixels[srcIdx + 3];
+
+                if (sa == 255) {
+                    canvas[destIdx] = sb | (sg << 8) | (sr << 16) | (sa << 24);
+                } else if (sa > 0) {
+                    uint32_t dest = canvas[destIdx];
+                    uint8_t db = dest & 0xFF;
+                    uint8_t dg = (dest >> 8) & 0xFF;
+                    uint8_t dr = (dest >> 16) & 0xFF;
+                    uint8_t da = (dest >> 24) & 0xFF;
+
+                    float alphaF = sa / 255.0f;
+                    uint8_t rb = sb + static_cast<uint8_t>(db * (1.0f - alphaF));
+                    uint8_t rg = sg + static_cast<uint8_t>(dg * (1.0f - alphaF));
+                    uint8_t rr = sr + static_cast<uint8_t>(dr * (1.0f - alphaF));
+                    uint8_t ra = sa + static_cast<uint8_t>(da * (1.0f - alphaF));
+
+                    canvas[destIdx] = rb | (rg << 8) | (rr << 16) | (ra << 24);
+                }
+            }
+        }
+
+        AnimationFrame af;
+        af.width = globalW;
+        af.height = globalH;
+        af.delayMs = delayMs;
+        uint32_t globalStride = globalW * 4;
+        af.pixels.resize(static_cast<size_t>(globalStride) * globalH);
+        std::memcpy(af.pixels.data(), canvas.data(), af.pixels.size());
 
         anim->totalDurationMs += af.delayMs;
         anim->frames.push_back(std::move(af));
-    }
 
-    ComPtr<IWICMetadataQueryReader> globalMeta;
-    if (SUCCEEDED(decoder->GetMetadataQueryReader(&globalMeta))) {
-        PROPVARIANT loops;
-        PropVariantInit(&loops);
-        if (SUCCEEDED(globalMeta->GetMetadataByName(L"/appext/Data", &loops))) {
-            anim->loopCount = 0;
-        }
-        PropVariantClear(&loops);
+        prevDisposal = disposal;
+        prevLeft = left;
+        prevTop = top;
+        prevW = localW;
+        prevH = localH;
     }
 
     LogInfo(std::format(L"Loaded animated: {} ({} frames, {:.0f}ms total)",

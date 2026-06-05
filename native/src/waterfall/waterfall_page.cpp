@@ -531,6 +531,19 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
         POINT pt;
         if (GetCursorPos(&pt)) {
             HMENU hMenu = CreatePopupMenu();
+            HMENU hSortSub = CreatePopupMenu();
+            int currentMode = m_app->m_settings.sort_mode;
+
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 30, L"Name (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 31, L"Name (Descending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 32, L"Date (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 33, L"Date (Descending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 34, L"Size (Ascending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 35, L"Size (Descending)");
+
+            AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
+            AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+
             AppendMenuW(hMenu, MF_STRING, 1, L"Settings...");
             AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
             AppendMenuW(hMenu, MF_STRING, 3, L"Exit");
@@ -546,6 +559,8 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
             } else if (selected == 3) {
                 m_app->m_isQuitting = true;
                 m_app->m_window.Close();
+            } else if (selected >= 30 && selected <= 35) {
+                m_app->ApplySortMode(selected - 30);
             }
         }
         return true;

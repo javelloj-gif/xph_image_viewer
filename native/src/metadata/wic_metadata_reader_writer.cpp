@@ -92,34 +92,11 @@ bool WicMetadataReaderWriter::ReadTags(
     if (!wicFactory) return false;
 
     ComPtr<IWICBitmapDecoder> pDecoder;
-    HRESULT hr = E_FAIL;
-    ComPtr<IStream> pStream;
-    if (SUCCEEDED(SHCreateStreamOnFileEx(filePath.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &pStream))) {
-        hr = wicFactory->CreateDecoderFromStream(
-            pStream.Get(),
-            nullptr,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
-    }
-    if (FAILED(hr)) {
-        hr = wicFactory->CreateDecoderFromFilename(
-            filePath.c_str(),
-            nullptr,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
-    }
-
-    if (FAILED(hr)) return false;
-
-    ComPtr<IWICBitmapFrameDecode> pFrame;
-    hr = pDecoder->GetFrame(0, &pFrame);
-    if (FAILED(hr)) return false;
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (!pFrame) return false;
 
     ComPtr<IWICMetadataQueryReader> pQueryReader;
-    hr = pFrame->GetMetadataQueryReader(&pQueryReader);
+    HRESULT hr = pFrame->GetMetadataQueryReader(&pQueryReader);
     if (FAILED(hr)) return true;
 
     GUID containerFormat = {};
@@ -333,68 +310,30 @@ bool WicMetadataReaderWriter::WriteTagsFast(
 ) {
     bool fastEncodingSucceeded = false;
     ComPtr<IWICBitmapDecoder> pDecoder;
-    HRESULT hr = wicFactory->CreateDecoderFromFilename(
-        filePath.c_str(),
-        nullptr,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnDemand,
-        &pDecoder
-    );
-
-    if (SUCCEEDED(hr)) {
-        ComPtr<IWICBitmapFrameDecode> pFrame;
-        hr = pDecoder->GetFrame(0, &pFrame);
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (pFrame) {
+        ComPtr<IWICFastMetadataEncoder> pFastEncoder;
+        HRESULT hr = wicFactory->CreateFastMetadataEncoderFromFrameDecode(pFrame.Get(), &pFastEncoder);
         if (SUCCEEDED(hr)) {
-            ComPtr<IWICFastMetadataEncoder> pFastEncoder;
-            hr = wicFactory->CreateFastMetadataEncoderFromFrameDecode(pFrame.Get(), &pFastEncoder);
+            ComPtr<IWICMetadataQueryWriter> pFastQueryWriter;
+            hr = pFastEncoder->GetMetadataQueryWriter(&pFastQueryWriter);
             if (SUCCEEDED(hr)) {
-                ComPtr<IWICMetadataQueryWriter> pFastQueryWriter;
-                hr = pFastEncoder->GetMetadataQueryWriter(&pFastQueryWriter);
-                if (SUCCEEDED(hr)) {
-                    bool fastOk = false;
-                    std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
-                    std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
-                    EnsureMetadataPath(wicFactory, pFastQueryWriter.Get(), subjectPath, false);
+                bool fastOk = false;
+                std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
+                std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
+                EnsureMetadataPath(wicFactory, pFastQueryWriter.Get(), subjectPath, false);
 
-                    PROPVARIANT var;
-                    PropVariantInit(&var);
-                    var.vt = VT_VECTOR | VT_LPWSTR;
-                    var.calpwstr.cElems = static_cast<ULONG>(tags.size());
-                    var.calpwstr.pElems = nullptr;
+                PROPVARIANT var;
+                if (CreateStringVectorPropVariant(tags, var)) {
+                    hr = pFastQueryWriter->SetMetadataByName(subjectPath.c_str(), &var);
+                    fastOk = SUCCEEDED(hr);
+                }
+                PropVariantClear(&var);
 
-                    bool prepOk = true;
-                    if (var.calpwstr.cElems > 0) {
-                        var.calpwstr.pElems = static_cast<LPOLESTR*>(CoTaskMemAlloc(sizeof(LPOLESTR) * var.calpwstr.cElems));
-                        if (!var.calpwstr.pElems) prepOk = false;
-                        else {
-                            for (size_t i = 0; i < tags.size(); ++i) {
-                                size_t len = tags[i].length() + 1;
-                                var.calpwstr.pElems[i] = static_cast<LPOLESTR>(CoTaskMemAlloc(sizeof(wchar_t) * len));
-                                if (var.calpwstr.pElems[i]) {
-                                    wcscpy_s(var.calpwstr.pElems[i], len, tags[i].c_str());
-                                } else {
-                                    for (size_t j = 0; j < i; ++j) {
-                                        CoTaskMemFree(var.calpwstr.pElems[j]);
-                                    }
-                                    CoTaskMemFree(var.calpwstr.pElems);
-                                    prepOk = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (prepOk) {
-                        hr = pFastQueryWriter->SetMetadataByName(subjectPath.c_str(), &var);
-                        fastOk = SUCCEEDED(hr);
-                    }
-                    PropVariantClear(&var);
-
-                    if (fastOk) {
-                        hr = pFastEncoder->Commit();
-                        if (SUCCEEDED(hr)) {
-                            fastEncodingSucceeded = true;
-                        }
+                if (fastOk) {
+                    hr = pFastEncoder->Commit();
+                    if (SUCCEEDED(hr)) {
+                        fastEncodingSucceeded = true;
                     }
                 }
             }
@@ -412,214 +351,113 @@ bool WicMetadataReaderWriter::WriteTagsTranscode(
     std::wstring tempPath = filePath + L".tmp";
     bool transcodingSucceeded = false;
 
-    {
-        ComPtr<IWICBitmapDecoder> pDecoder;
-        HRESULT hr = wicFactory->CreateDecoderFromFilename(
-            filePath.c_str(),
-            nullptr,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
+    ComPtr<IWICBitmapDecoder> pDecoder;
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (!pFrame) return false;
 
-        if (SUCCEEDED(hr)) {
-            ComPtr<IWICBitmapFrameDecode> pFrame;
-            hr = pDecoder->GetFrame(0, &pFrame);
-            if (SUCCEEDED(hr)) {
-                ComPtr<IWICStream> pStream;
-                hr = wicFactory->CreateStream(&pStream);
-                if (SUCCEEDED(hr)) {
-                    hr = pStream->InitializeFromFilename(tempPath.c_str(), GENERIC_WRITE);
-                    if (SUCCEEDED(hr)) {
-                        ComPtr<IWICBitmapEncoder> pEncoder;
-                        hr = wicFactory->CreateEncoder(containerFormat, nullptr, &pEncoder);
-                        if (SUCCEEDED(hr)) {
-                            hr = pEncoder->Initialize(pStream.Get(), WICBitmapEncoderNoCache);
-                            if (SUCCEEDED(hr)) {
-                                ComPtr<IWICBitmapFrameEncode> pFrameEncode;
-                                ComPtr<IPropertyBag2> pPropertyBag;
-                                hr = pEncoder->CreateNewFrame(&pFrameEncode, &pPropertyBag);
-                                if (SUCCEEDED(hr)) {
-                                    if (containerFormat == GUID_ContainerFormatJpeg && pPropertyBag) {
-                                        PROPBAG2 propBag = { 0 };
-                                        propBag.dwType = PROPBAG2_TYPE_DATA;
-                                        propBag.vt = VT_R4;
-                                        propBag.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
-                                        VARIANT varVal;
-                                        VariantInit(&varVal);
-                                        varVal.vt = VT_R4;
-                                        varVal.fltVal = 0.95f;
-                                        pPropertyBag->Write(1, &propBag, &varVal);
-                                    }
+    ComPtr<IWICBitmapEncoder> pEncoder;
+    ComPtr<IWICBitmapFrameEncode> pFrameEncode;
+    if (!InitializeTranscoder(wicFactory, tempPath, containerFormat, pFrame.Get(), pEncoder, pFrameEncode)) {
+        std::filesystem::remove(tempPath);
+        return false;
+    }
 
-                                    hr = pFrameEncode->Initialize(pPropertyBag.Get());
-                                    if (SUCCEEDED(hr)) {
-                                        uint32_t width = 0, height = 0;
-                                        pFrame->GetSize(&width, &height);
-                                        pFrameEncode->SetSize(width, height);
+    ComPtr<IWICMetadataBlockReader> pBlockReader;
+    ComPtr<IWICMetadataBlockWriter> pBlockWriter;
+    if (SUCCEEDED(pFrame->QueryInterface(IID_PPV_ARGS(&pBlockReader))) &&
+        SUCCEEDED(pFrameEncode->QueryInterface(IID_PPV_ARGS(&pBlockWriter)))) {
+        pBlockWriter->InitializeFromBlockReader(pBlockReader.Get());
 
-                                        double dpiX = 0, dpiY = 0;
-                                        pFrame->GetResolution(&dpiX, &dpiY);
-                                        pFrameEncode->SetResolution(dpiX, dpiY);
+        if (containerFormat == GUID_ContainerFormatJpeg) {
+            bool hasXmp = false;
+            UINT count = 0;
+            pBlockWriter->GetCount(&count);
+            for (UINT i = 0; i < count; ++i) {
+                ComPtr<IWICMetadataWriter> pWriter;
+                if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
+                    GUID format = {};
+                    pWriter->GetMetadataFormat(&format);
+                    if (format == GUID_MetadataFormatXMP) {
+                        hasXmp = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasXmp) {
+                ComPtr<IWICMetadataWriter> pXmpWriter;
+                ComPtr<IWICComponentFactory> pComponentFactory;
+                HRESULT hrCreate = E_FAIL;
+                if (SUCCEEDED(wicFactory->QueryInterface(IID_PPV_ARGS(&pComponentFactory)))) {
+                    hrCreate = pComponentFactory->CreateMetadataWriter(GUID_MetadataFormatXMP, nullptr, 0, &pXmpWriter);
+                }
+                if (SUCCEEDED(hrCreate)) {
+                    pBlockWriter->AddWriter(pXmpWriter.Get());
+                }
+            }
 
-                                        WICPixelFormatGUID pixelFormat = {};
-                                        pFrame->GetPixelFormat(&pixelFormat);
-                                        pFrameEncode->SetPixelFormat(&pixelFormat);
-
-                                        hr = pFrameEncode->WriteSource(pFrame.Get(), nullptr);
-                                        if (SUCCEEDED(hr)) {
-                                            ComPtr<IWICMetadataBlockReader> pBlockReader;
-                                            ComPtr<IWICMetadataBlockWriter> pBlockWriter;
-                                            if (SUCCEEDED(pFrame->QueryInterface(IID_PPV_ARGS(&pBlockReader))) &&
-                                                SUCCEEDED(pFrameEncode->QueryInterface(IID_PPV_ARGS(&pBlockWriter)))) {
-                                                pBlockWriter->InitializeFromBlockReader(pBlockReader.Get());
-
-                                                if (containerFormat == GUID_ContainerFormatJpeg) {
-                                                    bool hasXmp = false;
-                                                    UINT count = 0;
-                                                    pBlockWriter->GetCount(&count);
-                                                    for (UINT i = 0; i < count; ++i) {
-                                                        ComPtr<IWICMetadataWriter> pWriter;
-                                                        if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
-                                                            GUID format = {};
-                                                            pWriter->GetMetadataFormat(&format);
-                                                            if (format == GUID_MetadataFormatXMP) {
-                                                                hasXmp = true;
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                    if (!hasXmp) {
-                                                        ComPtr<IWICMetadataWriter> pXmpWriter;
-                                                        ComPtr<IWICComponentFactory> pComponentFactory;
-                                                        HRESULT hrCreate = E_FAIL;
-                                                        if (SUCCEEDED(wicFactory->QueryInterface(IID_PPV_ARGS(&pComponentFactory)))) {
-                                                            hrCreate = pComponentFactory->CreateMetadataWriter(GUID_MetadataFormatXMP, nullptr, 0, &pXmpWriter);
-                                                        }
-                                                        if (SUCCEEDED(hrCreate)) {
-                                                            pBlockWriter->AddWriter(pXmpWriter.Get());
-                                                        }
-                                                    }
-
-                                                    if (!tags.empty()) {
-                                                        ComPtr<IWICMetadataWriter> pXmpBlockWriter;
-                                                        UINT xmpCount = 0;
-                                                        pBlockWriter->GetCount(&xmpCount);
-                                                        for (UINT i = 0; i < xmpCount; ++i) {
-                                                            ComPtr<IWICMetadataWriter> pWriter;
-                                                            if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
-                                                                GUID format = {};
-                                                                pWriter->GetMetadataFormat(&format);
-                                                                if (format == GUID_MetadataFormatXMP) {
-                                                                    pXmpBlockWriter = pWriter;
-                                                                    break;
-                                                                }
-                                                            }
-                                                        }
-
-                                                        if (pXmpBlockWriter) {
-                                                            PROPVARIANT varSchema;
-                                                            PropVariantInit(&varSchema);
-                                                            varSchema.vt = VT_LPWSTR;
-                                                            varSchema.pwszVal = const_cast<LPOLESTR>(L"http://purl.org/dc/elements/1.1/");
-
-                                                            PROPVARIANT varId;
-                                                            PropVariantInit(&varId);
-                                                            varId.vt = VT_LPWSTR;
-                                                            varId.pwszVal = const_cast<LPOLESTR>(L"subject");
-
-                                                            PROPVARIANT val;
-                                                            PropVariantInit(&val);
-                                                            val.vt = VT_VECTOR | VT_LPWSTR;
-                                                            val.calpwstr.cElems = static_cast<ULONG>(tags.size());
-                                                            val.calpwstr.pElems = static_cast<LPOLESTR*>(
-                                                                CoTaskMemAlloc(sizeof(LPOLESTR) * tags.size()));
-
-                                                            bool xmpPrepOk = (val.calpwstr.pElems != nullptr);
-                                                            if (xmpPrepOk) {
-                                                                for (size_t i = 0; i < tags.size(); ++i) {
-                                                                    size_t len = tags[i].length() + 1;
-                                                                    val.calpwstr.pElems[i] = static_cast<LPOLESTR>(
-                                                                        CoTaskMemAlloc(sizeof(wchar_t) * len));
-                                                                    if (val.calpwstr.pElems[i]) {
-                                                                        wcscpy_s(val.calpwstr.pElems[i], len, tags[i].c_str());
-                                                                    } else {
-                                                                        for (size_t j = 0; j < i; ++j)
-                                                                            CoTaskMemFree(val.calpwstr.pElems[j]);
-                                                                        CoTaskMemFree(val.calpwstr.pElems);
-                                                                        xmpPrepOk = false;
-                                                                        break;
-                                                                    }
-                                                                }
-                                                            }
-
-                                                            if (xmpPrepOk) {
-                                                                pXmpBlockWriter->SetValue(&varSchema, &varId, &val);
-                                                            }
-                                                            PropVariantClear(&val);
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            ComPtr<IWICMetadataQueryWriter> pQueryWriter;
-                                            hr = pFrameEncode->GetMetadataQueryWriter(&pQueryWriter);
-                                            if (SUCCEEDED(hr)) {
-                                                bool allOk = true;
-                                                if (containerFormat == GUID_ContainerFormatPng) {
-                                                    allOk = WritePngXmp(pQueryWriter.Get(), tags);
-                                                } else {
-                                                    if (tags.empty()) {
-                                                        std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
-                                                        std::wstring removePath = xmpPrefix + L"/dc:subject";
-                                                        pQueryWriter->RemoveMetadataByName(removePath.c_str());
-                                                    }
-                                                }
-                                                
-                                                if (allOk) {
-                                                    hr = pFrameEncode->Commit();
-                                                    if (SUCCEEDED(hr)) {
-                                                        hr = pEncoder->Commit();
-                                                        if (SUCCEEDED(hr)) {
-                                                            transcodingSucceeded = true;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+            if (!tags.empty()) {
+                ComPtr<IWICMetadataWriter> pXmpBlockWriter;
+                UINT xmpCount = 0;
+                pBlockWriter->GetCount(&xmpCount);
+                for (UINT i = 0; i < xmpCount; ++i) {
+                    ComPtr<IWICMetadataWriter> pWriter;
+                    if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
+                        GUID format = {};
+                        pWriter->GetMetadataFormat(&format);
+                        if (format == GUID_MetadataFormatXMP) {
+                            pXmpBlockWriter = pWriter;
+                            break;
                         }
                     }
+                }
+
+                if (pXmpBlockWriter) {
+                    PROPVARIANT varSchema;
+                    PropVariantInit(&varSchema);
+                    varSchema.vt = VT_LPWSTR;
+                    varSchema.pwszVal = const_cast<LPOLESTR>(L"http://purl.org/dc/elements/1.1/");
+
+                    PROPVARIANT varId;
+                    PropVariantInit(&varId);
+                    varId.vt = VT_LPWSTR;
+                    varId.pwszVal = const_cast<LPOLESTR>(L"subject");
+
+                    PROPVARIANT val;
+                    if (CreateStringVectorPropVariant(tags, val)) {
+                        pXmpBlockWriter->SetValue(&varSchema, &varId, &val);
+                    }
+                    PropVariantClear(&val);
                 }
             }
         }
     }
 
-    if (!transcodingSucceeded) {
-        std::filesystem::remove(tempPath);
-        return false;
-    }
-
-    bool replaced = false;
-    for (int retry = 0; retry < 10; ++retry) {
-        try {
-            if (std::filesystem::exists(filePath)) {
-                std::filesystem::remove(filePath);
+    ComPtr<IWICMetadataQueryWriter> pQueryWriter;
+    HRESULT hr = pFrameEncode->GetMetadataQueryWriter(&pQueryWriter);
+    if (SUCCEEDED(hr)) {
+        bool allOk = true;
+        if (containerFormat == GUID_ContainerFormatPng) {
+            allOk = WritePngXmp(pQueryWriter.Get(), tags);
+        } else {
+            if (tags.empty()) {
+                std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
+                std::wstring removePath = xmpPrefix + L"/dc:subject";
+                pQueryWriter->RemoveMetadataByName(removePath.c_str());
             }
-            std::filesystem::rename(tempPath, filePath);
-            replaced = true;
-            break;
-        } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (allOk) {
+            hr = pFrameEncode->Commit();
+            if (SUCCEEDED(hr)) {
+                hr = pEncoder->Commit();
+                if (SUCCEEDED(hr)) {
+                    transcodingSucceeded = true;
+                }
+            }
         }
     }
-    if (!replaced) {
-        std::filesystem::remove(tempPath);
-        return false;
-    }
-    return true;
+
+    return ReplaceFileWithTemp(filePath, tempPath);
 }
 
 // Helpers for extended metadata
@@ -752,6 +590,151 @@ bool WicMetadataReaderWriter::WriteStringVectorProperty(
     PropVariantClear(&var);
     return SUCCEEDED(hr);
 }
+Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> WicMetadataReaderWriter::GetFrameDecoder(
+    IWICImagingFactory2* wicFactory,
+    const std::wstring& filePath,
+    Microsoft::WRL::ComPtr<IWICBitmapDecoder>& outDecoder
+) {
+    if (!wicFactory) return nullptr;
+    HRESULT hr = E_FAIL;
+    Microsoft::WRL::ComPtr<IStream> pStream;
+    if (SUCCEEDED(SHCreateStreamOnFileEx(filePath.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &pStream))) {
+        hr = wicFactory->CreateDecoderFromStream(
+            pStream.Get(),
+            nullptr,
+            WICDecodeMetadataCacheOnDemand,
+            &outDecoder
+        );
+    }
+    if (FAILED(hr)) {
+        hr = wicFactory->CreateDecoderFromFilename(
+            filePath.c_str(),
+            nullptr,
+            GENERIC_READ,
+            WICDecodeMetadataCacheOnDemand,
+            &outDecoder
+        );
+    }
+    if (FAILED(hr) || !outDecoder) return nullptr;
+
+    Microsoft::WRL::ComPtr<IWICBitmapFrameDecode> pFrame;
+    hr = outDecoder->GetFrame(0, &pFrame);
+    if (FAILED(hr)) return nullptr;
+    return pFrame;
+}
+
+bool WicMetadataReaderWriter::CreateStringVectorPropVariant(
+    const std::vector<std::wstring>& strings,
+    PROPVARIANT& outVar
+) {
+    PropVariantInit(&outVar);
+    outVar.vt = VT_VECTOR | VT_LPWSTR;
+    outVar.calpwstr.cElems = static_cast<ULONG>(strings.size());
+    outVar.calpwstr.pElems = nullptr;
+
+    if (outVar.calpwstr.cElems > 0) {
+        outVar.calpwstr.pElems = static_cast<LPOLESTR*>(CoTaskMemAlloc(sizeof(LPOLESTR) * outVar.calpwstr.cElems));
+        if (!outVar.calpwstr.pElems) return false;
+
+        for (size_t i = 0; i < strings.size(); ++i) {
+            size_t len = strings[i].length() + 1;
+            outVar.calpwstr.pElems[i] = static_cast<LPOLESTR>(CoTaskMemAlloc(sizeof(wchar_t) * len));
+            if (outVar.calpwstr.pElems[i]) {
+                wcscpy_s(outVar.calpwstr.pElems[i], len, strings[i].c_str());
+            } else {
+                for (size_t j = 0; j < i; ++j) {
+                    CoTaskMemFree(outVar.calpwstr.pElems[j]);
+                }
+                CoTaskMemFree(outVar.calpwstr.pElems);
+                outVar.calpwstr.pElems = nullptr;
+                outVar.calpwstr.cElems = 0;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool WicMetadataReaderWriter::InitializeTranscoder(
+    IWICImagingFactory2* wicFactory,
+    const std::wstring& tempPath,
+    GUID containerFormat,
+    IWICBitmapFrameDecode* pFrame,
+    Microsoft::WRL::ComPtr<IWICBitmapEncoder>& outEncoder,
+    Microsoft::WRL::ComPtr<IWICBitmapFrameEncode>& outFrameEncode
+) {
+    Microsoft::WRL::ComPtr<IWICStream> pStream;
+    HRESULT hr = wicFactory->CreateStream(&pStream);
+    if (FAILED(hr)) return false;
+
+    hr = pStream->InitializeFromFilename(tempPath.c_str(), GENERIC_WRITE);
+    if (FAILED(hr)) return false;
+
+    hr = wicFactory->CreateEncoder(containerFormat, nullptr, &outEncoder);
+    if (FAILED(hr)) return false;
+
+    hr = outEncoder->Initialize(pStream.Get(), WICBitmapEncoderNoCache);
+    if (FAILED(hr)) return false;
+
+    Microsoft::WRL::ComPtr<IPropertyBag2> pPropertyBag;
+    hr = outEncoder->CreateNewFrame(&outFrameEncode, &pPropertyBag);
+    if (FAILED(hr)) return false;
+
+    if (containerFormat == GUID_ContainerFormatJpeg && pPropertyBag) {
+        PROPBAG2 propBag = { 0 };
+        propBag.dwType = PROPBAG2_TYPE_DATA;
+        propBag.vt = VT_R4;
+        propBag.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
+        VARIANT varVal;
+        VariantInit(&varVal);
+        varVal.vt = VT_R4;
+        varVal.fltVal = 0.95f;
+        pPropertyBag->Write(1, &propBag, &varVal);
+    }
+
+    hr = outFrameEncode->Initialize(pPropertyBag.Get());
+    if (FAILED(hr)) return false;
+
+    uint32_t width = 0, height = 0;
+    pFrame->GetSize(&width, &height);
+    outFrameEncode->SetSize(width, height);
+
+    double dpiX = 0, dpiY = 0;
+    pFrame->GetResolution(&dpiX, &dpiY);
+    outFrameEncode->SetResolution(dpiX, dpiY);
+
+    WICPixelFormatGUID pixelFormat = {};
+    pFrame->GetPixelFormat(&pixelFormat);
+    outFrameEncode->SetPixelFormat(&pixelFormat);
+
+    hr = outFrameEncode->WriteSource(pFrame, nullptr);
+    return SUCCEEDED(hr);
+}
+
+bool WicMetadataReaderWriter::ReplaceFileWithTemp(
+    const std::wstring& filePath,
+    const std::wstring& tempPath
+) {
+    bool replaced = false;
+    for (int retry = 0; retry < 10; ++retry) {
+        try {
+            if (std::filesystem::exists(filePath)) {
+                std::filesystem::remove(filePath);
+            }
+            std::filesystem::rename(tempPath, filePath);
+            replaced = true;
+            break;
+        } catch (...) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+    if (!replaced) {
+        std::filesystem::remove(tempPath);
+        return false;
+    }
+    return true;
+}
+
 
 bool WicMetadataReaderWriter::ReadMetadataExtended(
     IWICImagingFactory2* wicFactory,
@@ -773,33 +756,11 @@ bool WicMetadataReaderWriter::ReadMetadataExtended(
     if (!wicFactory) return false;
 
     ComPtr<IWICBitmapDecoder> pDecoder;
-    HRESULT hr = E_FAIL;
-    ComPtr<IStream> pStream;
-    if (SUCCEEDED(SHCreateStreamOnFileEx(filePath.c_str(), STGM_READ | STGM_SHARE_DENY_NONE, FILE_ATTRIBUTE_NORMAL, FALSE, nullptr, &pStream))) {
-        hr = wicFactory->CreateDecoderFromStream(
-            pStream.Get(),
-            nullptr,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
-    }
-    if (FAILED(hr)) {
-        hr = wicFactory->CreateDecoderFromFilename(
-            filePath.c_str(),
-            nullptr,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
-    }
-    if (FAILED(hr)) return false;
-
-    ComPtr<IWICBitmapFrameDecode> pFrame;
-    hr = pDecoder->GetFrame(0, &pFrame);
-    if (FAILED(hr)) return false;
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (!pFrame) return false;
 
     ComPtr<IWICMetadataQueryReader> pQueryReader;
-    hr = pFrame->GetMetadataQueryReader(&pQueryReader);
+    HRESULT hr = pFrame->GetMetadataQueryReader(&pQueryReader);
     if (FAILED(hr)) return true;
 
     GUID containerFormat = {};
@@ -913,62 +874,27 @@ bool WicMetadataReaderWriter::WriteMetadataExtendedFast(
 ) {
     bool fastEncodingSucceeded = false;
     ComPtr<IWICBitmapDecoder> pDecoder;
-    HRESULT hr = wicFactory->CreateDecoderFromFilename(
-        filePath.c_str(),
-        nullptr,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnDemand,
-        &pDecoder
-    );
-
-    if (SUCCEEDED(hr)) {
-        ComPtr<IWICBitmapFrameDecode> pFrame;
-        hr = pDecoder->GetFrame(0, &pFrame);
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (pFrame) {
+        ComPtr<IWICFastMetadataEncoder> pFastEncoder;
+        HRESULT hr = wicFactory->CreateFastMetadataEncoderFromFrameDecode(pFrame.Get(), &pFastEncoder);
         if (SUCCEEDED(hr)) {
-            ComPtr<IWICFastMetadataEncoder> pFastEncoder;
-            hr = wicFactory->CreateFastMetadataEncoderFromFrameDecode(pFrame.Get(), &pFastEncoder);
+            ComPtr<IWICMetadataQueryWriter> pFastQueryWriter;
+            hr = pFastEncoder->GetMetadataQueryWriter(&pFastQueryWriter);
             if (SUCCEEDED(hr)) {
-                ComPtr<IWICMetadataQueryWriter> pFastQueryWriter;
-                hr = pFastEncoder->GetMetadataQueryWriter(&pFastQueryWriter);
-                if (SUCCEEDED(hr)) {
-                    bool fastOk = true;
-                    std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
+                bool fastOk = true;
+                std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
 
-                    std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
-                    EnsureMetadataPath(wicFactory, pFastQueryWriter.Get(), subjectPath, false);
-                    PROPVARIANT varTags;
-                    PropVariantInit(&varTags);
-                    varTags.vt = VT_VECTOR | VT_LPWSTR;
-                    varTags.calpwstr.cElems = static_cast<ULONG>(tags.size());
-                    varTags.calpwstr.pElems = nullptr;
-                    bool prepOk = true;
-                    if (varTags.calpwstr.cElems > 0) {
-                        varTags.calpwstr.pElems = static_cast<LPOLESTR*>(CoTaskMemAlloc(sizeof(LPOLESTR) * varTags.calpwstr.cElems));
-                        if (!varTags.calpwstr.pElems) prepOk = false;
-                        else {
-                            for (size_t i = 0; i < tags.size(); ++i) {
-                                size_t len = tags[i].length() + 1;
-                                varTags.calpwstr.pElems[i] = static_cast<LPOLESTR>(CoTaskMemAlloc(sizeof(wchar_t) * len));
-                                if (varTags.calpwstr.pElems[i]) {
-                                    wcscpy_s(varTags.calpwstr.pElems[i], len, tags[i].c_str());
-                                } else {
-                                    for (size_t j = 0; j < i; ++j) {
-                                        CoTaskMemFree(varTags.calpwstr.pElems[j]);
-                                    }
-                                    CoTaskMemFree(varTags.calpwstr.pElems);
-                                    prepOk = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (prepOk) {
-                        hr = pFastQueryWriter->SetMetadataByName(subjectPath.c_str(), &varTags);
-                        if (FAILED(hr)) fastOk = false;
-                    } else {
-                        fastOk = false;
-                    }
-                    PropVariantClear(&varTags);
+                std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
+                EnsureMetadataPath(wicFactory, pFastQueryWriter.Get(), subjectPath, false);
+                PROPVARIANT varTags;
+                if (CreateStringVectorPropVariant(tags, varTags)) {
+                    hr = pFastQueryWriter->SetMetadataByName(subjectPath.c_str(), &varTags);
+                    if (FAILED(hr)) fastOk = false;
+                } else {
+                    fastOk = false;
+                }
+                PropVariantClear(&varTags);
 
                     if (fastOk) {
                         fastOk = WriteStringVectorProperty(wicFactory, pFastQueryWriter.Get(), xmpPrefix + L"/<xmpalt>dc:title", title);
@@ -1002,7 +928,6 @@ bool WicMetadataReaderWriter::WriteMetadataExtendedFast(
                             fastEncodingSucceeded = true;
                         }
                     }
-                }
             }
         }
     }
@@ -1022,204 +947,107 @@ bool WicMetadataReaderWriter::WriteMetadataExtendedTranscode(
     std::wstring tempPath = filePath + L".tmp";
     bool transcodingSucceeded = false;
 
-    {
-        ComPtr<IWICBitmapDecoder> pDecoder;
-        HRESULT hr = wicFactory->CreateDecoderFromFilename(
-            filePath.c_str(),
-            nullptr,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-            &pDecoder
-        );
+    ComPtr<IWICBitmapDecoder> pDecoder;
+    ComPtr<IWICBitmapFrameDecode> pFrame = GetFrameDecoder(wicFactory, filePath, pDecoder);
+    if (!pFrame) return false;
 
-        if (SUCCEEDED(hr)) {
-            ComPtr<IWICBitmapFrameDecode> pFrame;
-            hr = pDecoder->GetFrame(0, &pFrame);
-            if (SUCCEEDED(hr)) {
-                ComPtr<IWICStream> pStream;
-                hr = wicFactory->CreateStream(&pStream);
-                if (SUCCEEDED(hr)) {
-                    hr = pStream->InitializeFromFilename(tempPath.c_str(), GENERIC_WRITE);
-                    if (SUCCEEDED(hr)) {
-                        ComPtr<IWICBitmapEncoder> pEncoder;
-                        hr = wicFactory->CreateEncoder(containerFormat, nullptr, &pEncoder);
-                        if (SUCCEEDED(hr)) {
-                            hr = pEncoder->Initialize(pStream.Get(), WICBitmapEncoderNoCache);
-                            if (SUCCEEDED(hr)) {
-                                ComPtr<IWICBitmapFrameEncode> pFrameEncode;
-                                ComPtr<IPropertyBag2> pPropertyBag;
-                                hr = pEncoder->CreateNewFrame(&pFrameEncode, &pPropertyBag);
-                                if (SUCCEEDED(hr)) {
-                                    if (containerFormat == GUID_ContainerFormatJpeg && pPropertyBag) {
-                                        PROPBAG2 propBag = { 0 };
-                                        propBag.dwType = PROPBAG2_TYPE_DATA;
-                                        propBag.vt = VT_R4;
-                                        propBag.pstrName = const_cast<LPOLESTR>(L"ImageQuality");
-                                        VARIANT varVal;
-                                        VariantInit(&varVal);
-                                        varVal.vt = VT_R4;
-                                        varVal.fltVal = 0.95f;
-                                        pPropertyBag->Write(1, &propBag, &varVal);
-                                    }
+    ComPtr<IWICBitmapEncoder> pEncoder;
+    ComPtr<IWICBitmapFrameEncode> pFrameEncode;
+    if (!InitializeTranscoder(wicFactory, tempPath, containerFormat, pFrame.Get(), pEncoder, pFrameEncode)) {
+        std::filesystem::remove(tempPath);
+        return false;
+    }
 
-                                    hr = pFrameEncode->Initialize(pPropertyBag.Get());
-                                    if (SUCCEEDED(hr)) {
-                                        uint32_t width = 0, height = 0;
-                                        pFrame->GetSize(&width, &height);
-                                        pFrameEncode->SetSize(width, height);
+    ComPtr<IWICMetadataBlockReader> pBlockReader;
+    ComPtr<IWICMetadataBlockWriter> pBlockWriter;
+    if (SUCCEEDED(pFrame->QueryInterface(IID_PPV_ARGS(&pBlockReader))) &&
+        SUCCEEDED(pFrameEncode->QueryInterface(IID_PPV_ARGS(&pBlockWriter)))) {
+        pBlockWriter->InitializeFromBlockReader(pBlockReader.Get());
 
-                                        double dpiX = 0, dpiY = 0;
-                                        pFrame->GetResolution(&dpiX, &dpiY);
-                                        pFrameEncode->SetResolution(dpiX, dpiY);
-
-                                        WICPixelFormatGUID pixelFormat = {};
-                                        pFrame->GetPixelFormat(&pixelFormat);
-                                        pFrameEncode->SetPixelFormat(&pixelFormat);
-
-                                        hr = pFrameEncode->WriteSource(pFrame.Get(), nullptr);
-                                        if (SUCCEEDED(hr)) {
-                                            ComPtr<IWICMetadataBlockReader> pBlockReader;
-                                            ComPtr<IWICMetadataBlockWriter> pBlockWriter;
-                                            if (SUCCEEDED(pFrame->QueryInterface(IID_PPV_ARGS(&pBlockReader))) &&
-                                                SUCCEEDED(pFrameEncode->QueryInterface(IID_PPV_ARGS(&pBlockWriter)))) {
-                                                pBlockWriter->InitializeFromBlockReader(pBlockReader.Get());
-
-                                                if (containerFormat == GUID_ContainerFormatJpeg) {
-                                                    bool hasXmp = false;
-                                                    UINT count = 0;
-                                                    pBlockWriter->GetCount(&count);
-                                                    for (UINT i = 0; i < count; ++i) {
-                                                        ComPtr<IWICMetadataWriter> pWriter;
-                                                        if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
-                                                            GUID format = {};
-                                                            pWriter->GetMetadataFormat(&format);
-                                                            if (format == GUID_MetadataFormatXMP) {
-                                                                hasXmp = true;
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                    if (!hasXmp) {
-                                                        ComPtr<IWICMetadataWriter> pXmpWriter;
-                                                        ComPtr<IWICComponentFactory> pComponentFactory;
-                                                        HRESULT hrCreate = E_FAIL;
-                                                        if (SUCCEEDED(wicFactory->QueryInterface(IID_PPV_ARGS(&pComponentFactory)))) {
-                                                            hrCreate = pComponentFactory->CreateMetadataWriter(GUID_MetadataFormatXMP, nullptr, 0, &pXmpWriter);
-                                                        }
-                                                        if (SUCCEEDED(hrCreate)) {
-                                                            pBlockWriter->AddWriter(pXmpWriter.Get());
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            ComPtr<IWICMetadataQueryWriter> pQueryWriter;
-                                            hr = pFrameEncode->GetMetadataQueryWriter(&pQueryWriter);
-                                            if (SUCCEEDED(hr)) {
-                                                bool allOk = true;
-                                                std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
-
-                                                std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
-                                                EnsureMetadataPath(wicFactory, pQueryWriter.Get(), subjectPath, false);
-                                                PROPVARIANT valTags;
-                                                PropVariantInit(&valTags);
-                                                valTags.vt = VT_VECTOR | VT_LPWSTR;
-                                                valTags.calpwstr.cElems = static_cast<ULONG>(tags.size());
-                                                valTags.calpwstr.pElems = static_cast<LPOLESTR*>(CoTaskMemAlloc(sizeof(LPOLESTR) * tags.size()));
-                                                bool xmpPrepOk = (valTags.calpwstr.pElems != nullptr);
-                                                if (xmpPrepOk) {
-                                                    for (size_t i = 0; i < tags.size(); ++i) {
-                                                        size_t len = tags[i].length() + 1;
-                                                        valTags.calpwstr.pElems[i] = static_cast<LPOLESTR>(CoTaskMemAlloc(sizeof(wchar_t) * len));
-                                                        if (valTags.calpwstr.pElems[i]) {
-                                                            wcscpy_s(valTags.calpwstr.pElems[i], len, tags[i].c_str());
-                                                        } else {
-                                                            for (size_t j = 0; j < i; ++j)
-                                                                CoTaskMemFree(valTags.calpwstr.pElems[j]);
-                                                            CoTaskMemFree(valTags.calpwstr.pElems);
-                                                            xmpPrepOk = false;
-                                                            break;
-                                                        }
-                                                    }
-                                                }
-                                                if (xmpPrepOk) {
-                                                    hr = pQueryWriter->SetMetadataByName(subjectPath.c_str(), &valTags);
-                                                    if (FAILED(hr)) allOk = false;
-                                                } else {
-                                                    allOk = false;
-                                                }
-                                                PropVariantClear(&valTags);
-
-                                                if (allOk) {
-                                                    allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpalt>dc:title", title);
-                                                }
-
-                                                if (allOk) {
-                                                    allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpseq>dc:creator", creator);
-                                                }
-
-                                                if (allOk) {
-                                                    allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpalt>dc:description", description);
-                                                }
-
-                                                if (allOk) {
-                                                    std::wstring ratingPath = xmpPrefix + L"/xmp:Rating";
-                                                    if (rating > 0) {
-                                                        PROPVARIANT varRating;
-                                                        PropVariantInit(&varRating);
-                                                        varRating.vt = VT_I4;
-                                                        varRating.lVal = rating;
-                                                        hr = pQueryWriter->SetMetadataByName(ratingPath.c_str(), &varRating);
-                                                        if (FAILED(hr)) allOk = false;
-                                                    } else {
-                                                        pQueryWriter->RemoveMetadataByName(ratingPath.c_str());
-                                                    }
-                                                }
-
-                                                if (allOk) {
-                                                    hr = pFrameEncode->Commit();
-                                                    if (SUCCEEDED(hr)) {
-                                                        hr = pEncoder->Commit();
-                                                        if (SUCCEEDED(hr)) {
-                                                            transcodingSucceeded = true;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+        if (containerFormat == GUID_ContainerFormatJpeg) {
+            bool hasXmp = false;
+            UINT count = 0;
+            pBlockWriter->GetCount(&count);
+            for (UINT i = 0; i < count; ++i) {
+                ComPtr<IWICMetadataWriter> pWriter;
+                if (SUCCEEDED(pBlockWriter->GetWriterByIndex(i, &pWriter))) {
+                    GUID format = {};
+                    pWriter->GetMetadataFormat(&format);
+                    if (format == GUID_MetadataFormatXMP) {
+                        hasXmp = true;
+                        break;
                     }
+                }
+            }
+            if (!hasXmp) {
+                ComPtr<IWICMetadataWriter> pXmpWriter;
+                ComPtr<IWICComponentFactory> pComponentFactory;
+                HRESULT hrCreate = E_FAIL;
+                if (SUCCEEDED(wicFactory->QueryInterface(IID_PPV_ARGS(&pComponentFactory)))) {
+                    hrCreate = pComponentFactory->CreateMetadataWriter(GUID_MetadataFormatXMP, nullptr, 0, &pXmpWriter);
+                }
+                if (SUCCEEDED(hrCreate)) {
+                    pBlockWriter->AddWriter(pXmpWriter.Get());
                 }
             }
         }
     }
 
-    if (!transcodingSucceeded) {
-        std::filesystem::remove(tempPath);
-        return false;
-    }
+    ComPtr<IWICMetadataQueryWriter> pQueryWriter;
+    HRESULT hr = pFrameEncode->GetMetadataQueryWriter(&pQueryWriter);
+    if (SUCCEEDED(hr)) {
+        bool allOk = true;
+        std::wstring xmpPrefix = GetXmpQueryPathPrefix(containerFormat);
 
-    bool replaced = false;
-    for (int retry = 0; retry < 10; ++retry) {
-        try {
-            if (std::filesystem::exists(filePath)) {
-                std::filesystem::remove(filePath);
+        std::wstring subjectPath = xmpPrefix + L"/<xmpbag>dc:subject";
+        EnsureMetadataPath(wicFactory, pQueryWriter.Get(), subjectPath, false);
+        PROPVARIANT valTags;
+        if (CreateStringVectorPropVariant(tags, valTags)) {
+            hr = pQueryWriter->SetMetadataByName(subjectPath.c_str(), &valTags);
+            if (FAILED(hr)) allOk = false;
+        } else {
+            allOk = false;
+        }
+        PropVariantClear(&valTags);
+
+        if (allOk) {
+            allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpalt>dc:title", title);
+        }
+
+        if (allOk) {
+            allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpseq>dc:creator", creator);
+        }
+
+        if (allOk) {
+            allOk = WriteStringVectorProperty(wicFactory, pQueryWriter.Get(), xmpPrefix + L"/<xmpalt>dc:description", description);
+        }
+
+        if (allOk) {
+            std::wstring ratingPath = xmpPrefix + L"/xmp:Rating";
+            if (rating > 0) {
+                PROPVARIANT varRating;
+                PropVariantInit(&varRating);
+                varRating.vt = VT_I4;
+                varRating.lVal = rating;
+                hr = pQueryWriter->SetMetadataByName(ratingPath.c_str(), &varRating);
+                if (FAILED(hr)) allOk = false;
+            } else {
+                pQueryWriter->RemoveMetadataByName(ratingPath.c_str());
             }
-            std::filesystem::rename(tempPath, filePath);
-            replaced = true;
-            break;
-        } catch (...) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        if (allOk) {
+            hr = pFrameEncode->Commit();
+            if (SUCCEEDED(hr)) {
+                hr = pEncoder->Commit();
+                if (SUCCEEDED(hr)) {
+                    transcodingSucceeded = true;
+                }
+            }
         }
     }
-    if (!replaced) {
-        std::filesystem::remove(tempPath);
-        return false;
-    }
-    return true;
+
+    return ReplaceFileWithTemp(filePath, tempPath);
 }
 
 } // namespace kv

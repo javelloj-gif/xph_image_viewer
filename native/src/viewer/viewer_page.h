@@ -113,6 +113,10 @@ private:
     float  m_zoomTextOpacity = 0.0f;
     double m_zoomTextTimer = 0.0;
     float  m_lastZoom = 1.0f;
+
+    // ── Metadata Overlay State ─────────────────────────────────────────────
+    float  m_metadataOpacity = 1.0f;
+    double m_mouseInactivityTimer = 0.0;
 };
 
 } // namespace kv

@@ -133,6 +133,8 @@ void Window::RequestRedraw() {
 void Window::SetFullscreen(bool fullscreen) {
     if (m_fullscreen == fullscreen) return;
 
+    m_fullscreen = fullscreen;
+
     if (fullscreen) {
         SaveWindowPlacement();
 
@@ -154,8 +156,6 @@ void Window::SetFullscreen(bool fullscreen) {
         SetWindowLongW(m_hwnd, GWL_STYLE, style | WS_VISIBLE);
         RestoreWindowPlacement();
     }
-
-    m_fullscreen = fullscreen;
 }
 
 void Window::Minimize() { ShowWindow(m_hwnd, SW_MINIMIZE); }
@@ -378,6 +378,9 @@ LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
 
     case WM_KEYDOWN:
     case WM_SYSKEYDOWN: {
+        if (msg == WM_SYSKEYDOWN && wp == VK_F4) {
+            break; // Dejar fluir a DefWindowProcW para Alt+F4
+        }
         if (events.onKeyDown) {
             events.onKeyDown(static_cast<uint32_t>(wp), KeyModifiers::Current());
         }

@@ -98,6 +98,9 @@ private:
     void LoadImage(const std::wstring& path);
     void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
+    void ApplySortMode(int mode);
+    void DeleteImage(const std::wstring& path);
+    void AdjustWindowToImage();
 
     // ── Zoom / Pan ────────────────────────────────────────────────────────
     void ZoomToPoint(float factor, float screenX, float screenY);
@@ -156,6 +159,7 @@ private:
     PointF   m_panStart;
     float    m_mouseX = 0.0f;
     float    m_mouseY = 0.0f;
+    bool     m_wasFullscreen = false;
 
     // ── Cached Values ─────────────────────────────────────────────────────
     ComPtr<ID2D1Bitmap1>  m_checkerboardBitmap;  // cached checkerboard pattern

@@ -149,6 +149,7 @@ bool Settings::Load() {
     show_thirds = ParseBool(FindKeyValueRaw(json, "show_thirds"), show_thirds);
     show_cyberpunk = ParseBool(FindKeyValueRaw(json, "show_cyberpunk"), show_cyberpunk);
     show_metadata = ParseBool(FindKeyValueRaw(json, "show_metadata"), show_metadata);
+    sort_mode = ParseInt(FindKeyValueRaw(json, "sort_mode"), sort_mode);
 
     LogInfo(L"Settings loaded successfully");
     return true;
@@ -209,7 +210,8 @@ bool Settings::Save() {
     file << "  \"draw_default_thumbnail\": [\n   " << (draw_default_thumbnail ? "true" : "false") << ",\n   \"Show dummy-default thumbnail while generated one is not ready\"\n  ],\n";
     file << "  \"show_thirds\": [\n   " << (show_thirds ? "true" : "false") << ",\n   \"Show thirds\"\n  ],\n";
     file << "  \"show_cyberpunk\": [\n   " << (show_cyberpunk ? "true" : "false") << ",\n   \"Cyberpunk frame\"\n  ],\n";
-    file << "  \"show_metadata\": [\n   " << (show_metadata ? "true" : "false") << ",\n   \"Show metadata\"\n  ]\n";
+    file << "  \"show_metadata\": [\n   " << (show_metadata ? "true" : "false") << ",\n   \"Show metadata\"\n  ],\n";
+    file << "  \"sort_mode\": [\n   " << sort_mode << ",\n   \"Sort mode\"\n  ]\n";
 
     file << " }\n}\n";
 

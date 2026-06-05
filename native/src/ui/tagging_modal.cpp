@@ -204,22 +204,55 @@ void TaggingModal::GetScrollLimits(float& leftTotalH, float& leftMaxScroll, floa
     if (!m_app) return;
 
     RectF bounds = GetBounds();
-    RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-    RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
+    bool hasAvailable = !m_availableTags.empty();
 
-    RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-    RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+    RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+    RectF rightPane;
+    if (hasAvailable) {
+        rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+    } else {
+        rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
+    }
+
+    RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+    RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
 
     // Left scroll limits
-    float itemH = 25.0f;
-    int numRows = (static_cast<int>(m_filteredTags.size()) + 1) / 2;
-    leftTotalH = static_cast<float>(numRows) * itemH;
-    leftMaxScroll = std::max(0.0f, leftTotalH - listRect.Height());
+    if (hasAvailable) {
+        float availX = listRect.left + 8.0f;
+        float availY = listRect.top + 8.0f;
+        float availH = 28.0f;
+        float spacingX = 6.0f;
+        float spacingY = 6.0f;
+
+        for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+            std::wstring tagStr = m_filteredTags[i];
+            if (tagStr.length() > 30) {
+                tagStr = tagStr.substr(0, 27) + L"...";
+            }
+            float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+            float pillW = textW + 22.0f;
+
+            if (availX + pillW > listRect.right - 8.0f) {
+                availX = listRect.left + 8.0f;
+                availY += availH + spacingY;
+            }
+            availX += pillW + spacingX;
+        }
+
+        if (m_filteredTags.empty()) {
+            leftTotalH = 0.0f;
+            leftMaxScroll = 0.0f;
+        } else {
+            leftTotalH = (availY + availH) - listRect.top;
+            leftMaxScroll = std::max(0.0f, leftTotalH - listRect.Height());
+        }
+    }
 
     // Right scroll limits
     float tagX = gridRect.left + 8.0f;
     float tagY = gridRect.top + 8.0f;
-    float tagH = 22.0f;
+    float tagH = 28.0f;
     float spacingX = 6.0f;
     float spacingY = 6.0f;
 
@@ -228,8 +261,8 @@ void TaggingModal::GetScrollLimits(float& leftTotalH, float& leftMaxScroll, floa
         if (tagStr.length() > 30) {
             tagStr = tagStr.substr(0, 27) + L"...";
         }
-        float textW = m_app->m_renderer.MeasureText(tagStr, 11.0f).x;
-        float pillW = textW + 28.0f;
+        float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+        float pillW = textW + 36.0f;
 
         if (tagX + pillW > gridRect.right - 8.0f) {
             tagX = gridRect.left + 8.0f;
@@ -238,15 +271,20 @@ void TaggingModal::GetScrollLimits(float& leftTotalH, float& leftMaxScroll, floa
         tagX += pillW + spacingX;
     }
 
-    rightTotalH = (tagY + tagH) - gridRect.top;
-    rightMaxScroll = std::max(0.0f, rightTotalH - gridRect.Height());
+    if (m_imageTags.empty()) {
+        rightTotalH = 0.0f;
+        rightMaxScroll = 0.0f;
+    } else {
+        rightTotalH = (tagY + tagH) - gridRect.top;
+        rightMaxScroll = std::max(0.0f, rightTotalH - gridRect.Height());
+    }
 }
 
 RectF TaggingModal::GetBounds() const {
     if (!m_app) return {};
     auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    float boxW = 960.0f;
-    float boxH = 700.0f;
+    float boxW = 1152.0f;
+    float boxH = 840.0f;
     return RectF::FromXYWH(
         (screenSize.width - boxW) / 2.0f,
         (screenSize.height - boxH) / 2.0f,
@@ -277,7 +315,7 @@ void TaggingModal::Draw(Renderer& renderer) {
         filename,
         titleRect,
         Color::White(),
-        18.0f,
+        22.0f,
         TextAlign::Left,
         TextVAlign::Center
     );
@@ -290,14 +328,14 @@ void TaggingModal::Draw(Renderer& renderer) {
 
     for (int i = 0; i < 2; ++i) {
         std::wstring label = _(tabLabels[i]);
-        float labelW = 100.0f;
+        float labelW = 110.0f;
         RectF tabRect = RectF::FromXYWH(tabX, tabY, labelW, tabH);
 
         bool active = (m_currentTab == i);
         bool hovered = (m_hoveredTabIdx == i);
         Color textColor = active ? Color::White() : (hovered ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(160, 160, 160));
 
-        renderer.DrawText(label, tabRect, textColor, 14.0f, TextAlign::Center, TextVAlign::Center);
+        renderer.DrawText(label, tabRect, textColor, 17.0f, TextAlign::Center, TextVAlign::Center);
         if (active) {
             // Neon red active underline
             renderer.FillRect(
@@ -318,32 +356,39 @@ void TaggingModal::Draw(Renderer& renderer) {
 
     // 5. Render Tab Content
     if (m_currentTab == 0) {
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
+        bool hasAvailable = !m_availableTags.empty();
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+        RectF rightPane;
+        if (hasAvailable) {
+            rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+        } else {
+            rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
+        }
         DrawTagsTab(renderer, leftPane, rightPane);
     } else {
-        RectF contentBounds = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 175.0f);
+        RectF contentBounds = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
         DrawMetadataTab(renderer, contentBounds);
     }
 
     // 6. Draw Bottom Actions (Save / Cancel)
-    RectF cancelRect = RectF::FromXYWH(bounds.right - 140.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
-    RectF saveRect = RectF::FromXYWH(bounds.right - 260.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
+    RectF cancelRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+    RectF saveRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
 
     // Cancel Button
     Color cancelBg = (m_hoveredButton == 2) ? Color::FromRGBA(60, 60, 65) : Color::FromRGBA(35, 35, 40);
     renderer.FillRoundedRect(cancelRect, 4.0f, 4.0f, cancelBg);
     renderer.DrawRoundedRect(cancelRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-    renderer.DrawText(_(L"Cancelar"), cancelRect, Color::White(0.9f), 13.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Cancelar"), cancelRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
 
     // Save Button
     Color saveBg = (m_hoveredButton == 1) ? Color::FromRGBA(255, 55, 95) : Color::FromRGBA(220, 40, 75);
     renderer.FillRoundedRect(saveRect, 4.0f, 4.0f, saveBg);
     renderer.DrawRoundedRect(saveRect, 4.0f, 4.0f, Color::White(0.2f), 1.0f);
-    renderer.DrawText(_(L"Guardar"), saveRect, Color::White(), 13.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Guardar"), saveRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
 }
 
 void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const RectF& rightPane) {
+    bool hasAvailable = !m_availableTags.empty();
     float totalH = 0.0f, maxScroll = 0.0f;
     float gridTotalH = 0.0f, maxRightScroll = 0.0f;
     GetScrollLimits(totalH, maxScroll, gridTotalH, maxRightScroll);
@@ -351,95 +396,116 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
     m_leftScroll = std::clamp(m_leftScroll, 0.0f, maxScroll);
     m_rightScroll = std::clamp(m_rightScroll, 0.0f, maxRightScroll);
 
-    // --- LEFT PANE: AVAILABLE TAGS ---
-    // 1. Search Box
-    RectF searchRect = RectF::FromXYWH(leftPane.left, leftPane.top, leftPane.Width(), 30.0f);
-    bool searchFocused = (m_activeInputType == 1);
-    Color searchBorder = searchFocused ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(255, 255, 255, 30);
-    renderer.FillRoundedRect(searchRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 200));
-    renderer.DrawRoundedRect(searchRect, 4.0f, 4.0f, searchBorder, 1.0f);
+    if (hasAvailable) {
+        // --- LEFT PANE: AVAILABLE TAGS ---
+        // 1. Search Box
+        RectF searchRect = RectF::FromXYWH(leftPane.left, leftPane.top, leftPane.Width(), 36.0f);
+        bool searchFocused = (m_activeInputType == 1);
+        Color searchBorder = searchFocused ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(255, 255, 255, 30);
+        renderer.FillRoundedRect(searchRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 200));
+        renderer.DrawRoundedRect(searchRect, 4.0f, 4.0f, searchBorder, 1.0f);
 
-    if (m_searchText.empty()) {
-        renderer.DrawText(_(L"Buscar etiquetas..."), searchRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 12.0f, TextAlign::Left, TextVAlign::Center);
-    } else {
-        renderer.DrawText(m_searchText, searchRect.Inset(8.0f), Color::White(), 12.0f, TextAlign::Left, TextVAlign::Center);
-    }
-
-    if (searchFocused) {
-        // Blinking caret
-        static auto lastCaret = std::chrono::steady_clock::now();
-        static bool caretVisible = true;
-        if (std::chrono::steady_clock::now() - lastCaret > std::chrono::milliseconds(500)) {
-            caretVisible = !caretVisible;
-            lastCaret = std::chrono::steady_clock::now();
+        if (m_searchText.empty()) {
+            renderer.DrawText(_(L"Buscar etiquetas..."), searchRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
+        } else {
+            renderer.DrawText(m_searchText, searchRect.Inset(8.0f), Color::White(), 15.0f, TextAlign::Left, TextVAlign::Center);
         }
-        if (caretVisible) {
-            float textW = renderer.MeasureText(m_searchText, 12.0f).x;
-            float caretX = searchRect.left + 8.0f + textW;
-            renderer.DrawLine({ caretX, searchRect.top + 6.0f }, { caretX, searchRect.bottom - 6.0f }, Color::FromRGBA(0, 240, 255), 1.5f);
+
+        if (searchFocused) {
+            // Blinking caret
+            static auto lastCaret = std::chrono::steady_clock::now();
+            static bool caretVisible = true;
+            if (std::chrono::steady_clock::now() - lastCaret > std::chrono::milliseconds(500)) {
+                caretVisible = !caretVisible;
+                lastCaret = std::chrono::steady_clock::now();
+            }
+            if (caretVisible) {
+                float textW = renderer.MeasureText(m_searchText, 15.0f).x;
+                float caretX = searchRect.left + 8.0f + textW;
+                renderer.DrawLine({ caretX, searchRect.top + 6.0f }, { caretX, searchRect.bottom - 6.0f }, Color::FromRGBA(0, 240, 255), 1.5f);
+            }
         }
-    }
 
-    // 2. Scrollable List of Available Tags
-    RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-    renderer.FillRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 150));
-    renderer.DrawRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(255, 255, 255, 15), 1.0f);
+        // 2. Scrollable List of Available Tags (Pills wrapped)
+        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+        renderer.FillRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 150));
+        renderer.DrawRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(255, 255, 255, 15), 1.0f);
 
-    float itemH = 25.0f;
+        renderer.PushClip(listRect);
 
-    renderer.PushClip(listRect);
-    float colWidth = (listRect.Width() - 15.0f) / 2.0f;
+        float availX = listRect.left + 8.0f;
+        float availY = listRect.top + 8.0f - m_leftScroll;
+        float availH = 28.0f;
+        float availSpacingX = 6.0f;
+        float availSpacingY = 6.0f;
 
-    for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
-        int row = i / 2;
-        int col = i % 2;
-        float itemX = listRect.left + 5.0f + col * (colWidth + 5.0f);
-        float itemY = listRect.top - m_leftScroll + row * itemH;
-        RectF itemRect = RectF::FromXYWH(itemX, itemY, colWidth, itemH - 2.0f);
+        for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+            std::wstring tagStr = m_filteredTags[i];
+            if (tagStr.length() > 30) {
+                tagStr = tagStr.substr(0, 27) + L"...";
+            }
 
-        if (itemRect.bottom > listRect.top && itemRect.top < listRect.bottom) {
-            bool selected = m_selectedAvailableIndices[i];
-            bool hovered = (m_hoveredAvailableIdx == i);
+            float textW = renderer.MeasureText(tagStr, 14.0f).x;
+            float pillW = textW + 22.0f; // no close 'x', only 11px padding on each side
 
-            Color itemBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 10) : Color::Transparent());
-            renderer.FillRoundedRect(itemRect, 3.0f, 3.0f, itemBg);
+            if (availX + pillW > listRect.right - 8.0f) {
+                availX = listRect.left + 8.0f;
+                availY += availH + availSpacingY;
+            }
 
-            Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
-            renderer.DrawText(m_filteredTags[i], itemRect.Inset(6.0f), textColor, 12.0f, TextAlign::Left, TextVAlign::Center);
+            RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+
+            if (pillRect.bottom > listRect.top && pillRect.top < listRect.bottom) {
+                bool selected = m_selectedAvailableIndices[i];
+                bool hovered = (m_hoveredAvailableIdx == i);
+
+                Color pillBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10));
+                Color pillBorder = selected ? Color::FromRGBA(0, 240, 255, 150) : (hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20));
+
+                renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
+                renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+
+                Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
+                RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
+                renderer.DrawText(tagStr, textRect, textColor, 14.0f, TextAlign::Left, TextVAlign::Center);
+            }
+
+            availX += pillW + availSpacingX;
         }
-    }
-    renderer.PopClip();
 
-    // Draw left scrollbar track if scrollable
-    if (maxScroll > 0.0f) {
-        float scrollPct = m_leftScroll / maxScroll;
-        float trackH = listRect.Height() - 20.0f;
-        float thumbH = std::max(20.0f, (listRect.Height() / totalH) * trackH);
-        float thumbY = listRect.top + 10.0f + (trackH - thumbH) * scrollPct;
-        RectF thumbRect = RectF::FromXYWH(listRect.right - 6.0f, thumbY, 4.0f, thumbH);
-        renderer.FillRoundedRect(thumbRect, 2.0f, 2.0f, Color::FromRGBA(255, 255, 255, 60));
-    }
+        renderer.PopClip();
 
-    // --- MIDDLE COPY BUTTON [ > ] ---
-    RectF midBtnRect = RectF::FromXYWH(leftPane.right + 25.0f, leftPane.top + (leftPane.Height() - 40.0f) / 2.0f, 30.0f, 40.0f);
-    Color midBtnBg = (m_hoveredButton == 3) ? Color::FromRGBA(0, 240, 255, 180) : Color::FromRGBA(30, 30, 35);
-    Color arrowColor = (m_hoveredButton == 3) ? Color::Black() : Color::FromRGBA(180, 180, 180);
-    renderer.FillRoundedRect(midBtnRect, 4.0f, 4.0f, midBtnBg);
-    renderer.DrawRoundedRect(midBtnRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-    renderer.DrawText(L">", midBtnRect, arrowColor, 16.0f, TextAlign::Center, TextVAlign::Center);
+        // Draw left scrollbar track if scrollable
+        if (maxScroll > 0.0f) {
+            float scrollPct = m_leftScroll / maxScroll;
+            float trackH = listRect.Height() - 20.0f;
+            float thumbH = std::max(20.0f, (listRect.Height() / totalH) * trackH);
+            float thumbY = listRect.top + 10.0f + (trackH - thumbH) * scrollPct;
+            RectF thumbRect = RectF::FromXYWH(listRect.right - 6.0f, thumbY, 4.0f, thumbH);
+            renderer.FillRoundedRect(thumbRect, 2.0f, 2.0f, Color::FromRGBA(255, 255, 255, 60));
+        }
+
+        // --- MIDDLE COPY BUTTON [ > ] ---
+        RectF midBtnRect = RectF::FromXYWH(leftPane.right + 36.0f, leftPane.top + (leftPane.Height() - 50.0f) / 2.0f, 36.0f, 50.0f);
+        Color midBtnBg = (m_hoveredButton == 3) ? Color::FromRGBA(0, 240, 255, 180) : Color::FromRGBA(30, 30, 35);
+        Color arrowColor = (m_hoveredButton == 3) ? Color::Black() : Color::FromRGBA(180, 180, 180);
+        renderer.FillRoundedRect(midBtnRect, 4.0f, 4.0f, midBtnBg);
+        renderer.DrawRoundedRect(midBtnRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
+        renderer.DrawText(L">", midBtnRect, arrowColor, 19.0f, TextAlign::Center, TextVAlign::Center);
+    }
 
     // --- RIGHT PANE: IMAGE TAGS ---
     // 1. Manual tag creation box
-    RectF addRect = RectF::FromXYWH(rightPane.left, rightPane.top, rightPane.Width() - 35.0f, 30.0f);
+    RectF addRect = RectF::FromXYWH(rightPane.left, rightPane.top, rightPane.Width() - 40.0f, 36.0f);
     bool addFocused = (m_activeInputType == 6);
     Color addBorder = addFocused ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(255, 255, 255, 30);
     renderer.FillRoundedRect(addRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 200));
     renderer.DrawRoundedRect(addRect, 4.0f, 4.0f, addBorder, 1.0f);
 
     if (m_manualTagText.empty()) {
-        renderer.DrawText(_(L"Nueva etiqueta..."), addRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 12.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(_(L"Nueva etiqueta..."), addRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
     } else {
-        renderer.DrawText(m_manualTagText, addRect.Inset(8.0f), Color::White(), 12.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(m_manualTagText, addRect.Inset(8.0f), Color::White(), 15.0f, TextAlign::Left, TextVAlign::Center);
     }
 
     if (addFocused) {
@@ -450,21 +516,21 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
             lastCaretAdd = std::chrono::steady_clock::now();
         }
         if (caretAddVisible) {
-            float textW = renderer.MeasureText(m_manualTagText, 12.0f).x;
+            float textW = renderer.MeasureText(m_manualTagText, 15.0f).x;
             float caretX = addRect.left + 8.0f + textW;
             renderer.DrawLine({ caretX, addRect.top + 6.0f }, { caretX, addRect.bottom - 6.0f }, Color::FromRGBA(0, 240, 255), 1.5f);
         }
     }
 
     // Plus (+) button
-    RectF plusRect = RectF::FromXYWH(rightPane.right - 30.0f, rightPane.top, 30.0f, 30.0f);
+    RectF plusRect = RectF::FromXYWH(rightPane.right - 36.0f, rightPane.top, 36.0f, 36.0f);
     Color plusBg = (m_hoveredButton == 4) ? Color::FromRGBA(0, 240, 255, 100) : Color::FromRGBA(30, 30, 35);
     renderer.FillRoundedRect(plusRect, 4.0f, 4.0f, plusBg);
     renderer.DrawRoundedRect(plusRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-    renderer.DrawText(L"+", plusRect, Color::White(), 14.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(L"+", plusRect, Color::White(), 17.0f, TextAlign::Center, TextVAlign::Center);
 
     // 2. Tags Grid View
-    RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+    RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
     renderer.FillRoundedRect(gridRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 150));
     renderer.DrawRoundedRect(gridRect, 4.0f, 4.0f, Color::FromRGBA(255, 255, 255, 15), 1.0f);
 
@@ -472,7 +538,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
 
     float tagX = gridRect.left + 8.0f;
     float tagY = gridRect.top + 8.0f - m_rightScroll;
-    float tagH = 22.0f;
+    float tagH = 28.0f;
     float spacingX = 6.0f;
     float spacingY = 6.0f;
 
@@ -483,8 +549,8 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
         }
 
         // Measure size of pill
-        float textW = renderer.MeasureText(tagStr, 11.0f).x;
-        float pillW = textW + 28.0f; // extra space for padding and the close 'x'
+        float textW = renderer.MeasureText(tagStr, 14.0f).x;
+        float pillW = textW + 36.0f; // extra space for padding and the close 'x'
 
         // Check wrap
         if (tagX + pillW > gridRect.right - 8.0f) {
@@ -502,7 +568,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
                 // Render text box inside the pill
                 renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, Color::FromRGBA(30, 30, 45, 255));
                 renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, Color::FromRGBA(0, 240, 255), 1.0f);
-                renderer.DrawText(m_editingTagText, pillRect.Inset(4.0f), Color::White(), 11.0f, TextAlign::Left, TextVAlign::Center);
+                renderer.DrawText(m_editingTagText, pillRect.Inset(4.0f), Color::White(), 14.0f, TextAlign::Left, TextVAlign::Center);
 
                 // Blinking caret inside tag editor
                 static auto lastTagCaret = std::chrono::steady_clock::now();
@@ -512,7 +578,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
                     lastTagCaret = std::chrono::steady_clock::now();
                 }
                 if (tagCaretVisible) {
-                    float editW = renderer.MeasureText(m_editingTagText, 11.0f).x;
+                    float editW = renderer.MeasureText(m_editingTagText, 14.0f).x;
                     float editCaretX = pillRect.left + 4.0f + editW;
                     renderer.DrawLine({ editCaretX, pillRect.top + 4.0f }, { editCaretX, pillRect.bottom - 4.0f }, Color::FromRGBA(0, 240, 255), 1.5f);
                 }
@@ -524,12 +590,12 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
 
                 // Text
                 RectF textRect = RectF::FromXYWH(pillRect.left + 6.0f, pillRect.top, textW, pillRect.Height());
-                renderer.DrawText(tagStr, textRect, Color::White(0.9f), 11.0f, TextAlign::Left, TextVAlign::Center);
+                renderer.DrawText(tagStr, textRect, Color::White(0.9f), 14.0f, TextAlign::Left, TextVAlign::Center);
 
                 // Close 'x' icon
-                RectF xRect = RectF::FromXYWH(pillRect.right - 18.0f, pillRect.top, 14.0f, pillRect.Height());
+                RectF xRect = RectF::FromXYWH(pillRect.right - 22.0f, pillRect.top, 18.0f, pillRect.Height());
                 Color xColor = isHovered ? Color::FromRGBA(255, 45, 85) : Color::White(0.5f);
-                renderer.DrawText(L"×", xRect, xColor, 12.0f, TextAlign::Center, TextVAlign::Center);
+                renderer.DrawText(L"×", xRect, xColor, 15.0f, TextAlign::Center, TextVAlign::Center);
             }
         }
 
@@ -549,12 +615,13 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
     }
 
     // --- BOTTOM PANE: STAR RATING ---
-    RectF starsTextRect = RectF::FromXYWH(leftPane.left, rightPane.bottom + 15.0f, 100.0f, 30.0f);
-    renderer.DrawText(_(L"Clasificación") + L":", starsTextRect, Color::White(0.85f), 13.0f, TextAlign::Left, TextVAlign::Center);
+    float startX = hasAvailable ? leftPane.left : rightPane.left;
+    RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+    renderer.DrawText(_(L"Clasificación") + L":", starsTextRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Center);
 
-    float starX = starsTextRect.right + 10.0f;
+    float starX = starsTextRect.right + 12.0f;
     float starY = starsTextRect.top;
-    float starW = 22.0f;
+    float starW = 28.0f;
 
     for (int i = 1; i <= 5; ++i) {
         RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
@@ -562,7 +629,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
 
         Color starColor = filled ? Color::FromRGBA(255, 185, 0) : Color::FromRGBA(80, 80, 80);
         std::wstring starChar = filled ? L"★" : L"☆";
-        renderer.DrawText(starChar, starRect, starColor, 18.0f, TextAlign::Center, TextVAlign::Center);
+        renderer.DrawText(starChar, starRect, starColor, 22.0f, TextAlign::Center, TextVAlign::Center);
 
         starX += starW + 2.0f;
     }
@@ -575,7 +642,7 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
 
     float labelW = 100.0f;
     float valW = 200.0f;
-    float itemH = 22.0f;
+    float itemH = 26.0f;
 
     float infoX = bounds.left + 20.0f;
     float infoY = bounds.top + 10.0f;
@@ -599,8 +666,8 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
         RectF lblRect = RectF::FromXYWH(infoX, infoY, labelW, itemH);
         RectF valRect = RectF::FromXYWH(infoX + labelW + 10.0f, infoY, valW + 150.0f, itemH);
 
-        renderer.DrawText(lbl + L":", lblRect, Color::White(0.5f), 12.0f, TextAlign::Left, TextVAlign::Center);
-        renderer.DrawText(val, valRect, Color::White(0.9f), 12.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(lbl + L":", lblRect, Color::White(0.5f), 15.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(val, valRect, Color::White(0.9f), 15.0f, TextAlign::Left, TextVAlign::Center);
 
         infoY += itemH + 2.0f;
     }
@@ -620,7 +687,7 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
     auto drawTextBox = [&](const std::wstring& label, const std::wstring& text, RectF rect, int inputType, bool multiline = false) {
         // Label
         RectF lblRect = RectF::FromXYWH(rect.left, rect.top - 20.0f, rect.Width(), 18.0f);
-        renderer.DrawText(label, lblRect, Color::White(0.85f), 12.0f, TextAlign::Left, TextVAlign::Top);
+        renderer.DrawText(label, lblRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Top);
 
         // Box
         bool focused = (m_activeInputType == inputType);
@@ -630,7 +697,7 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
 
         // Content
         RectF textRect = rect.Inset(8.0f);
-        renderer.DrawText(text, textRect, Color::White(), 12.0f, TextAlign::Left, multiline ? TextVAlign::Top : TextVAlign::Center);
+        renderer.DrawText(text, textRect, Color::White(), 15.0f, TextAlign::Left, multiline ? TextVAlign::Top : TextVAlign::Center);
 
         // Blinking caret
         if (focused) {
@@ -647,13 +714,13 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
 
                 if (multiline) {
                     // Approximate text wrapping width for caret (or keep at end of last char)
-                    textW = renderer.MeasureText(text, 12.0f).x;
+                    textW = renderer.MeasureText(text, 15.0f).x;
                     // Clamp textW to width of text rect
                     if (textW > textRect.Width()) textW = textRect.Width();
                     caretYStart = rect.top + 8.0f;
-                    caretYEnd = caretYStart + 14.0f;
+                    caretYEnd = caretYStart + 16.0f;
                 } else {
-                    textW = renderer.MeasureText(text, 12.0f).x;
+                    textW = renderer.MeasureText(text, 15.0f).x;
                 }
 
                 float caretX = textRect.left + textW;
@@ -663,15 +730,15 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
     };
 
     // Title
-    RectF titleRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 20.0f, bounds.Width() - 40.0f, 32.0f);
+    RectF titleRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 20.0f, bounds.Width() - 40.0f, 40.0f);
     drawTextBox(_(L"Título"), m_title, titleRect, 3);
 
     // Creator / Author
-    RectF creatorRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 77.0f, bounds.Width() - 40.0f, 32.0f);
+    RectF creatorRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 85.0f, bounds.Width() - 40.0f, 40.0f);
     drawTextBox(_(L"Autor"), m_creator, creatorRect, 4);
 
     // Description
-    RectF descRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 134.0f, bounds.Width() - 40.0f, 75.0f);
+    RectF descRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 150.0f, bounds.Width() - 40.0f, 90.0f);
     drawTextBox(_(L"Descripción / Comentario"), m_description, descRect, 5, true);
 }
 
@@ -681,8 +748,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     RectF bounds = GetBounds();
 
     if (m_leftScrollCaptured) {
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 435.0f, bounds.Height() - 185.0f);
+        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 45.0f, leftPane.Width(), leftPane.Height() - 45.0f);
         float leftTotalH = 0.0f, maxScroll = 0.0f;
         float gridTotalH = 0.0f, maxRightScroll = 0.0f;
         GetScrollLimits(leftTotalH, maxScroll, gridTotalH, maxRightScroll);
@@ -702,8 +769,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     if (m_rightScrollCaptured) {
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+        RectF rightPane = RectF::FromXYWH(bounds.left + 569.0f, bounds.top + 105.0f, 505.0f, bounds.Height() - 185.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 45.0f, rightPane.Width(), rightPane.Height() - 45.0f);
         float leftTotalH = 0.0f, maxScroll = 0.0f;
         float gridTotalH = 0.0f, maxRightScroll = 0.0f;
         GetScrollLimits(leftTotalH, maxScroll, gridTotalH, maxRightScroll);
@@ -757,51 +824,77 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
         return true;
     }
 
+    bool hasAvailable = !m_availableTags.empty();
+
     if (m_currentTab == 0) {
         // --- TAGS TAB MOUSE HOVER ---
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+        RectF rightPane;
+        if (hasAvailable) {
+            rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+        } else {
+            rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
+        }
 
-        // Middle arrow button [ > ]
-        RectF midBtnRect = RectF::FromXYWH(leftPane.right + 25.0f, leftPane.top + (leftPane.Height() - 40.0f) / 2.0f, 30.0f, 40.0f);
-        if (midBtnRect.Contains(x, y)) {
-            m_hoveredButton = 3;
-            if (m_app) m_app->m_window.RequestRedraw();
-            return true;
+        // Middle arrow button [ > ] - only if hasAvailable
+        if (hasAvailable) {
+            RectF midBtnRect = RectF::FromXYWH(leftPane.right + 36.0f, leftPane.top + (leftPane.Height() - 50.0f) / 2.0f, 36.0f, 50.0f);
+            if (midBtnRect.Contains(x, y)) {
+                m_hoveredButton = 3;
+                if (m_app) m_app->m_window.RequestRedraw();
+                return true;
+            }
         }
 
         // Plus (+) button
-        RectF plusRect = RectF::FromXYWH(rightPane.right - 30.0f, rightPane.top, 30.0f, 30.0f);
+        RectF plusRect = RectF::FromXYWH(rightPane.right - 36.0f, rightPane.top, 36.0f, 36.0f);
         if (plusRect.Contains(x, y)) {
             m_hoveredButton = 4;
             if (m_app) m_app->m_window.RequestRedraw();
             return true;
         }
 
-        // Left Pane Scrollable list items
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-        if (listRect.Contains(x, y)) {
-            float relativeX = x - listRect.left - 5.0f;
-            float relativeY = y - listRect.top + m_leftScroll;
-            float colWidth = (listRect.Width() - 15.0f) / 2.0f;
-            int col = static_cast<int>(relativeX / (colWidth + 5.0f));
-            int row = static_cast<int>(relativeY / 25.0f);
-            if (col >= 0 && col < 2 && row >= 0) {
-                int idx = row * 2 + col;
-                if (idx >= 0 && idx < static_cast<int>(m_filteredTags.size())) {
-                    m_hoveredAvailableIdx = idx;
-                    if (m_app) m_app->m_window.RequestRedraw();
-                    return true;
+        // Left Pane Scrollable list items - only if hasAvailable
+        if (hasAvailable) {
+            RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+            if (listRect.Contains(x, y)) {
+                float availX = listRect.left + 8.0f;
+                float availY = listRect.top + 8.0f - m_leftScroll;
+                float availH = 28.0f;
+                float spacingX = 6.0f;
+                float spacingY = 6.0f;
+
+                for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                    std::wstring tagStr = m_filteredTags[i];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + spacingY;
+                    }
+
+                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                    if (pillRect.Contains(x, y)) {
+                        m_hoveredAvailableIdx = i;
+                        if (m_app) m_app->m_window.RequestRedraw();
+                        return true;
+                    }
+
+                    availX += pillW + spacingX;
                 }
             }
         }
 
         // Right Pane Tags Grid
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
         if (gridRect.Contains(x, y)) {
             float tagX = gridRect.left + 8.0f;
             float tagY = gridRect.top + 8.0f - m_rightScroll;
-            float tagH = 22.0f;
+            float tagH = 28.0f;
             float spacingX = 6.0f;
             float spacingY = 6.0f;
 
@@ -810,8 +903,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
                 if (tagStr.length() > 30) {
                     tagStr = tagStr.substr(0, 27) + L"...";
                 }
-                float textW = m_app->m_renderer.MeasureText(tagStr, 11.0f).x;
-                float pillW = textW + 28.0f;
+                float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                float pillW = textW + 36.0f;
 
                 if (tagX + pillW > gridRect.right - 8.0f) {
                     tagX = gridRect.left + 8.0f;
@@ -830,10 +923,11 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
         }
 
         // Star ratings
-        RectF starsTextRect = RectF::FromXYWH(leftPane.left, rightPane.bottom + 15.0f, 100.0f, 30.0f);
-        float starX = starsTextRect.right + 10.0f;
+        float startX = hasAvailable ? leftPane.left : rightPane.left;
+        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+        float starX = starsTextRect.right + 12.0f;
         float starY = starsTextRect.top;
-        float starW = 22.0f;
+        float starW = 28.0f;
 
         for (int i = 1; i <= 5; ++i) {
             RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
@@ -860,23 +954,32 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         return true;
     }
 
+    bool hasAvailable = !m_availableTags.empty();
+
     if (m_currentTab == 0) {
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+        RectF rightPane;
+        if (hasAvailable) {
+            rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+        } else {
+            rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
+        }
+        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
 
         float leftTotalH = 0.0f, maxScroll = 0.0f;
         float gridTotalH = 0.0f, maxRightScroll = 0.0f;
         GetScrollLimits(leftTotalH, maxScroll, gridTotalH, maxRightScroll);
 
-        RectF leftTrackRect = RectF::FromXYWH(listRect.right - 12.0f, listRect.top, 12.0f, listRect.Height());
-        if (maxScroll > 0.0f && leftTrackRect.Contains(x, y)) {
-            m_leftScrollCaptured = true;
-            m_dragStartY = y;
-            m_dragStartScrollOffset = m_leftScroll;
-            if (m_app) m_app->m_window.RequestRedraw();
-            return true;
+        if (hasAvailable) {
+            RectF leftTrackRect = RectF::FromXYWH(listRect.right - 12.0f, listRect.top, 12.0f, listRect.Height());
+            if (maxScroll > 0.0f && leftTrackRect.Contains(x, y)) {
+                m_leftScrollCaptured = true;
+                m_dragStartY = y;
+                m_dragStartScrollOffset = m_leftScroll;
+                if (m_app) m_app->m_window.RequestRedraw();
+                return true;
+            }
         }
 
         RectF rightTrackRect = RectF::FromXYWH(gridRect.right - 12.0f, gridRect.top, 12.0f, gridRect.Height());
@@ -904,18 +1007,18 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
     float tabY = bounds.top + 60.0f;
     float tabH = 30.0f;
     for (int i = 0; i < 2; ++i) {
-        RectF tabRect = RectF::FromXYWH(tabX, tabY, 100.0f, tabH);
+        RectF tabRect = RectF::FromXYWH(tabX, tabY, 110.0f, tabH);
         if (tabRect.Contains(x, y)) {
             m_currentTab = i;
             if (m_app) m_app->m_window.RequestRedraw();
             return true;
         }
-        tabX += 110.0f;
+        tabX += 120.0f;
     }
 
     // Save & Cancel buttons
-    RectF cancelRect = RectF::FromXYWH(bounds.right - 140.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
-    RectF saveRect = RectF::FromXYWH(bounds.right - 260.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
+    RectF cancelRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+    RectF saveRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
 
     if (saveRect.Contains(x, y)) {
         SaveChanges();
@@ -928,70 +1031,96 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
 
     if (m_currentTab == 0) {
         // --- TAGS TAB CLICKS ---
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
-
-        // Search Input Focus
-        RectF searchRect = RectF::FromXYWH(leftPane.left, leftPane.top, leftPane.Width(), 30.0f);
-        if (searchRect.Contains(x, y)) {
-            m_activeInputType = 1;
-            if (m_app) m_app->m_window.RequestRedraw();
-            return true;
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+        RectF rightPane;
+        if (hasAvailable) {
+            rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+        } else {
+            rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
         }
 
-        // Available Tags list clicks
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-        if (listRect.Contains(x, y)) {
-            float relativeX = x - listRect.left - 5.0f;
-            float relativeY = y - listRect.top + m_leftScroll;
-            float colWidth = (listRect.Width() - 15.0f) / 2.0f;
-            int col = static_cast<int>(relativeX / (colWidth + 5.0f));
-            int row = static_cast<int>(relativeY / 25.0f);
-            if (col >= 0 && col < 2 && row >= 0) {
-                int idx = row * 2 + col;
-                if (idx >= 0 && idx < static_cast<int>(m_filteredTags.size())) {
-                    if (mods.ctrl) {
-                        m_selectedAvailableIndices[idx] = !m_selectedAvailableIndices[idx];
-                    } else {
-                        m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
-                        m_selectedAvailableIndices[idx] = true;
+        // Search Input Focus - only if hasAvailable
+        if (hasAvailable) {
+            RectF searchRect = RectF::FromXYWH(leftPane.left, leftPane.top, leftPane.Width(), 36.0f);
+            if (searchRect.Contains(x, y)) {
+                m_activeInputType = 1;
+                if (m_app) m_app->m_window.RequestRedraw();
+                return true;
+            }
+        }
 
-                        // Double click simulation to copy
-                        static double lastClickTime = 0;
-                        static int lastClickIdx = -1;
-                        double now = m_app ? m_app->m_frameTimer.Elapsed() : 0;
-                        if (lastClickIdx == idx && now - lastClickTime < 0.3) {
-                            std::wstring tagToCopy = m_filteredTags[idx];
-                            if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
-                                m_imageTags.push_back(tagToCopy);
+        // Available Tags list clicks - only if hasAvailable
+        if (hasAvailable) {
+            RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+            if (listRect.Contains(x, y)) {
+                float availX = listRect.left + 8.0f;
+                float availY = listRect.top + 8.0f - m_leftScroll;
+                float availH = 28.0f;
+                float spacingX = 6.0f;
+                float spacingY = 6.0f;
+
+                for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                    std::wstring tagStr = m_filteredTags[i];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + spacingY;
+                    }
+
+                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                    if (pillRect.Contains(x, y)) {
+                        if (mods.ctrl) {
+                            m_selectedAvailableIndices[i] = !m_selectedAvailableIndices[i];
+                        } else {
+                            m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
+                            m_selectedAvailableIndices[i] = true;
+
+                            // Double click simulation to copy
+                            static double lastClickTime = 0;
+                            static int lastClickIdx = -1;
+                            double now = m_app ? m_app->m_frameTimer.Elapsed() : 0;
+                            if (lastClickIdx == i && now - lastClickTime < 0.3) {
+                                std::wstring tagToCopy = m_filteredTags[i];
+                                if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
+                                    m_imageTags.push_back(tagToCopy);
+                                }
                             }
+                            lastClickTime = now;
+                            lastClickIdx = i;
                         }
-                        lastClickTime = now;
-                        lastClickIdx = idx;
+                        if (m_app) m_app->m_window.RequestRedraw();
+                        return true;
                     }
-                    if (m_app) m_app->m_window.RequestRedraw();
-                    return true;
+
+                    availX += pillW + spacingX;
                 }
             }
         }
 
-        // Copy Arrow [ > ] Button
-        RectF midBtnRect = RectF::FromXYWH(leftPane.right + 25.0f, leftPane.top + (leftPane.Height() - 40.0f) / 2.0f, 30.0f, 40.0f);
-        if (midBtnRect.Contains(x, y)) {
-            for (size_t i = 0; i < m_filteredTags.size(); ++i) {
-                if (m_selectedAvailableIndices[i]) {
-                    std::wstring tagToCopy = m_filteredTags[i];
-                    if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
-                        m_imageTags.push_back(tagToCopy);
+        // Copy Arrow [ > ] Button - only if hasAvailable
+        if (hasAvailable) {
+            RectF midBtnRect = RectF::FromXYWH(leftPane.right + 36.0f, leftPane.top + (leftPane.Height() - 50.0f) / 2.0f, 36.0f, 50.0f);
+            if (midBtnRect.Contains(x, y)) {
+                for (size_t i = 0; i < m_filteredTags.size(); ++i) {
+                    if (m_selectedAvailableIndices[i]) {
+                        std::wstring tagToCopy = m_filteredTags[i];
+                        if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
+                            m_imageTags.push_back(tagToCopy);
+                        }
                     }
                 }
+                if (m_app) m_app->m_window.RequestRedraw();
+                return true;
             }
-            if (m_app) m_app->m_window.RequestRedraw();
-            return true;
         }
 
         // Manual tag text focus
-        RectF addRect = RectF::FromXYWH(rightPane.left, rightPane.top, rightPane.Width() - 35.0f, 30.0f);
+        RectF addRect = RectF::FromXYWH(rightPane.left, rightPane.top, rightPane.Width() - 42.0f, 36.0f);
         if (addRect.Contains(x, y)) {
             m_activeInputType = 6;
             if (m_app) m_app->m_window.RequestRedraw();
@@ -999,7 +1128,7 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Add Tag (+) click
-        RectF plusRect = RectF::FromXYWH(rightPane.right - 30.0f, rightPane.top, 30.0f, 30.0f);
+        RectF plusRect = RectF::FromXYWH(rightPane.right - 36.0f, rightPane.top, 36.0f, 36.0f);
         if (plusRect.Contains(x, y)) {
             if (!m_manualTagText.empty()) {
                 if (std::find(m_imageTags.begin(), m_imageTags.end(), m_manualTagText) == m_imageTags.end()) {
@@ -1012,11 +1141,11 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Tags Grid clicks
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
         if (gridRect.Contains(x, y)) {
             float tagX = gridRect.left + 8.0f;
             float tagY = gridRect.top + 8.0f - m_rightScroll;
-            float tagH = 22.0f;
+            float tagH = 28.0f;
             float spacingX = 6.0f;
             float spacingY = 6.0f;
 
@@ -1025,8 +1154,8 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
                 if (tagStr.length() > 30) {
                     tagStr = tagStr.substr(0, 27) + L"...";
                 }
-                float textW = m_app->m_renderer.MeasureText(tagStr, 11.0f).x;
-                float pillW = textW + 28.0f;
+                float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                float pillW = textW + 36.0f;
 
                 if (tagX + pillW > gridRect.right - 8.0f) {
                     tagX = gridRect.left + 8.0f;
@@ -1035,7 +1164,7 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
 
                 RectF pillRect = RectF::FromXYWH(tagX, tagY, pillW, tagH);
                 if (pillRect.Contains(x, y)) {
-                    RectF xRect = RectF::FromXYWH(pillRect.right - 18.0f, pillRect.top, 14.0f, pillRect.Height());
+                    RectF xRect = RectF::FromXYWH(pillRect.right - 22.0f, pillRect.top, 18.0f, pillRect.Height());
                     if (xRect.Contains(x, y)) {
                         // Delete tag
                         m_imageTags.erase(m_imageTags.begin() + i);
@@ -1054,10 +1183,11 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Star rating clicks
-        RectF starsTextRect = RectF::FromXYWH(leftPane.left, rightPane.bottom + 15.0f, 100.0f, 30.0f);
-        float starX = starsTextRect.right + 10.0f;
+        float startX = hasAvailable ? leftPane.left : rightPane.left;
+        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+        float starX = starsTextRect.right + 12.0f;
         float starY = starsTextRect.top;
-        float starW = 22.0f;
+        float starW = 28.0f;
 
         for (int i = 1; i <= 5; ++i) {
             RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
@@ -1072,12 +1202,12 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         // --- METADATA TAB CLICKS ---
         std::wstring dimStr, sizeStr, modStr;
         GetFileStats(m_filePath, dimStr, sizeStr, modStr, m_app ? m_app->m_tagManager.GetWicFactory() : nullptr);
-        float infoY = bounds.top + 10.0f + 3.0f * 24.0f;
-        if (!m_deviceMake.empty() || !m_deviceModel.empty()) infoY += 24.0f;
+        float infoY = bounds.top + 10.0f + 3.0f * 28.0f;
+        if (!m_deviceMake.empty() || !m_deviceModel.empty()) infoY += 28.0f;
         float fieldsY = infoY + 28.0f;
 
         // Title box focus
-        RectF titleRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 20.0f, bounds.Width() - 40.0f, 32.0f);
+        RectF titleRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 20.0f, bounds.Width() - 40.0f, 40.0f);
         if (titleRect.Contains(x, y)) {
             m_activeInputType = 3;
             if (m_app) m_app->m_window.RequestRedraw();
@@ -1085,7 +1215,7 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Creator focus
-        RectF creatorRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 77.0f, bounds.Width() - 40.0f, 32.0f);
+        RectF creatorRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 85.0f, bounds.Width() - 40.0f, 40.0f);
         if (creatorRect.Contains(x, y)) {
             m_activeInputType = 4;
             if (m_app) m_app->m_window.RequestRedraw();
@@ -1093,7 +1223,7 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Description focus
-        RectF descRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 134.0f, bounds.Width() - 40.0f, 75.0f);
+        RectF descRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 150.0f, bounds.Width() - 40.0f, 90.0f);
         if (descRect.Contains(x, y)) {
             m_activeInputType = 5;
             if (m_app) m_app->m_window.RequestRedraw();
@@ -1120,20 +1250,28 @@ bool TaggingModal::OnMouseWheel(float delta, float x, float y, KeyModifiers mods
     if (!m_visible) return false;
 
     RectF bounds = GetBounds();
-    if (m_currentTab == 0) {
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 380.0f, bounds.Height() - 175.0f);
-        RectF rightPane = RectF::FromXYWH(bounds.left + 490.0f, bounds.top + 105.0f, 440.0f, bounds.Height() - 175.0f);
+    bool hasAvailable = !m_availableTags.empty();
+    RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+    RectF rightPane;
+    if (hasAvailable) {
+        rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+    } else {
+        rightPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, bounds.Width() - 60.0f, bounds.Height() - 195.0f);
+    }
 
+    if (m_currentTab == 0) {
         // Scroll left panel
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 40.0f, leftPane.Width(), leftPane.Height() - 40.0f);
-        if (listRect.Contains(x, y)) {
-            m_leftScroll -= delta * 15.0f; // Scroll speed multiplier
-            if (m_app) m_app->m_window.RequestRedraw();
-            return true;
+        if (hasAvailable) {
+            RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
+            if (listRect.Contains(x, y)) {
+                m_leftScroll -= delta * 15.0f; // Scroll speed multiplier
+                if (m_app) m_app->m_window.RequestRedraw();
+                return true;
+            }
         }
 
         // Scroll right panel (Tags grid)
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 40.0f, rightPane.Width(), rightPane.Height() - 40.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
         if (gridRect.Contains(x, y)) {
             m_rightScroll -= delta * 15.0f;
             if (m_app) m_app->m_window.RequestRedraw();

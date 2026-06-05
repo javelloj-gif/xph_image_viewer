@@ -10,8 +10,17 @@
 #include "core/app.h"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <set>
+#include <thread>
 
 namespace kv {
+
+BoardPage::~BoardPage() {
+    if (m_scanThread.joinable()) {
+        m_scanThread.detach();
+    }
+}
 
 void BoardPage::Initialize(App* app) {
     m_app = app;
@@ -80,6 +89,13 @@ void BoardPage::OnEnterPage() {
 
 void BoardPage::Update(double dt) {
     m_editor.UpdateCursor(dt, [this]() { m_app->m_window.RequestRedraw(); });
+    if (m_toastTimeRemaining > 0.0) {
+        m_toastTimeRemaining -= dt;
+        if (m_toastTimeRemaining <= 0.0) {
+            m_toastTimeRemaining = 0.0;
+        }
+        m_app->m_window.RequestRedraw();
+    }
 }
 
 void BoardPage::Draw(Renderer& renderer) {
@@ -151,9 +167,64 @@ void BoardPage::Draw(Renderer& renderer) {
     RectF textRect = RectF::FromXYWH(islandX + 15.0f, islandY + 5.0f, islandWidth - 30.0f, islandHeight - 10.0f);
     renderer.DrawText(L"Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Ctrl+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save", 
                       textRect, Color::White(0.9f), 11.0f, TextAlign::Center, TextVAlign::Center);
+
+    DrawSearchModal(renderer);
+    DrawScanProgressBar(renderer);
+    DrawToastNotification(renderer);
 }
 
 bool BoardPage::OnMouseMove(float x, float y, KeyModifiers mods) {
+    if (m_scanningTags) {
+        return true;
+    }
+    if (m_searchVisible) {
+        RectF bounds = GetSearchModalBounds();
+        m_hoveredSuggestionIdx = -1;
+        m_hoveredSearchButton = 0;
+        
+        if (bounds.Contains(x, y)) {
+            RectF searchBtnRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+            if (searchBtnRect.Contains(x, y)) {
+                m_hoveredSearchButton = 1;
+            }
+            
+            RectF closeBtnRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+            if (closeBtnRect.Contains(x, y)) {
+                m_hoveredSearchButton = 2;
+            }
+            
+            RectF suggestionsArea = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 110.0f, bounds.Width() - 60.0f, 180.0f);
+            if (suggestionsArea.Contains(x, y)) {
+                float sX = suggestionsArea.left + 8.0f;
+                float sY = suggestionsArea.top + 8.0f;
+                float pillH = 28.0f;
+                float spacingX = 6.0f;
+                float spacingY = 6.0f;
+                
+                for (size_t i = 0; i < m_filteredSuggestions.size(); ++i) {
+                    std::wstring tagStr = m_filteredSuggestions[i];
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+                    
+                    if (sX + pillW > suggestionsArea.right - 8.0f) {
+                        sX = suggestionsArea.left + 8.0f;
+                        sY += pillH + spacingY;
+                    }
+                    
+                    RectF pillRect = RectF::FromXYWH(sX, sY, pillW, pillH);
+                    if (pillRect.Contains(x, y)) {
+                        m_hoveredSuggestionIdx = static_cast<int>(i);
+                        break;
+                    }
+                    
+                    sX += pillW + spacingX;
+                }
+            }
+        }
+        m_app->m_window.RequestRedraw();
+        return true;
+    }
+
     m_linkingCurrentMousePos = { x, y };
 
     if (m_canvas.m_cameraPanning) {
@@ -189,6 +260,65 @@ bool BoardPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 }
 
 bool BoardPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_scanningTags) {
+        return true;
+    }
+    if (m_searchVisible) {
+        RectF bounds = GetSearchModalBounds();
+        if (btn == MouseButton::Left) {
+            if (!bounds.Contains(x, y)) {
+                m_searchVisible = false;
+                m_app->m_window.RequestRedraw();
+                return true;
+            }
+            
+            RectF searchBtnRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+            if (searchBtnRect.Contains(x, y)) {
+                PerformTagQueryAndInsert();
+                m_searchVisible = false;
+                m_app->m_window.RequestRedraw();
+                return true;
+            }
+            
+            RectF closeBtnRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+            if (closeBtnRect.Contains(x, y)) {
+                m_searchVisible = false;
+                m_app->m_window.RequestRedraw();
+                return true;
+            }
+            
+            RectF suggestionsArea = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 110.0f, bounds.Width() - 60.0f, 180.0f);
+            if (suggestionsArea.Contains(x, y)) {
+                float sX = suggestionsArea.left + 8.0f;
+                float sY = suggestionsArea.top + 8.0f;
+                float pillH = 28.0f;
+                float spacingX = 6.0f;
+                float spacingY = 6.0f;
+                
+                for (size_t i = 0; i < m_filteredSuggestions.size(); ++i) {
+                    std::wstring tagStr = m_filteredSuggestions[i];
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+                    
+                    if (sX + pillW > suggestionsArea.right - 8.0f) {
+                        sX = suggestionsArea.left + 8.0f;
+                        sY += pillH + spacingY;
+                    }
+                    
+                    RectF pillRect = RectF::FromXYWH(sX, sY, pillW, pillH);
+                    if (pillRect.Contains(x, y)) {
+                        SelectSuggestion(tagStr);
+                        m_app->m_window.RequestRedraw();
+                        return true;
+                    }
+                    
+                    sX += pillW + spacingX;
+                }
+            }
+        }
+        return true;
+    }
+
     PointF worldPos = ScreenToWorld({ x, y });
 
     if (btn == MouseButton::Middle) {
@@ -286,6 +416,12 @@ bool BoardPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods
 }
 
 bool BoardPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_scanningTags) {
+        return true;
+    }
+    if (m_searchVisible) {
+        return true;
+    }
     if (btn == MouseButton::Middle) {
         m_canvas.m_cameraPanning = false;
         return true;
@@ -409,6 +545,12 @@ bool BoardPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) 
 }
 
 bool BoardPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
+    if (m_scanningTags) {
+        return true;
+    }
+    if (m_searchVisible) {
+        return true;
+    }
     float factor = (delta > 0) ? 1.07f : (1.0f / 1.07f);
     float oldZoom = m_canvas.m_zoom;
     
@@ -425,6 +567,12 @@ bool BoardPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
 }
 
 bool BoardPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_scanningTags) {
+        return true;
+    }
+    if (m_searchVisible) {
+        return true;
+    }
     if (btn != MouseButton::Left) return false;
 
     PointF worldPos = ScreenToWorld({ x, y });
@@ -456,6 +604,58 @@ bool BoardPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifie
 }
 
 bool BoardPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (m_scanningTags) {
+        if (vk == VK_ESCAPE) {
+            return false;
+        }
+        return true;
+    }
+
+    if (vk == 'F' && mods.ctrl) {
+        if (!m_editor.IsEditing()) {
+            m_searchVisible = !m_searchVisible;
+            if (m_searchVisible) {
+                LoadSuggestionsFromDirectory(GetActiveDirectory());
+                m_searchText.clear();
+                m_filteredSuggestions = m_suggestions;
+                m_hoveredSuggestionIdx = -1;
+                m_hoveredSearchButton = 0;
+            }
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
+    }
+
+    if (vk == 'L' && mods.ctrl) {
+        if (!m_editor.IsEditing()) {
+            std::filesystem::path activeDir = GetActiveDirectory();
+            std::filesystem::path jsonPath = activeDir / "xmpTags.json";
+            if (std::filesystem::exists(jsonPath)) {
+                m_toastMessage = L"Tags file already exists";
+                m_toastTimeRemaining = 2.5;
+                m_app->m_window.RequestRedraw();
+            } else {
+                StartDirectoryTagScan(activeDir);
+            }
+            return true;
+        }
+    }
+
+    if (m_searchVisible) {
+        if (vk == VK_ESCAPE) {
+            m_searchVisible = false;
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
+        if (vk == VK_RETURN) {
+            PerformTagQueryAndInsert();
+            m_searchVisible = false;
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
+        return true;
+    }
+
     if (m_editor.HandleKeyDown(vk, [this]() { m_app->m_window.RequestRedraw(); })) {
         return true;
     }
@@ -484,10 +684,38 @@ bool BoardPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
 }
 
 void BoardPage::OnChar(wchar_t ch) {
+    if (m_scanningTags) {
+        return;
+    }
+    if (m_searchVisible) {
+        if (ch == L'\r' || ch == L'\n') {
+            return;
+        }
+        if (ch == L'\b') {
+            if (!m_searchText.empty()) {
+                m_searchText.pop_back();
+                UpdateFilteredSuggestions();
+                m_app->m_window.RequestRedraw();
+            }
+            return;
+        }
+        if (ch == 27) {
+            return;
+        }
+        if (ch >= 32) {
+            m_searchText += ch;
+            UpdateFilteredSuggestions();
+            m_app->m_window.RequestRedraw();
+        }
+        return;
+    }
     m_editor.HandleChar(ch, m_items, [this]() { m_app->m_window.RequestRedraw(); });
 }
 
 void BoardPage::OnFileDrop(const std::wstring& path, float screenX, float screenY) {
+    if (m_scanningTags || m_searchVisible) {
+        return;
+    }
     PointF worldPos = ScreenToWorld({ screenX, screenY });
     namespace fs = std::filesystem;
 
@@ -659,6 +887,589 @@ float BoardPage::DistanceToLineSegment(const PointF& p, const PointF& a, const P
     
     PointF projection = { a.x + t * (b.x - a.x), a.y + t * (b.y - a.y) };
     return std::sqrt((p.x - projection.x) * (p.x - projection.x) + (p.y - projection.y) * (p.y - projection.y));
+}
+
+std::filesystem::path BoardPage::GetActiveDirectory() const {
+    if (!m_app->m_fileList.empty()) {
+        return std::filesystem::path(m_app->m_fileList[0]).parent_path();
+    }
+    int folderIdx = m_app->m_libraryData.GetCurrentFolderIndex();
+    const auto& folders = m_app->m_libraryData.GetFolders();
+    if (folderIdx >= 0 && folderIdx < static_cast<int>(folders.size())) {
+        return folders[folderIdx].folderPath;
+    }
+    return std::filesystem::current_path();
+}
+
+RectF BoardPage::GetSearchModalBounds() const {
+    auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    float boxW = 600.0f;
+    float boxH = 360.0f;
+    return RectF::FromXYWH(
+        (screenSize.width - boxW) / 2.0f,
+        (screenSize.height - boxH) / 2.0f,
+        boxW,
+        boxH
+    );
+}
+
+static std::wstring GetCurrentTypingTag(const std::wstring& text, size_t& outLastCommaPos) {
+    size_t pos = text.find_last_of(L',');
+    if (pos == std::wstring::npos) {
+        outLastCommaPos = std::wstring::npos;
+        std::wstring sub = text;
+        size_t start = sub.find_first_not_of(L" \t");
+        if (start != std::wstring::npos) sub = sub.substr(start);
+        return sub;
+    } else {
+        outLastCommaPos = pos;
+        std::wstring sub = text.substr(pos + 1);
+        size_t start = sub.find_first_not_of(L" \t");
+        if (start != std::wstring::npos) sub = sub.substr(start);
+        return sub;
+    }
+}
+
+void BoardPage::UpdateFilteredSuggestions() {
+    m_filteredSuggestions.clear();
+    size_t lastComma = std::wstring::npos;
+    std::wstring typing = GetCurrentTypingTag(m_searchText, lastComma);
+    
+    bool isExcluding = false;
+    if (!typing.empty() && typing[0] == L'-') {
+        isExcluding = true;
+        typing = typing.substr(1);
+    }
+    
+    size_t last = typing.find_last_not_of(L" \t");
+    if (last != std::wstring::npos) {
+        typing = typing.substr(0, last + 1);
+    }
+    
+    if (typing.empty()) {
+        m_filteredSuggestions = m_suggestions;
+    } else {
+        std::wstring typingLower = typing;
+        std::transform(typingLower.begin(), typingLower.end(), typingLower.begin(), ::towlower);
+        for (const auto& tag : m_suggestions) {
+            std::wstring tagLower = tag;
+            std::transform(tagLower.begin(), tagLower.end(), tagLower.begin(), ::towlower);
+            if (tagLower.find(typingLower) == 0) {
+                m_filteredSuggestions.push_back(tag);
+            }
+        }
+    }
+}
+
+void BoardPage::SelectSuggestion(const std::wstring& suggestion) {
+    size_t lastComma = std::wstring::npos;
+    std::wstring typing = GetCurrentTypingTag(m_searchText, lastComma);
+    bool isExcluding = (!typing.empty() && typing[0] == L'-');
+    
+    std::wstring prefix = L"";
+    if (lastComma != std::wstring::npos) {
+        prefix = m_searchText.substr(0, lastComma + 1) + L" ";
+    }
+    
+    if (isExcluding) {
+        m_searchText = prefix + L"-" + suggestion + L", ";
+    } else {
+        m_searchText = prefix + suggestion + L", ";
+    }
+    
+    UpdateFilteredSuggestions();
+    m_hoveredSuggestionIdx = -1;
+}
+
+void BoardPage::DrawSearchModal(Renderer& renderer) {
+    if (!m_searchVisible) return;
+    
+    auto screenSize = renderer.GetTargetSize().ToFloat();
+    RectF bounds = GetSearchModalBounds();
+    
+    renderer.FillRect(RectF::FromXYWH(0, 0, screenSize.width, screenSize.height), Color::Black(0.65f));
+    
+    Color panelBg = Color::FromRGBA(15, 15, 20, 245);
+    Color panelBorder = Color::FromRGBA(0, 240, 255, 60);
+    renderer.FillRoundedRect(bounds, 8.0f, 8.0f, panelBg);
+    renderer.DrawRoundedRect(bounds, 8.0f, 8.0f, panelBorder, 1.5f);
+    
+    RectF titleRect = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 20.0f, bounds.Width() - 60.0f, 30.0f);
+    renderer.DrawText(
+        L"Buscar por etiquetas",
+        titleRect,
+        Color::White(),
+        22.0f,
+        TextAlign::Left,
+        TextVAlign::Center
+    );
+    
+    RectF searchRect = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 60.0f, bounds.Width() - 60.0f, 36.0f);
+    Color searchBorder = Color::FromRGBA(0, 240, 255);
+    renderer.FillRoundedRect(searchRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 200));
+    renderer.DrawRoundedRect(searchRect, 4.0f, 4.0f, searchBorder, 1.0f);
+    
+    if (m_searchText.empty()) {
+        renderer.DrawText(
+            L"Etiquetas separadas por comas (ej. tag1, -tag2)...",
+            searchRect.Inset(8.0f),
+            Color::FromRGBA(120, 120, 120),
+            15.0f,
+            TextAlign::Left,
+            TextVAlign::Center
+        );
+    } else {
+        renderer.DrawText(
+            m_searchText,
+            searchRect.Inset(8.0f),
+            Color::White(),
+            15.0f,
+            TextAlign::Left,
+            TextVAlign::Center
+        );
+    }
+    
+    static auto lastCaretSearch = std::chrono::steady_clock::now();
+    static bool caretSearchVisible = true;
+    if (std::chrono::steady_clock::now() - lastCaretSearch > std::chrono::milliseconds(500)) {
+        caretSearchVisible = !caretSearchVisible;
+        lastCaretSearch = std::chrono::steady_clock::now();
+    }
+    if (caretSearchVisible) {
+        float textW = renderer.MeasureText(m_searchText, 15.0f).x;
+        float caretX = searchRect.left + 8.0f + textW;
+        renderer.DrawLine(
+            { caretX, searchRect.top + 6.0f },
+            { caretX, searchRect.bottom - 6.0f },
+            Color::FromRGBA(0, 240, 255),
+            1.5f
+        );
+    }
+    
+    RectF suggestionsArea = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 110.0f, bounds.Width() - 60.0f, 180.0f);
+    renderer.FillRoundedRect(suggestionsArea, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 150));
+    renderer.DrawRoundedRect(suggestionsArea, 4.0f, 4.0f, Color::FromRGBA(255, 255, 255, 15), 1.0f);
+    
+    renderer.PushClip(suggestionsArea);
+    
+    float sX = suggestionsArea.left + 8.0f;
+    float sY = suggestionsArea.top + 8.0f;
+    float pillH = 28.0f;
+    float spacingX = 6.0f;
+    float spacingY = 6.0f;
+    
+    for (size_t i = 0; i < m_filteredSuggestions.size(); ++i) {
+        std::wstring tagStr = m_filteredSuggestions[i];
+        float textW = renderer.MeasureText(tagStr, 14.0f).x;
+        float pillW = textW + 22.0f;
+        
+        if (sX + pillW > suggestionsArea.right - 8.0f) {
+            sX = suggestionsArea.left + 8.0f;
+            sY += pillH + spacingY;
+        }
+        
+        RectF pillRect = RectF::FromXYWH(sX, sY, pillW, pillH);
+        
+        if (pillRect.bottom > suggestionsArea.top && pillRect.top < suggestionsArea.bottom) {
+            bool hovered = (m_hoveredSuggestionIdx == static_cast<int>(i));
+            Color pillBg = hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10);
+            Color pillBorder = hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20);
+            
+            renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
+            renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+            
+            RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
+            renderer.DrawText(tagStr, textRect, Color::White(0.9f), 14.0f, TextAlign::Left, TextVAlign::Center);
+        }
+        
+        sX += pillW + spacingX;
+    }
+    
+    renderer.PopClip();
+    
+    RectF closeRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+    RectF searchBtnRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+    
+    Color closeBg = (m_hoveredSearchButton == 2) ? Color::FromRGBA(60, 60, 65) : Color::FromRGBA(35, 35, 40);
+    renderer.FillRoundedRect(closeRect, 4.0f, 4.0f, closeBg);
+    renderer.DrawRoundedRect(closeRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
+    renderer.DrawText(L"Cerrar", closeRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
+    
+    Color searchBg = (m_hoveredSearchButton == 1) ? Color::FromRGBA(255, 55, 95) : Color::FromRGBA(220, 40, 75);
+    renderer.FillRoundedRect(searchBtnRect, 4.0f, 4.0f, searchBg);
+    renderer.DrawRoundedRect(searchBtnRect, 4.0f, 4.0f, Color::White(0.2f), 1.0f);
+    renderer.DrawText(L"Buscar", searchBtnRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
+}
+
+void BoardPage::DrawScanProgressBar(Renderer& renderer) {
+    if (!m_scanningTags) return;
+    
+    auto screenSize = renderer.GetTargetSize().ToFloat();
+    
+    float barW = 400.0f;
+    float barH = 30.0f;
+    float barX = (screenSize.width - barW) * 0.5f;
+    float barY = 20.0f;
+    
+    RectF barRect = RectF::FromXYWH(barX, barY, barW, barH);
+    
+    renderer.FillRoundedRect(barRect, 6.0f, 6.0f, Color::FromRGBA(15, 15, 20, 240));
+    renderer.DrawRoundedRect(barRect, 6.0f, 6.0f, Color::FromRGBA(0, 240, 255, 60), 1.5f);
+    
+    size_t total = m_scanTotal;
+    size_t current = m_scanCurrent.load();
+    float pct = (total > 0) ? (static_cast<float>(current) / static_cast<float>(total)) : 0.0f;
+    pct = std::clamp(pct, 0.0f, 1.0f);
+    
+    RectF fillRect = RectF::FromXYWH(barX + 3.0f, barY + 3.0f, (barW - 6.0f) * pct, barH - 6.0f);
+    if (fillRect.Width() > 0.0f) {
+        renderer.FillRoundedRect(fillRect, 4.0f, 4.0f, Color::FromRGBA(0, 240, 255, 120));
+    }
+    
+    std::wstring text = std::format(L"Escaneando directorio: {} / {} ({}%)", current, total, static_cast<int>(pct * 100.0f));
+    renderer.DrawText(text, barRect, Color::White(), 12.0f, TextAlign::Center, TextVAlign::Center);
+}
+
+void BoardPage::DrawToastNotification(Renderer& renderer) {
+    if (m_toastTimeRemaining <= 0.0 || m_toastMessage.empty()) return;
+    
+    auto screenSize = renderer.GetTargetSize().ToFloat();
+    
+    float textW = renderer.MeasureText(m_toastMessage, 13.0f).x;
+    float toastW = textW + 30.0f;
+    float toastH = 40.0f;
+    float toastX = screenSize.width - toastW - 20.0f;
+    float toastY = 20.0f;
+    
+    RectF toastRect = RectF::FromXYWH(toastX, toastY, toastW, toastH);
+    
+    float alpha = 1.0f;
+    if (m_toastTimeRemaining < 0.5) {
+        alpha = static_cast<float>(m_toastTimeRemaining / 0.5);
+    }
+    
+    Color borderCol = Color::FromRGBA(255, 152, 0, static_cast<uint8_t>(alpha * 255.0f * 0.4f));
+    Color bgCol = Color::FromRGBA(20, 20, 25, static_cast<uint8_t>(alpha * 255.0f * 0.95f));
+    Color textCol = Color::FromRGBA(255, 255, 255, static_cast<uint8_t>(alpha * 255.0f * 0.9f));
+    
+    renderer.FillRoundedRect(toastRect, 6.0f, 6.0f, bgCol);
+    renderer.DrawRoundedRect(toastRect, 6.0f, 6.0f, borderCol, 1.5f);
+    renderer.DrawText(m_toastMessage, toastRect, textCol, 13.0f, TextAlign::Center, TextVAlign::Center);
+}
+
+void BoardPage::LoadSuggestionsFromDirectory(const std::filesystem::path& activeDir) {
+    m_suggestions.clear();
+    m_filteredSuggestions.clear();
+    
+    std::filesystem::path jsonPath = activeDir / "xmpTags.json";
+    if (!std::filesystem::exists(jsonPath)) {
+        return;
+    }
+    
+    std::ifstream file(jsonPath, std::ios::binary);
+    if (!file) return;
+    
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    file.close();
+    
+    std::wstring wcontent;
+    int len = MultiByteToWideChar(CP_UTF8, 0, content.c_str(), static_cast<int>(content.size()), nullptr, 0);
+    if (len > 0) {
+        wcontent.resize(len);
+        MultiByteToWideChar(CP_UTF8, 0, content.c_str(), static_cast<int>(content.size()), &wcontent[0], len);
+    } else {
+        return;
+    }
+    
+    int arrayDepth = 0;
+    size_t i = 0;
+    while (i < wcontent.size()) {
+        wchar_t ch = wcontent[i];
+        if (ch == L'[') {
+            arrayDepth++;
+            i++;
+        } else if (ch == L']') {
+            if (arrayDepth > 0) arrayDepth--;
+            i++;
+        } else if (ch == L'"') {
+            std::wstring str = L"";
+            i++;
+            while (i < wcontent.size() && wcontent[i] != L'"') {
+                if (wcontent[i] == L'\\' && i + 1 < wcontent.size()) {
+                    str += wcontent[i + 1];
+                    i += 2;
+                } else {
+                    str += wcontent[i];
+                    i++;
+                }
+            }
+            if (i < wcontent.size()) i++;
+            
+            if (arrayDepth > 0 && !str.empty()) {
+                if (std::find(m_suggestions.begin(), m_suggestions.end(), str) == m_suggestions.end()) {
+                    m_suggestions.push_back(str);
+                }
+            }
+        } else {
+            i++;
+        }
+    }
+    
+    std::sort(m_suggestions.begin(), m_suggestions.end());
+    m_filteredSuggestions = m_suggestions;
+}
+
+void BoardPage::StartDirectoryTagScan(const std::filesystem::path& activeDir) {
+    m_scanningTags = true;
+    m_scanCurrent = 0;
+    m_scanTotal = 0;
+    m_scanDir = activeDir.wstring();
+    
+    if (m_scanThread.joinable()) {
+        m_scanThread.join();
+    }
+    
+    m_scanThread = std::thread([this, activeDir]() {
+        HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        bool comInitialized = SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
+        
+        std::vector<std::filesystem::path> files;
+        try {
+            for (const auto& entry : std::filesystem::directory_iterator(activeDir)) {
+                if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
+                    files.push_back(entry.path());
+                }
+            }
+        } catch (...) {}
+        
+        m_scanTotal = files.size();
+        m_scanCurrent = 0;
+        
+        std::set<std::wstring> uniqueTags;
+        
+        for (const auto& filePath : files) {
+            std::vector<std::wstring> fileTags;
+            if (m_app->m_tagManager.ReadTags(filePath.wstring(), fileTags)) {
+                for (const auto& tag : fileTags) {
+                    if (!tag.empty()) {
+                        uniqueTags.insert(tag);
+                    }
+                }
+            }
+            m_scanCurrent++;
+            m_app->m_window.RequestRedraw();
+        }
+        
+        if (!files.empty()) {
+            std::filesystem::path jsonPath = activeDir / "xmpTags.json";
+            
+            std::wstring jsonW = L"[\n";
+            bool first = true;
+            for (const auto& tag : uniqueTags) {
+                if (!first) {
+                    jsonW += L",\n";
+                }
+                first = false;
+                
+                std::wstring escaped = L"";
+                for (wchar_t ch : tag) {
+                    if (ch == L'\\' || ch == L'"') {
+                        escaped += L'\\';
+                    }
+                    escaped += ch;
+                }
+                jsonW += L"  \"" + escaped + L"\"";
+            }
+            jsonW += L"\n]\n";
+            
+            std::string jsonUtf8;
+            int lenLen = WideCharToMultiByte(CP_UTF8, 0, jsonW.c_str(), static_cast<int>(jsonW.size()), nullptr, 0, nullptr, nullptr);
+            if (lenLen > 0) {
+                jsonUtf8.resize(lenLen);
+                WideCharToMultiByte(CP_UTF8, 0, jsonW.c_str(), static_cast<int>(jsonW.size()), &jsonUtf8[0], lenLen, nullptr, nullptr);
+            }
+            
+            std::ofstream file(jsonPath, std::ios::binary);
+            if (file) {
+                file.write(jsonUtf8.data(), jsonUtf8.size());
+                file.close();
+            }
+        }
+        
+        m_app->m_tagManager.SaveCache();
+        m_scanningTags = false;
+        m_app->m_window.RequestRedraw();
+        
+        if (comInitialized) {
+            CoUninitialize();
+        }
+    });
+}
+
+void BoardPage::PerformTagQueryAndInsert() {
+    std::vector<std::wstring> posTags;
+    std::vector<std::wstring> negTags;
+    
+    std::wstring term = L"";
+    for (wchar_t ch : m_searchText) {
+        if (ch == L',') {
+            size_t start = term.find_first_not_of(L" \t");
+            if (start != std::wstring::npos) {
+                term = term.substr(start);
+                size_t end = term.find_last_not_of(L" \t");
+                if (end != std::wstring::npos) {
+                    term = term.substr(0, end + 1);
+                }
+                if (!term.empty()) {
+                    if (term[0] == L'-') {
+                        std::wstring sub = term.substr(1);
+                        if (!sub.empty()) negTags.push_back(sub);
+                    } else {
+                        posTags.push_back(term);
+                    }
+                }
+            }
+            term = L"";
+        } else {
+            term += ch;
+        }
+    }
+    
+    size_t start = term.find_first_not_of(L" \t");
+    if (start != std::wstring::npos) {
+        term = term.substr(start);
+        size_t end = term.find_last_not_of(L" \t");
+        if (end != std::wstring::npos) {
+            term = term.substr(0, end + 1);
+        }
+        if (!term.empty()) {
+            if (term[0] == L'-') {
+                std::wstring sub = term.substr(1);
+                if (!sub.empty()) negTags.push_back(sub);
+            } else {
+                posTags.push_back(term);
+            }
+        }
+    }
+    
+    if (posTags.empty() && negTags.empty()) {
+        return;
+    }
+    
+    std::filesystem::path activeDir = GetActiveDirectory();
+    std::vector<std::filesystem::path> matchingFiles;
+    
+    try {
+        if (std::filesystem::exists(activeDir) && std::filesystem::is_directory(activeDir)) {
+            for (const auto& entry : std::filesystem::directory_iterator(activeDir)) {
+                if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
+                    std::wstring filePath = entry.path().wstring();
+                    std::vector<std::wstring> fileTags;
+                    if (m_app->m_tagManager.ReadTags(filePath, fileTags)) {
+                        bool matchesPos = true;
+                        for (const auto& posTag : posTags) {
+                            bool tagFound = false;
+                            for (const auto& ft : fileTags) {
+                                if (_wcsicmp(posTag.c_str(), ft.c_str()) == 0) {
+                                    tagFound = true;
+                                    break;
+                                }
+                            }
+                            if (!tagFound) {
+                                matchesPos = false;
+                                break;
+                            }
+                        }
+                        
+                        if (!matchesPos) continue;
+                        
+                        bool matchesNeg = true;
+                        for (const auto& negTag : negTags) {
+                            for (const auto& ft : fileTags) {
+                                if (_wcsicmp(negTag.c_str(), ft.c_str()) == 0) {
+                                    matchesNeg = false;
+                                    break;
+                                }
+                            }
+                            if (!matchesNeg) break;
+                        }
+                        
+                        if (matchesPos && matchesNeg) {
+                            matchingFiles.push_back(entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    } catch (...) {}
+    
+    if (matchingFiles.empty()) {
+        return;
+    }
+    
+    std::vector<std::filesystem::path> newFiles;
+    for (const auto& path : matchingFiles) {
+        bool alreadyExists = false;
+        std::wstring pathStr = path.wstring();
+        for (const auto& item : m_items) {
+            if (item.type == BoardItemType::Image) {
+                if (_wcsicmp(item.filePath.c_str(), pathStr.c_str()) == 0) {
+                    alreadyExists = true;
+                    break;
+                }
+            }
+        }
+        if (!alreadyExists) {
+            newFiles.push_back(path);
+        }
+    }
+    
+    if (newFiles.empty()) {
+        return;
+    }
+    
+    auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
+    PointF worldCenter = ScreenToWorld(screenCenter);
+    
+    int columns = 3;
+    float spacingX = 40.0f;
+    float spacingY = 40.0f;
+    float itemW = 400.0f;
+    float itemH = 300.0f;
+    
+    int count = static_cast<int>(newFiles.size());
+    int gridCols = std::min(count, columns);
+    int gridRows = (count + columns - 1) / columns;
+    
+    float gridWidth = gridCols * itemW + (gridCols - 1) * spacingX;
+    float gridHeight = gridRows * itemH + (gridRows - 1) * spacingY;
+    
+    float startX = worldCenter.x - gridWidth * 0.5f;
+    float startY = worldCenter.y - gridHeight * 0.5f;
+    
+    for (int i = 0; i < count; ++i) {
+        int row = i / columns;
+        int col = i % columns;
+        
+        float cellLeft = startX + col * (itemW + spacingX);
+        float cellTop = startY + row * (itemH + spacingY);
+        float centerX = cellLeft + itemW * 0.5f;
+        float centerY = cellTop + itemH * 0.5f;
+        
+        BoardItem imgItem;
+        imgItem.type = BoardItemType::Image;
+        imgItem.position = { centerX, centerY };
+        imgItem.filePath = newFiles[i].wstring();
+        imgItem.label = newFiles[i].filename().wstring();
+        imgItem.width = itemW;
+        imgItem.height = itemH;
+        
+        m_items.push_back(imgItem);
+        LoadItemTexture(m_items.back());
+    }
+    
+    m_app->m_window.RequestRedraw();
 }
 
 } // namespace kv
