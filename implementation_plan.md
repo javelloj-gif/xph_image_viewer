@@ -1,154 +1,145 @@
-# Plan de Implementación — Mejoras del Modal de Tagging y Optimización del Infinity Board
+# Plan de Implementación — Opciones de Búsqueda en Board y Limpieza de HUD en Visor
 
-Este documento detalla las soluciones técnicas y de diseño para implementar mejoras de usabilidad en el modal de tagging, la categorización de etiquetas desde archivos JSON, la optimización y escalado para directorios masivos (+10,000 elementos) en el modo Board, la redefinición de atajos de selección/enlace, y el soporte de etiquetado masivo.
+Este plan detalla los cambios necesarios para cumplir con los requerimientos previos a la distribución del visor de imágenes **LenteUV**:
+1. **Eliminar el mensaje flotante** de depuración en la esquina superior izquierda del visor (FPS y Opacidad).
+2. **Implementar el comportamiento de Agrupación y Enfoque** por defecto al buscar etiquetas (`CTRL+F`) en el modo Tablero (`BoardPage`), con la posibilidad de alternar al comportamiento original de filtrado mediante un botón toggle en la esquina inferior derecha.
 
 ---
 
 ## User Review Required
 
-> [!NOTE]
-> Todos los cambios se realizarán utilizando C++20 nativo de Windows (Win32/DirectX) sin introducir dependencias externas. 
-> La persistencia de cambios en metadatos multi-imagen llamará individualmente a `XmpTagManager::WriteTags` para mantener la sincronización con el explorador y la caché en disco.
-
-> [!WARNING]
-> La tecla para enlazar nodos en el tablero cambiará de **CTRL + Click** a **ALT + Click** para liberar la combinación estándar de selección múltiple (**CTRL + Click**).
+> [!IMPORTANT]
+> - **Comportamiento por Defecto:** La búsqueda por etiquetas (`CTRL+F`) en Board ahora agrupará y enfocará las imágenes coincidentes alrededor del centro de la pantalla actual en coordenadas del mundo (`worldCenter`), sin eliminar del lienzo las imágenes que no coincidan.
+> - **Botón Toggle Flotante:** Se añadirá un botón con estilo Cyberpunk en la esquina inferior derecha de la pantalla para alternar de manera síncrona entre "Búsqueda: Agrupar" (predeterminado) y "Búsqueda: Filtrar" (comportamiento original de eliminación).
+> - **Persistencia:** De acuerdo con las preferencias del usuario, este estado se mantendrá únicamente en memoria durante la sesión activa del tablero (inicializándose siempre en "Agrupar" al arrancar).
+> - **Limpieza de HUD:** Se eliminará por completo la cadena flotante de FPS y Opacidad en la parte superior izquierda del visor de imagen única para asegurar una experiencia limpia y libre de ruidos visuales.
 
 ---
 
 ## Proposed Changes
 
-### Componente: Tagging Modal (`ui/tagging_modal`)
+### 1. Segmento: Visor de Imagen Única (`viewer/`)
 
-#### [MODIFY] [tagging_modal.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.h)
-* Añadir miembros privados para soportar categorías y selección múltiple:
-  ```cpp
-  struct AvailableTag {
-      std::wstring name;
-      std::wstring category; // Vacío si no tiene categoría
-  };
-  std::vector<std::wstring> m_categories; // Orden de aparición en el JSON
-  std::unordered_map<std::wstring, std::wstring> m_tagToCategory;
-  
-  // Soporte multi-imagen
-  std::vector<std::wstring> m_filePaths;
-  std::vector<std::vector<std::wstring>> m_originalFileTags;
-  std::vector<std::wstring> m_initialCommonTags;
-  bool m_multiImageMode = false;
-  ```
-* Declarar sobrecarga de `Show`:
-  ```cpp
-  void Show(const std::vector<std::wstring>& filePaths);
-  ```
-
-#### [MODIFY] [tagging_modal.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.cpp)
-* **Requisito 1 & 2 (Auto-añadir y Foco de Búsqueda)**:
-  * En `OnMouseDown`, al hacer click sobre un tag de disponibles:
-    * Si `mods.ctrl` es falso: Añadir el tag directamente a `m_imageTags` (si no existía). Luego, vaciar `m_searchText`, actualizar la búsqueda (`m_filteredTags = m_availableTags`) y fijar `m_activeInputType = 1` (foco en buscar etiquetas).
-    * Si `mods.ctrl` es verdadero: Alternar selección en la lista de disponibles (multi-selección para copiar por lote).
-  * Al hacer click en el botón copiar `[ > ]`, tras transferir los elementos, vaciar `m_searchText`, filtrar disponibles y fijar `m_activeInputType = 1`.
-* **Requisito 3 (Foco al crear etiqueta)**:
-  * Al presionar `ENTER` en el input de nueva etiqueta (`m_activeInputType == 6`) o al hacer click en el botón `+`:
-    * Añadir el tag a `m_imageTags`, vaciar `m_manualTagText` y **mantener** `m_activeInputType = 6` para que el cursor siga activo para la siguiente escritura.
-* **Requisito 4 (Tags categorizados)**:
-  * Refactorizar `LoadAvailableTags()` para detectar la estructura del archivo `xmpTags.json`:
-    * Leer el primer carácter sin espacios de `wcontent`.
-    * Si es `{`: Es un objeto clasificado (ej. `{"personajes": [...], "lugares": [...]}`).
-      * Analizar las claves (categorías) y añadir cada una a `m_categories`.
-      * Extraer el array de strings asociado a cada categoría, guardándolos en `m_availableTags` y mapeando `m_tagToCategory[tag] = categoria`.
-    * Si es `[`: Es un listado plano tradicional. Limpiar `m_categories`.
-  * Adaptar `GetScrollLimits()` and `DrawTagsTab()` para calcular y renderizar el scroll con secciones:
-    * Si `m_categories` no está vacío, iterar por categorías. Si una categoría tiene tags coincidentes con la búsqueda:
-      * Renderizar una cabecera con el nombre de la categoría en cian cyberpunk (`Color::FromRGBA(0, 240, 255, 180)`).
-      * Envolver y dibujar los tags correspondientes como píldoras tabuladas.
-      * Ajustar la altura acumulada del listado en consecuencia.
-* **Requisito 7 (Etiquetado masivo multi-imagen)**:
-  * Implementar `Show(const std::vector<std::wstring>& filePaths)`:
-    * Establecer `m_multiImageMode = true`, `m_filePaths = filePaths`.
-    * Leer metadatos originales de cada archivo y guardarlos en `m_originalFileTags`.
-    * Computar la intersección de todas las listas de etiquetas para rellenar `m_imageTags` (etiquetas en común). Guardar copia en `m_initialCommonTags`.
-  * En `Draw()` y `DrawTagsTab()`:
-    * Si `m_multiImageMode` es activo, ocultar o inhabilitar la pestaña "Metadata" (mostrando un aviso en su lugar) y el control de clasificación de estrellas. Cambiar el título a "Etiquetado Múltiple (X imágenes)".
-  * En `SaveChanges()`:
-    * Si `m_multiImageMode` es verdadero, calcular diferencias:
-      * Nuevos tags añadidos: presentes en `m_imageTags` pero no en `m_initialCommonTags`.
-      * Tags eliminados: presentes en `m_initialCommonTags` pero no en `m_imageTags`.
-    * Para cada archivo en `m_filePaths`, mezclar sus tags originales aplicando las diferencias (añadir nuevos y borrar eliminados).
-    * Guardar en disco llamando a `m_app->m_tagManager.WriteTags(path, nuevosTags)`.
+#### [MODIFY] [viewer_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/viewer/viewer_page.cpp)
+* **Objetivo:** Eliminar el renderizado del texto flotante en la esquina superior izquierda.
+* **Cambios:**
+  * En el método `ViewerPage::DrawOverlayInfo(Renderer& renderer)` (líneas ~381-382):
+    * Comentar o eliminar la inicialización de `fpsText` y la llamada a `renderer.DrawText()` que renderiza las métricas de FPS y Opacidad.
+    * Conservar intacta la lógica posterior de visualización de metadatos de la imagen (la isla inferior).
 
 ---
 
-### Componente: Board Page (`board`)
+### 2. Segmento: Tablero Virtual Infinito (`board/`)
 
 #### [MODIFY] [board_page.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_page.h)
-* Declarar constantes y métodos auxiliares para optimización y adición masiva:
-  ```cpp
-  static constexpr size_t MAX_BOARD_TEXTURES = 150; // Umbral de texturas en VRAM
-  void ListCurrentDirectoryImages();
-  void EvictFarBoardTextures();
-  ```
+* **Objetivo:** Declarar las variables de estado y helpers necesarios para el control del toggle de búsqueda.
+* **Cambios:**
+  * Añadir las siguientes variables miembro privadas:
+    ```cpp
+    bool m_searchModeGroup = true;   // true = Agrupar y enfocar (default), false = Filtrar (original)
+    bool m_hoveredToggleBtn = false; // Indica si el puntero está sobre el botón toggle
+    ```
+  * Declarar un método auxiliar privado:
+    ```cpp
+    RectF GetSearchToggleRect(const SizeF& screenSize) const;
+    ```
 
 #### [MODIFY] [board_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_page.cpp)
-* **Requisito 5 (Listar directorio masivo + Optimización VRAM)**:
-  * Agregar el atajo `SHIFT + CTRL + L` en `OnKeyDown` y la opción `"Listar imágenes (SHIFT+CTRL+L)"` al menú contextual del lienzo vacío en `OnMouseUp`.
-  * Implementar `ListCurrentDirectoryImages()`:
-    * Obtener el directorio activo. Leer de forma no bloqueante todas las rutas de imágenes soportadas.
-    * Calcular un grid centrado en la vista de cámara (ej. cuadrícula de 12 columnas).
-    * Crear ítems de tablero `BoardItemType::Image` para cada archivo e insertarlos en `m_items`.
-    * **CRÍTICO**: No invocar `LoadItemTexture()` para estos elementos al crearlos. Quedarán en cola con `texture = nullptr`.
-  * Implementar `EvictFarBoardTextures()` para descargar memoria:
-    * Si el recuento de ítems con `texture != nullptr` supera `MAX_BOARD_TEXTURES`:
-      * Calcular el centro actual de la pantalla en coordenadas de mundo.
-      * Obtener todos los ítems cargados y ordenarlos por distancia euclidiana descendente respecto al centro de la cámara.
-      * Para los elementos más lejanos, poner `item.texture = nullptr` (liberando automáticamente el puntero inteligente y su recurso `ID2D1Bitmap1` de la GPU) hasta que el número de texturas cargadas se reduzca a `MAX_BOARD_TEXTURES`.
-      * Llamar a esta función al final de traslaciones/zoom importantes o periódicamente en el ciclo de dibujado.
-* **Requisito 6 (Cambio de Atajos de Enlace / Selección)**:
-  * En `OnMouseDown`, cambiar la detección de conectores de `mods.ctrl` a `mods.alt`.
-  * En `OnMouseDown`, si se hace click sobre un nodo o imagen:
-    * Si `mods.ctrl` o `mods.shift` es verdadero: Alternar estado de selección (`clickedItem.selected = !clickedItem.selected`) permitiendo seleccionar múltiples elementos manualmente uno a uno.
-    * Si no hay modificadores: Si el ítem no estaba seleccionado, deseleccionar todos los demás y seleccionar únicamente el actual.
-* **Requisito 8 (Rectángulo envolvente de selección múltiple)**:
-  * En `Draw()`, al renderizar el rectángulo envolvente de la caja delimitadora `selBox`:
-    * Contar el número de elementos seleccionados.
-    * Si el número de elementos seleccionados es mayor que 1:
-      * Renderizar el rectángulo delimitador externo `selScreenBox` y sus tiradores en color **Cian/Azul Cyberpunk** (`Color::FromHex(0x00E5FF)`) en lugar del naranja estándar.
-    * Mantener el dibujo individual de los bordes amarillos/naranjas de cada imagen seleccionada dentro de `BoardItemRenderer::DrawItems`.
-
-#### [MODIFY] [app.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp)
-* **Integración del atajo de etiquetado múltiple**:
-  * En el handler de la tecla `'T'`, si la página actual es `Page::Board`:
-    * Recopilar todos los archivos de imágenes actualmente seleccionados en el tablero.
-    * Si se selecciona solo 1, llamar a `m_taggingModal.Show(selectedPath)`.
-    * Si se seleccionan 2 o más, llamar a `m_taggingModal.Show(selectedPaths)`.
+* **Objetivo:** Implementar la UI del botón flotante y el nuevo algoritmo de búsqueda.
+* **Cambios:**
+  * **Inicialización:**
+    * En el constructor o en `BoardPage::Initialize`, inicializar `m_searchModeGroup = true;` y `m_hoveredToggleBtn = false;`.
+  * **Posicionamiento del Botón:**
+    * Implementar `GetSearchToggleRect` para calcular los límites del botón en la esquina inferior derecha:
+      ```cpp
+      RectF BoardPage::GetSearchToggleRect(const SizeF& screenSize) const {
+          float btnW = 200.0f;
+          float btnH = 35.0f;
+          return RectF::FromXYWH(
+              screenSize.width - btnW - 20.0f,
+              screenSize.height - btnH - 20.0f,
+              btnW,
+              btnH
+          );
+      }
+      ```
+  * **Dibujo (Draw):**
+    * En `BoardPage::Draw(Renderer& renderer)` (al final, antes de dibujar modales o toasts):
+      * Obtener el rectángulo usando `GetSearchToggleRect(size)`.
+      * Renderizar el botón flotante con diseño Cyberpunk:
+        * Fondo: `Color::FromHex(0x1E1E1E, m_hoveredToggleBtn ? 0.95f : 0.85f)`.
+        * Borde: `Color::FromHex(0x00E5FF, m_hoveredToggleBtn ? 0.65f : 0.35f)` de espesor `1.0f` (o `1.5f` si está hovered).
+        * Texto: `m_searchModeGroup ? L"Búsqueda: Agrupar" : L"Búsqueda: Filtrar"` dibujado de forma centrada en color blanco/cian, tamaño `11.0f`.
+  * **Interacción del Mouse (OnMouseMove):**
+    * En `BoardPage::OnMouseMove`:
+      * Si el buscador modal o el escaneo están activos, omitir.
+      * Evaluar si `GetSearchToggleRect` contiene las coordenadas del mouse `{x, y}`.
+      * Actualizar `m_hoveredToggleBtn` y llamar a `m_app->m_window.RequestRedraw()` si el estado cambia.
+  * **Interacción del Mouse (OnMouseDown):**
+    * Al principio de `BoardPage::OnMouseDown`:
+      * Si se hace click izquierdo dentro de `GetSearchToggleRect(screenSize)`:
+        * Alternar `m_searchModeGroup = !m_searchModeGroup;`.
+        * Solicitar redibujado y retornar `true` de inmediato para interceptar el evento.
+  * **Algoritmo de Búsqueda (PerformTagQueryAndInsert):**
+    * Reestructurar `PerformTagQueryAndInsert` para condicionar el flujo según el modo:
+      ```cpp
+      if (m_searchModeGroup) {
+          // --- NUEVO COMPORTAMIENTO B (AGRUPAR Y ENFOCAR) ---
+          
+          // 1. Obtener la lista de archivos coincidentes (matchingFiles) según la búsqueda actual.
+          // 2. Identificar cuáles imágenes en m_items ya existen y coinciden. Almacenar sus índices.
+          // 3. Establecer temporalmente la posición de estas imágenes a coordenadas muy lejanas (ej. {-999999.0f, -999999.0f})
+          //    para evitar que colisionen en la búsqueda espacial de la espiral.
+          // 4. Calcular el centro actual de la pantalla en coordenadas de mundo (worldCenter).
+          // 5. Inicializar un vector temporal de colisión local 'addedItems'.
+          // 6. Para cada imagen coincidente existente (usando sus índices):
+          //    - Calcular su nueva posición en espiral: FindSpiralPosition(worldCenter, item.width, item.height, 40.0f, addedItems).
+          //    - Asignar la nueva posición en m_items.
+          //    - Agregar una copia de la imagen posicionada a 'addedItems'.
+          // 7. Para cada archivo coincidente que no estuviera ya en el tablero:
+          //    - Instanciar un nuevo BoardItem (Image) de 400x300.
+          //    - Calcular su posición en espiral: FindSpiralPosition(worldCenter, 400.0f, 300.0f, 40.0f, addedItems).
+          //    - Asignar posición y agregarlo a m_items y a 'addedItems'.
+          //    - Solicitar la carga de su textura.
+          // 8. Desplazar la cámara del tablero (m_canvas.m_pan) para centrarla en 'worldCenter':
+          //    - m_canvas.m_pan.x = (targetSize.width / 2.0f) - worldCenter.x * m_canvas.m_zoom;
+          //    - m_canvas.m_pan.y = (targetSize.height / 2.0f) - worldCenter.y * m_canvas.m_zoom;
+      } else {
+          // --- COMPORTAMIENTO ORIGINAL A (FILTRAR / ELIMINAR) ---
+          // Ejecutar la lógica actual: eliminar de m_items las imágenes no coincidentes
+          // e insertar las nuevas imágenes coincidentes en espiral partiendo del worldCenter.
+      }
+      ```
 
 ---
 
 ## Verification Plan
 
 ### Automated Tests
-1. Ejecutar las pruebas unitarias existentes para asegurar que no hay regresiones colaterales en la caché ni en la codificación XML/XMP:
-   ```powershell
-   & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build native/build --config Release --target tagging_tests
-   native/build/bin/Release/tagging_tests.exe
-   ```
+* Compilar el proyecto en modo Release usando el comando CMake absoluto para asegurar que no existan errores sintácticos ni de enlazado:
+  ```powershell
+  & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+  & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build native/build --config Release
+  ```
+* Ejecutar las pruebas unitarias existentes (`tagging_tests.exe`) para garantizar que la caché de metadatos mantenga su consistencia al 100%.
 
 ### Manual Verification
-1. **Verificar Usabilidad de Foco y Clics**:
-   * Abrir el modal de tagging, hacer clic en un tag de la izquierda y confirmar que se agrega instantáneamente a la derecha y el cursor se enfoca en el input de búsqueda (vacío).
-   * Escribir un tag manual, presionar ENTER, confirmar su inserción a la derecha y verificar que el cursor sigue en el input de manual listo para escribir el siguiente.
-2. **Verificar Tags Categorizados**:
-   * Crear un archivo `xmpTags.json` estructurado con objetos (ej. `{"Categoría A": ["tag1", "tag2"], "Categoría B": ["tag3"]}`).
-   * Abrir el modal y confirmar que los tags se listan agrupados bajo las cabeceras cian correspondientes.
-3. **Verificar Selección y Enlaces en Board**:
-   * Confirmar que **ALT + Click** dibuja y crea el enlace direccional entre nodos.
-   * Confirmar que **CTRL + Click** añade/remueve nodos a la selección grupal.
-4. **Verificar Rectángulos de Selección**:
-   * Seleccionar una única imagen y verificar que se dibuja el marco naranja con tiradores naranjas.
-   * Seleccionar múltiples imágenes (mediante lasso o CTRL+click) y verificar que el marco exterior que las une a todas cambia a cian brillante, mientras que cada imagen individual mantiene su borde naranja.
-5. **Verificar Etiquetado Masivo**:
-   * Seleccionar 3 imágenes en el Board, presionar `T`.
-   * Confirmar que solo se muestran los tags comunes. Añadir un tag nuevo y presionar Guardar.
-   * Abrir el modal individualmente para cada una de las 3 imágenes y verificar que el nuevo tag fue guardado en todas ellas.
-6. **Verificar Carga Masiva y Optimización VRAM**:
-   * Copiar temporalmente 5,000-10,000 imágenes en una carpeta de pruebas.
-   * En el Board, presionar `SHIFT + CTRL + L` o usar el menú contextual.
-   * Confirmar que se añaden los ítems en un grid masivo y que la app sigue fluida sin disparar el consumo de VRAM (las imágenes se renderizan y decodifican bajo demanda a medida que se desplaza la cámara por el tablero, y las lejanas liberan su textura de la memoria GPU).
+1. **Comprobación del HUD del Visor:**
+   * Entrar en el visor de imagen única (Viewer Page).
+   * Confirmar visualmente que la esquina superior izquierda está completamente vacía (no se dibuja el texto de FPS ni de Opacidad).
+   * Verificar que la isla inferior de metadatos siga apareciendo en hover/inactividad normal de acuerdo al temporizador de 2s.
+2. **Comprobación del Toggle de Búsqueda:**
+   * Entrar en el modo Tablero (Board Page).
+   * Confirmar que el botón flotante "Búsqueda: Agrupar" se dibuja en la esquina inferior derecha.
+   * Probar el hover (debe iluminarse de color cian brillante) y hacer click izquierdo. Confirmar que alterna cíclicamente a "Búsqueda: Filtrar".
+3. **Comprobación del Comportamiento de Agrupación (Por defecto):**
+   * Configurar el toggle en "Búsqueda: Agrupar".
+   * Agregar varias imágenes al tablero.
+   * Realizar una búsqueda con `CTRL+F` por una etiqueta existente.
+   * Verificar que **ninguna** imagen no coincidente se borre del lienzo.
+   * Confirmar que todas las imágenes coincidentes (las que ya estaban en el lienzo + las nuevas descubiertas en el directorio) se posicionan de manera concéntrica (patrón radial/espiral) y que la cámara del tablero centra la vista automáticamente en este grupo recién formado.
+   * Confirmar que las conexiones o flechas (links) que tenían estas imágenes se actualicen dinámicamente sin romperse.
+4. **Comprobación del Comportamiento de Filtrado:**
+   * Configurar el toggle en "Búsqueda: Filtrar".
+   * Realizar otra búsqueda por tags.
+   * Confirmar que las imágenes que no coinciden se eliminan del tablero y sus enlaces se purgan (comportamiento original).

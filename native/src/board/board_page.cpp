@@ -820,6 +820,81 @@ void BoardPage::ResetView() {
     m_editor.StopEditing();
 }
 
+PointF BoardPage::FindSpiralPosition(const PointF& center, float width, float height, float margin, const std::vector<BoardItem>& extraItems) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> distAngle(0.0f, 2.0f * 3.14159265f);
+
+    bool hasElements = false;
+    for (const auto& item : m_items) {
+        if (item.type != BoardItemType::Link) {
+            hasElements = true;
+            break;
+        }
+    }
+    if (!hasElements) {
+        for (const auto& item : extraItems) {
+            if (item.type != BoardItemType::Link) {
+                hasElements = true;
+                break;
+            }
+        }
+    }
+    if (!hasElements) {
+        return center;
+    }
+
+    float candidateW = width;
+    float candidateH = height;
+
+    float theta = distAngle(gen);
+    float r = 0.0f;
+    float pitch = 200.0f; 
+    float thetaStep = 0.05f; 
+
+    int iterations = 0;
+    while (iterations < 10000) {
+        float cx = center.x + r * std::cos(theta);
+        float cy = center.y + r * std::sin(theta);
+
+        RectF candRect = RectF::Centered(cx, cy, candidateW + margin, candidateH + margin);
+
+        bool collision = false;
+        for (const auto& item : m_items) {
+            if (item.type != BoardItemType::Link) {
+                RectF otherRect = item.GetWorldRect();
+                if (candRect.Intersects(otherRect)) {
+                    collision = true;
+                    break;
+                }
+            }
+        }
+
+        if (!collision) {
+            for (const auto& item : extraItems) {
+                if (item.type != BoardItemType::Link) {
+                    RectF otherRect = item.GetWorldRect();
+                    if (candRect.Intersects(otherRect)) {
+                        collision = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!collision) {
+            return { cx, cy };
+        }
+
+        theta += thetaStep;
+        r = (pitch / (2.0f * 3.14159265f)) * theta;
+        iterations++;
+    }
+
+    std::uniform_real_distribution<float> distFall(-500.0f, 500.0f);
+    return { center.x + distFall(gen), center.y + distFall(gen) };
+}
+
 void BoardPage::LoadItemTexture(BoardItem& item) {
     if (item.texture || item.isLoading || item.loadFailed) return;
     if (item.filePath.empty()) return;
@@ -886,60 +961,28 @@ void BoardPage::ListCurrentDirectoryImages() {
     PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
     PointF worldCenter = ScreenToWorld(screenCenter);
 
-    int columns = 12;
-    float spacingX = 40.0f;
-    float spacingY = 40.0f;
     float itemW = 400.0f;
     float itemH = 300.0f;
-
     int count = static_cast<int>(files.size());
-    int gridCols = std::min(count, columns);
-    int gridRows = (count + columns - 1) / columns;
-
-    float gridWidth = gridCols * itemW + (gridCols - 1) * spacingX;
-    float gridHeight = gridRows * itemH + (gridRows - 1) * spacingY;
-
-    float startX = worldCenter.x - gridWidth * 0.5f;
-    float startY = worldCenter.y - gridHeight * 0.5f;
-
-    float maxY = -1e9f;
-    bool hasExisting = false;
-    for (const auto& item : m_items) {
-        if (item.type != BoardItemType::Link) {
-            RectF r = item.GetWorldRect();
-            if (r.bottom > maxY) {
-                maxY = r.bottom;
-            }
-            hasExisting = true;
-        }
-    }
-    if (hasExisting) {
-        startY = maxY + spacingY;
-    }
 
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distOffset(-15.0f, 15.0f);
     std::uniform_real_distribution<float> distRotation(-2.0f, 2.0f);
 
+    std::vector<BoardItem> addedItems;
     for (int i = 0; i < count; ++i) {
-        int row = i / columns;
-        int col = i % columns;
-
-        float cellLeft = startX + col * (itemW + spacingX);
-        float cellTop = startY + row * (itemH + spacingY);
-        float centerX = cellLeft + itemW * 0.5f + distOffset(gen);
-        float centerY = cellTop + itemH * 0.5f + distOffset(gen);
-
         BoardItem imgItem;
         imgItem.type = BoardItemType::Image;
-        imgItem.position = { centerX, centerY };
+        imgItem.width = itemW;
+        imgItem.height = itemH;
         imgItem.rotation = distRotation(gen);
         imgItem.filePath = files[i].wstring();
         imgItem.label = files[i].filename().wstring();
-        imgItem.width = itemW;
-        imgItem.height = itemH;
 
+        PointF pos = FindSpiralPosition(worldCenter, itemW, itemH, 40.0f, addedItems);
+        imgItem.position = pos;
+
+        addedItems.push_back(imgItem);
         m_items.push_back(imgItem);
     }
 
@@ -1636,60 +1679,28 @@ void BoardPage::PerformTagQueryAndInsert() {
     PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
     PointF worldCenter = ScreenToWorld(screenCenter);
     
-    int columns = 3;
-    float spacingX = 40.0f;
-    float spacingY = 40.0f;
     float itemW = 400.0f;
     float itemH = 300.0f;
-    
     int count = static_cast<int>(newFiles.size());
-    int gridCols = std::min(count, columns);
-    int gridRows = (count + columns - 1) / columns;
-    
-    float gridWidth = gridCols * itemW + (gridCols - 1) * spacingX;
-    float gridHeight = gridRows * itemH + (gridRows - 1) * spacingY;
-    
-    float startX = worldCenter.x - gridWidth * 0.5f;
-    float startY = worldCenter.y - gridHeight * 0.5f;
-
-    float maxY = -1e9f;
-    bool hasExisting = false;
-    for (const auto& item : m_items) {
-        if (item.type != BoardItemType::Link) {
-            RectF r = item.GetWorldRect();
-            if (r.bottom > maxY) {
-                maxY = r.bottom;
-            }
-            hasExisting = true;
-        }
-    }
-    if (hasExisting) {
-        startY = maxY + spacingY;
-    }
     
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_real_distribution<float> distOffset(-15.0f, 15.0f);
     std::uniform_real_distribution<float> distRotation(-2.0f, 2.0f);
 
+    std::vector<BoardItem> addedItems;
     for (int i = 0; i < count; ++i) {
-        int row = i / columns;
-        int col = i % columns;
-        
-        float cellLeft = startX + col * (itemW + spacingX);
-        float cellTop = startY + row * (itemH + spacingY);
-        float centerX = cellLeft + itemW * 0.5f + distOffset(gen);
-        float centerY = cellTop + itemH * 0.5f + distOffset(gen);
-        
         BoardItem imgItem;
         imgItem.type = BoardItemType::Image;
-        imgItem.position = { centerX, centerY };
+        imgItem.width = itemW;
+        imgItem.height = itemH;
         imgItem.rotation = distRotation(gen);
         imgItem.filePath = newFiles[i].wstring();
         imgItem.label = newFiles[i].filename().wstring();
-        imgItem.width = itemW;
-        imgItem.height = itemH;
-        
+
+        PointF pos = FindSpiralPosition(worldCenter, itemW, itemH, 40.0f, addedItems);
+        imgItem.position = pos;
+
+        addedItems.push_back(imgItem);
         m_items.push_back(imgItem);
         LoadItemTexture(m_items.back());
     }

@@ -8,7 +8,7 @@
 
 namespace kv {
 
-static constexpr const wchar_t* kWindowClassName = L"KrumassanViewerWindow";
+static constexpr const wchar_t* kWindowClassName = L"LenteUVWindow";
 static bool sWindowClassRegistered = false;
 
 Window::~Window() {

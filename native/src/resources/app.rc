@@ -1,6 +1,6 @@
 // ============================================================================
 // app.rc — Windows Resource Script
-// Krumassan Image Viewer — Native C++20
+// LenteUV Image Viewer — Native C++20
 // ============================================================================
 
 #include <winresrc.h>
@@ -28,12 +28,12 @@ BEGIN
         BLOCK "040904B0"  // English (US), Unicode
         BEGIN
             VALUE "CompanyName",      "Sergei Krumas"
-            VALUE "FileDescription",  "Krumassan Image Viewer"
+            VALUE "FileDescription",  "LenteUV Image Viewer"
             VALUE "FileVersion",      "0.90.0.0"
-            VALUE "InternalName",     "KrumassanViewer"
-            VALUE "LegalCopyright",   "Copyright (C) 2022-2026 Sergei Krumas. GPL v2+"
-            VALUE "OriginalFilename", "KrumassanViewer.exe"
-            VALUE "ProductName",      "Krumassan Image Viewer"
+            VALUE "InternalName",     "lenteuv"
+            VALUE "LegalCopyright",   "Copyright (C) 2022-2026 Sergei Krumas. LenteUV based on Sergkruma's image viewer."
+            VALUE "OriginalFilename", "lenteuv.exe"
+            VALUE "ProductName",      "LenteUV"
             VALUE "ProductVersion",   "0.90.0.0"
         END
     END

@@ -1,6 +1,6 @@
-# Krumassan Image Viewer — Complete Native Project Context
+# LenteUV Image Viewer (basado en Sergkruma's image viewer) — Complete Native Project Context
 
-> **Purpose**: This document provides the complete, consolidated context for any agent or developer needing to understand, maintain, or build the native C++20 implementation of Krumassan Image Viewer. It contains only native details and eliminates legacy Python context.
+> **Purpose**: This document provides the complete, consolidated context for any agent or developer needing to understand, maintain, or build the native C++20 implementation of LenteUV Image Viewer. It contains only native details and eliminates legacy Python context.
 
 ---
 
@@ -8,14 +8,14 @@
 
 | Field | Value |
 |---|---|
-| **Name** | Krumassan Image Viewer (Native) |
+| **Name** | LenteUV Image Viewer (Native) |
 | **Version** | v0.90 Alpha (C++20 Migration) |
 | **Author** | Sergei Krumas ([github.com/sergkrumas](https://github.com/sergkrumas)) |
 | **License** | GPL v2+ |
 | **Language** | C++20 (MSVC x64 compiler) |
 | **UI Backend** | Direct2D 1.3 / Direct3D 11 / DirectWrite / DirectComposition |
 | **Platform** | Windows 10 (Build 18362+) / Windows 11 |
-| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L), el soporte nativo de Alt+F4 en Windows, y las mejoras de usabilidad/escalabilidad (click directo para copiar, enfoque continuo al crear tag, categorías con cabeceras cian en xmpTags.json, etiquetado masivo, listado de directorio masivo en grid con desalojo VRAM inteligente de texturas lejanas, enlace con Alt+Click y selección cyberpunk cian)**. Phase 4 (Packaging/Installer) pendiente. |
+| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L), el soporte nativo de Alt+F4 en Windows, y las mejoras de usabilidad/escalabilidad (click directo para copiar, enfoque continuo al crear tag, categorías con cabeceras cian en xmpTags.json, etiquetado masivo, listado de directorio masivo en grid con desalojo VRAM inteligente de texturas lejanas, enlace con Alt+Click y selección cyberpunk cian)**. **Se ha generado el plan de optimización, refactorización y división de clases grandes (como BoardPage de 1700+ líneas y wic_metadata_reader_writer.cpp de 1054 líneas en sub-componentes independientes, y eliminación de CommentsManager), así como la estrategia de rebranding a LenteUV (basado en LenteUV Image Viewer y Google Picasa) documentado en el archivo del proyecto implementation_plan.md. Recientemente se incorporó al plan de implementación la eliminación de info flotante de FPS/Opacidad del visor y la búsqueda de tags en tablero por agrupación/enfoque con un botón de toggle en la esquina inferior derecha**. Phase 4 (Packaging/Installer) pendiente. |
 | **Inspiration** | Google Picasa Photo Viewer + PureRef |
 
 ---
@@ -40,7 +40,6 @@ Sorted by lines of code:
 | [folder_data_manager.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp) | 369 | 12,137 | History, favorites, and session persistence management |
 | [types.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/common/types.h) | 299 | 11,290 | Geometric vectors, colors, logging macros, and clocks |
 | [tagging_tests.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/tagging_tests.cpp) | 298 | 11,976 | Unit tests suite verifying tagging cache, R/W, and search |
-| [comments_manager.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/comments_manager.cpp) | 268 | 9,147 | Image comment persistence in comments.txt |
 | [single_instance_ipc.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/single_instance_ipc.cpp) | 239 | 7,307 | Named pipe single-instance connection & file path IPC |
 | [png_chunk_injector.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/png_chunk_injector.cpp) | 221 | 9,054 | Binary chunk injection of XMP iTXt metadata in PNG streams |
 | [settings.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/settings.cpp) | 220 | 11,965 | JSON settings file serializer/deserializer |
@@ -49,7 +48,7 @@ Sorted by lines of code:
 | [async_directory_scanner.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/async_directory_scanner.cpp) | 196 | 7,877 | Thread-pool recursive directory scan tag indexer |
 | [i18n_engine.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/i18n/i18n_engine.cpp) | 180 | 6,000 | Translation loader for gettext PO files |
 | [board_serializer.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_serializer.cpp) | 176 | 6,371 | Serialization of BoardItems to .board binary format |
-| [metadata_cache.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/metadata_cache.cpp) | 173 | 6,238 | In-memory database & file-based index (KTAG v1) serialization |
+| [metadata_cache.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/metadata_cache.cpp) | 173 | 6,238 | In-memory database & file-based index (LTAG v1) serialization |
 | [board_item_renderer.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_item_renderer.cpp) | 167 | 7,574 | Direct2D rendering of board nodes, links, and text notes |
 | [app.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.h) | 167 | 7,457 | Application orchestrator, game loop, and main event router |
 | [jpeg_segment_injector.cpp](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/jpeg_segment_injector.cpp) | 166 | 6,697 | APP1/XMP marker segment injection in JPEG files |
@@ -85,7 +84,7 @@ Sorted by lines of code:
 | [board_item_renderer.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_item_renderer.h) | 42 | 1,236 | Direct2D rendering of board nodes, links, and text notes |
 | [app.manifest](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/resources/app.manifest) | 41 | 1,395 | DPI awareness configuration manifest file |
 | [board_canvas.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_canvas.h) | 40 | 1,259 | Canvas viewport transforms & checkerboard/grid backgrounds |
-| [metadata_cache.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/metadata_cache.h) | 38 | 1,208 | In-memory database & file-based index (KTAG v1) serialization |
+| [metadata_cache.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/metadata_cache.h) | 38 | 1,208 | In-memory database & file-based index (LTAG v1) serialization |
 | [board_text_editor.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_text_editor.h) | 34 | 1,284 | Caret blinking & note text insertion/deletion edits |
 | [board_serializer.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_serializer.h) | 33 | 995 | Serialization of BoardItems to .board binary format |
 | [animation_curve.h](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/rendering/animation_curve.h) | 33 | 956 | Mathematical easing equations for UI transitions |
@@ -205,7 +204,7 @@ image_viewer/
 │   ├── CMakeLists.txt                  # CMake project configuration
 │   ├── build/
 │   │   └── bin/Release/
-│   │       ├── KrumassanViewer.exe     # Compiled executable
+│   │       ├── lenteuv.exe     # Compiled executable
 │   │       └── kv_log.txt              # Diagnostic file-logging output
 │   └── src/
 │       ├── main.cpp                    # WinMain entry point
@@ -667,6 +666,30 @@ Se corrigieron detalles de navegación de la interfaz de usuario para una experi
    * El icono por defecto del folder pasó de un alpha de `180` a `234`.
    * Los textos de nombre y descripción aumentaron su opacidad para mejorar la visibilidad (nombre de `0.9f` a `1.0f`, descripción de `0.45f` a `0.58f`).
    Esta modificación no tiene impacto alguno en el desempeño de la renderización acelerada por GPU de la aplicación, pero incrementa significativamente la legibilidad de la lista de directorios.
+
+---
+
+## 17. Appendix: Rebranding completo y Algoritmo de Colocación Radial Espiral (Junio 6, 2026)
+
+En esta sesión se completaron los cambios fundamentales solicitados por el usuario antes del empaquetado final de la aplicación:
+
+### A. Rebranding a LenteUV
+1. Se renombraron todas las referencias internas y externas de la aplicación de xviewer y Krumassan Image Viewer a LenteUV (ej. en nombres de proyectos de CMakeLists.txt, ejecutables, registros de Win32 de shell_integrator.cpp, títulos de ventanas en app.cpp y window.h/cpp, manifestos de ensamblado, y pipe IPC single-instance).
+2. Se agregaron las atribuciones correctas de lenteuv imageviewer basado en Sergkruma's image viewer tanto en main.cpp como en toda la documentación del proyecto.
+
+### B. Evasión de Colisiones y Posicionamiento Radial Espiral en Board
+1. Se reemplazó el esquema anterior de colocar múltiples imágenes al final vertical del tablero por un nuevo Algoritmo de Colocación Radial en Espiral de Arquímedes concéntrico en BoardPage::FindSpiralPosition.
+2. Cuando se importan múltiples imágenes (ya sea por listado de directorio masivo SHIFT+CTRL+L o por resultados de consultas de etiquetas CTRL+F), el algoritmo busca posiciones libres a partir del centro de la pantalla del usuario en el espacio virtual, validando colisiones contra los cuadros delimitadores (Bounding Boxes) de los elementos existentes y otros elementos recién añadidos en la misma transacción, aplicando una holgura segura de 40px.
+3. Esto garantiza que las imágenes se coloquen orgánicamente alrededor de los elementos existentes, sin taparse entre sí ni tapar lo ya creado.
+
+### C. Remoción de CommentsManager
+1. Se eliminó por completo el CommentsManager y las referencias a comments_manager.cpp y comments_manager.h en la configuración de compilación de CMake y en el orquestador principal App.
+
+### D. Verificación y Validación
+1. Se compiló con éxito el binario final en modo Release en native/build/bin/Release/lenteuv.exe.
+2. Se ejecutaron y pasaron exitosamente todas las pruebas de tagging y metadatos en tagging_tests.exe.
+3. Se actualizó la guía de uso native (NATIVE_USAGE_GUIDE.md) para reflejar las nuevas características y el comportamiento espiral del tablero.
+
 
 
 

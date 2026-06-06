@@ -80,11 +80,8 @@ InitResult App::Initialize(const AppConfig& config) {
     m_libraryData.Initialize(this);
     trace("FolderDataManager initialized");
     m_libraryData.LoadFavorites();
-    trace("Favorites loaded");
     m_libraryData.LoadSession();
     trace("Session loaded");
-    m_commentsManager.Load();
-    trace("Comments loaded");
     // Initialize Image Loader early to provide WIC Factory to TagManager
     if (!m_imageLoader.Initialize(4)) {
         LogError(L"Failed to initialize image loader");
@@ -102,7 +99,7 @@ InitResult App::Initialize(const AppConfig& config) {
 
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
-    wndConfig.title       = L"Krumassan Image Viewer";
+    wndConfig.title       = L"LenteUV";
     wndConfig.width       = 1280;
     wndConfig.height      = 800;
     wndConfig.frameless   = config.frameless;
@@ -129,7 +126,7 @@ InitResult App::Initialize(const AppConfig& config) {
     ShellIntegrator::RegisterTrayIcon(
         m_window.GetHwnd(),
         LoadIconW(nullptr, IDI_APPLICATION),
-        L"Krumassan Image Viewer"
+        L"LenteUV"
     );
 
     // ── Wire Events ───────────────────────────────────────────────────────
@@ -561,7 +558,7 @@ void App::LoadImage(const std::wstring& path) {
             m_frameSequencer.SetFrames(delays, anim->loopCount);
 
             ResetView();
-            m_window.SetTitle(std::format(L"Krumassan Viewer — {} ({} frames)",
+            m_window.SetTitle(std::format(L"LenteUV — {} ({} frames)",
                 fs::path(path).filename().wstring(), anim->FrameCount()));
             
             m_libraryData.AddToHistory(path);
@@ -578,7 +575,7 @@ void App::LoadImage(const std::wstring& path) {
         m_animatedImage = nullptr;
         m_frameSequencer.Reset();
         ResetView();
-        m_window.SetTitle(std::format(L"Krumassan Viewer — {} ({}×{})",
+        m_window.SetTitle(std::format(L"LenteUV — {} ({}×{})",
             fs::path(path).filename().wstring(), image->width, image->height));
 
         m_libraryData.AddToHistory(path);
@@ -702,7 +699,7 @@ void App::DeleteImage(const std::wstring& path) {
         } else {
             m_currentIndex = -1;
             ResetView();
-            m_window.SetTitle(L"Krumassan Viewer");
+            m_window.SetTitle(L"LenteUV");
             m_waterfallPage.m_viewerModal = false;
         }
     } else {

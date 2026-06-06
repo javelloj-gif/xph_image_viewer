@@ -340,7 +340,7 @@ int wmain() {
     _setmode(_fileno(stderr), _O_U16TEXT);
 
     std::wcout << L"========================================" << std::endl;
-    std::wcout << L"  Krumassan Image Viewer - Tagging Tests" << std::endl;
+    std::wcout << L"  LenteUV - Tagging Tests" << std::endl;
     std::wcout << L"========================================" << std::endl;
 
     // Initialize COM

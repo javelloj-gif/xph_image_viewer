@@ -12,7 +12,7 @@ namespace kv {
 // ─── Window Configuration ────────────────────────────────────────────────────
 
 struct WindowConfig {
-    std::wstring title       = L"Krumassan Image Viewer";
+    std::wstring title       = L"LenteUV";
     int          width       = 1280;
     int          height      = 800;
     bool         frameless   = true;

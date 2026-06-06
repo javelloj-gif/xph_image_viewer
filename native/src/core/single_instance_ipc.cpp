@@ -11,7 +11,7 @@
 
 namespace kv {
 
-static const wchar_t* kPipeName = L"\\\\.\\pipe\\krumassanimageviewer";
+static const wchar_t* kPipeName = L"\\\\.\\pipe\\lenteuv";
 
 /*static*/ std::string SingleInstanceIpc::WideToUtf8(const std::wstring& w) {
     if (w.empty()) return {};

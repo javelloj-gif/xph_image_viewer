@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(KrumassanViewer
+project(lenteuv
     VERSION 0.90.0
-    DESCRIPTION "Krumassan Image Viewer — Native C++20"
+    DESCRIPTION "LenteUV Image Viewer — Native C++20"
     LANGUAGES CXX
 )
 
@@ -35,7 +35,6 @@ set(SOURCES
     src/rendering/animation_curve.cpp
     src/loader/image_loader.cpp
     src/loader/frame_sequencer.cpp
-    src/metadata/comments_manager.cpp
     src/metadata/xmp_tag_manager.cpp
     src/metadata/metadata_cache.cpp
     src/metadata/png_chunk_injector.cpp
@@ -72,7 +71,6 @@ set(HEADERS
     src/rendering/animation_curve.h
     src/loader/image_loader.h
     src/loader/frame_sequencer.h
-    src/metadata/comments_manager.h
     src/metadata/xmp_tag_manager.h
     src/metadata/metadata_cache.h
     src/metadata/png_chunk_injector.h

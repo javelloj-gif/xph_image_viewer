@@ -200,11 +200,11 @@ bool ShellIntegrator::SetRunOnStartup(bool enable) {
             WCHAR szPath[MAX_PATH] = {};
             GetModuleFileNameW(nullptr, szPath, MAX_PATH);
             std::wstring val = L"\"" + std::wstring(szPath) + L"\"";
-            RegSetValueExW(hKey, L"KrumassanImageViewer", 0, REG_SZ, 
+            RegSetValueExW(hKey, L"LenteUV", 0, REG_SZ, 
                            reinterpret_cast<const BYTE*>(val.c_str()), 
                            static_cast<DWORD>((val.size() + 1) * sizeof(wchar_t)));
         } else {
-            RegDeleteValueW(hKey, L"KrumassanImageViewer");
+            RegDeleteValueW(hKey, L"LenteUV");
         }
         RegCloseKey(hKey);
         return true;

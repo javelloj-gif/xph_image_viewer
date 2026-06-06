@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: None
-// Description: Main is the WinMain entry point of the project, which is based on Krumassan's Image Viewer.
+// Description: Main is the WinMain entry point of the project. lenteuv imageviewer basado en Sergkruma's image viewer.
 // Responsibility: Parse parameters, initialize COM, verify single instances via IPC, and initialize `App`.
 // ============================================================================
 #include "common/pch.h"
@@ -81,7 +81,7 @@ int wWinMainImpl(
             L"• GPU driver does not support Direct3D 11\n"
             L"• Windows version is too old (requires Windows 10 1903+)\n"
             L"• DirectComposition is not available",
-            L"Krumassan Image Viewer — Initialization Error",
+            L"LenteUV — Error de inicialización",
             MB_OK | MB_ICONERROR);
         return 1;
     }

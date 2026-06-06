@@ -3,11 +3,11 @@
   <assemblyIdentity
     version="0.90.0.0"
     processorArchitecture="amd64"
-    name="Sergkrumas.KrumassanImageViewer"
+    name="Sergkrumas.LenteUV"
     type="win32"
   />
 
-  <description>Krumassan Image Viewer — Native C++20</description>
+  <description>LenteUV Image Viewer — Native C++20</description>
 
   <!-- DPI Awareness: Per-Monitor DPI Aware V2 (Windows 10 1703+) -->
   <asmv3:application>

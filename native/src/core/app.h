@@ -18,7 +18,6 @@
 #include "board/board_page.h"
 #include "waterfall/waterfall_page.h"
 #include "core/single_instance_ipc.h"
-#include "metadata/comments_manager.h"
 #include "metadata/xmp_tag_manager.h"
 #include "ui/options_menu.h"
 #include "ui/tagging_modal.h"
@@ -131,7 +130,6 @@ private:
     BoardPage           m_boardPage;
     WaterfallPage       m_waterfallPage;
     SingleInstanceIpc   m_ipc;
-    CommentsManager     m_commentsManager;
     XmpTagManager       m_tagManager;
     OptionsMenu         m_optionsMenu;
     TaggingModal        m_taggingModal;

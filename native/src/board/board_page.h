@@ -69,6 +69,7 @@ private:
     float DistanceToLineSegment(const PointF& p, const PointF& a, const PointF& b) const;
 
     // Helpers
+    PointF FindSpiralPosition(const PointF& center, float width, float height, float margin, const std::vector<BoardItem>& extraItems);
     RectF GetSearchModalBounds() const;
     void UpdateFilteredSuggestions();
     void SelectSuggestion(const std::wstring& suggestion);

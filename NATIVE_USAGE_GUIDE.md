@@ -1,331 +1,230 @@
-# Krumassan Image Viewer — Native C++ Usage and Testing Guide
+# LenteUV — Native C++ Usage and Testing Guide
 
-This guide describes how to build, run, and perform comprehensive functional testing on the native C++ implementation of the **Krumassan Image Viewer** (Win32 + Direct2D/Direct3D 11).
+Esta guía describe cómo compilar, ejecutar y realizar pruebas funcionales de la implementación nativa en C++ de **LenteUV** (Win32 + Direct2D/Direct3D 11/DirectComposition), un visor de imágenes de alta velocidad y lienzo infinito basado en el visualizador original de Sergei Krumas (Sergkruma's image viewer) y Google Picasa.
 
 ---
 
-## 1. Building and Running
+## 1. Compilación y Ejecución
 
-### 📁 Directory Context & Preparation
-Before running any compilation commands, you must open your terminal (PowerShell or Command Prompt) and set the working directory to the project's root directory:
+### 📁 Directorio de Trabajo y Preparación
+Antes de ejecutar los comandos de compilación, abre tu consola (PowerShell o Command Prompt) en el directorio raíz del proyecto:
 ```powershell
-# Verify your working directory is the project root:
+# Verifica que te encuentras en el directorio raíz:
 # e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer
 ```
 > [!IMPORTANT]
-> All build commands listed below **must** be executed from this root directory (`image_viewer`). Do not run them from inside `native/` or `native/build/`.
+> Todos los comandos de CMake y construcción se deben ejecutar desde el directorio raíz (`image_viewer`). No los ejecutes dentro de la carpeta `native/` o `native/build/`.
 
 ---
 
-### Prerequisites
-- **Operating System**: Windows 10 (Build 18362+) or Windows 11
-- **Compiler**: Visual Studio 2022 (Build Tools, Community, Professional, or Enterprise edition) with the **"Desktop development with C++"** workload checked.
-- **Build System**: CMake 3.20+ (can be installed via the Visual Studio Installer as **"C++ CMake tools for Windows"** or standalone).
+### Prerrequisitos
+* **Sistema Operativo**: Windows 10 (Build 18362 o superior) o Windows 11.
+* **Compilador**: Visual Studio 2022 con la carga de trabajo **"Desarrollo para el escritorio con C++"** instalada.
+* **Sistema de Construcción**: CMake 3.20+ (incluido opcionalmente en el instalador de Visual Studio o de forma independiente).
 
 ---
 
-### 🚀 Step-by-Step Compilation Guide
+### 🚀 Guía de Compilación Paso a Paso
 
-#### Option A: Using CMake & MSBuild on System `PATH` (Recommended)
-Use this option if you have registered CMake and MSBuild in your system environment variables.
-
-1. **Navigate to the Project Root**:
-   Make sure you are at `e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`.
-2. **Configure & Generate Build Files**:
-   This step parses the `CMakeLists.txt` file in `native/` and automatically creates the target output directories under `native/build/`.
+#### Opción A: Usando CMake en el PATH del Sistema (Recomendado)
+1. **Configurar y Generar Archivos de Construcción**:
    ```powershell
    cmake -S native -B native/build
    ```
-3. **Compile the Release Executable**:
-   Build the generated Visual Studio solution (`.sln`) in `Release` configuration:
+2. **Compilar el Ejecutable en Release**:
    ```powershell
    cmake --build native/build --config Release
    ```
 
 ---
 
-#### Option B: Using Direct Executable Paths (Absolute Paths)
-Use this option if CMake or MSBuild are not configured in your environment variables. Run these commands from the root directory `e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`.
+#### Opción B: Usando Rutas Absolutas (Visual Studio Build Tools)
+Si `cmake` no está en las variables de entorno, puedes utilizar la ruta absoluta de las herramientas de Visual Studio 2022:
 
-##### Step 1: Configuration and Project Generation
-This command runs CMake to generate the Visual Studio project solution inside `native/build/`. Choose the command matching your Visual Studio installation:
+##### Paso 1: Configurar Proyecto
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
+```
 
-*   **Visual Studio Build Tools 2022**:
-     ```powershell
-     & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
-     ```
-*   **Visual Studio Community 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
-     ```
-*   **Visual Studio Professional 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
-     ```
-*   **Visual Studio Enterprise 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
-     ```
-
-##### Step 2: Compiling the Solution
-This builds the C++ code to generate the executable. Run the command matching your Visual Studio installation:
-
-*   **Visual Studio Build Tools 2022**:
-     ```powershell
-     & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
-     ```
-*   **Visual Studio Community 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
-     ```
-*   **Visual Studio Professional 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
-     ```
-*   **Visual Studio Enterprise 2022**:
-     ```powershell
-     & "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe" native/build/KrumassanViewer.sln /p:Configuration=Release /p:Platform=x64
-     ```
+##### Paso 2: Compilar Proyecto
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" native/build/lenteuv.sln /p:Configuration=Release /p:Platform=x64
+```
 
 ---
 
-### 📂 Compiled Output Location
-After compilation completes successfully, the native binary is placed in:
+### 📂 Ubicación del Ejecutable Compilado
+Una vez completada la compilación, el ejecutable binario de LenteUV se generará en:
 ```text
-e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native\build\bin\Release\KrumassanViewer.exe
+e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native\build\bin\Release\lenteuv.exe
 ```
 
-### 🏃 Running the Application
-From the project root directory (`e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer`), execute:
+### 🏃 Ejecutar la Aplicación
+Desde el directorio raíz del proyecto, ejecuta:
 ```powershell
-./native/build/bin/Release/KrumassanViewer.exe "./test/linux.png"
+./native/build/bin/Release/lenteuv.exe "./test/linux.png"
 ```
-You can replace `./test/linux.png` with any absolute or relative path to a supported image file or directory you want to browse.
+Puedes pasar cualquier ruta absoluta o relativa de un archivo de imagen o directorio como argumento de inicio.
 
 ---
 
-## 2. Global Shortcuts and Page Navigation
+## 2. Atajos de Teclado Globales y Navegación
 
-These keys work globally across all screens of the application:
-*   **`2`**: Switch to **Viewer Page** (single-image viewer with smooth zoom and pan).
-*   **`3`**: Switch to **Board Page** (infinite virtual canvas / PureRef clone).
-*   **`4`**: Switch to **Library Page** (folders browser and masonry previews grid).
-*   **`5`**: Switch to **Waterfall Page** (masonry layout grid with virtual scrolling and modal viewer).
-*   **`F11` / `F`**: Toggle **Fullscreen** mode.
-*   **`Escape`**: Exit Fullscreen mode, or close the application if windowed (Note: If *Hide to tray on close* is enabled, it minimizes/hides to system tray).
-*   **`Page Up` / `Page Down`**: Increase / decrease window background opacity (translucency level).
-*   **`Arrow Left` / `Arrow Up` / `Home`**: Navigate to the previous image in the folder.
-*   **`Arrow Right` / `Arrow Down` / `End`**: Navigate to the next image in the folder.
-*   **`0` / `Numpad 0`**: Reset active view transform (zoom, pan, and rotation) back to default.
-*   **`O` / `~` (Tilde)**: Toggle settings menu modal overlay.
-*   **`T`**: Toggle XMP tagging modal overlay (manage tags, ratings, and Dublin Core metadata).
-
----
-
-## 3. Page 2: Viewer Page Controls
-
-The Viewer Page acts as the primary single-image viewing screen:
-
-### Mouse Interactions
-*   **Mouse Drag (Left Click)**: Pan the image.
-*   **Mouse Wheel (Default)**: Smoothly zoom in/out (centered locked at the screen center).
-*   **Ctrl + Mouse Wheel (Default)**: Navigate through folder images (loads previous or next image).
-*   **Mouse Wheel over Thumbnail Strip**: Scrolls the bottom thumbnail row horizontally.
-*   **Double-click**: Focus/reset image view (toggles between fitting to screen and actual 1:1 scale).
-*   **Right-Click**: Opens a context menu with options:
-    - **Settings...**: Opens the settings modal.
-    - **Toggle Fullscreen (F11)**: Toggles window fullscreen mode.
-    - **Exit**: Closes the application.
-*   **Ctrl + Left Drag (Magnifier selection)**: Drag a spotlight box over a region of the image; releasing zooms into that specific region.
-*   **Ctrl + Left Click on Thumbnail**: Toggle thumbnail selection (for multi-selection).
-*   **Drag & Drop Thumbnails**: Select and drag thumbnails horizontally to reorder them in the folder list. A red insertion cursor will guide placement.
-
-### Keyboard Interactions
-*   **`1`**: Toggle actual 1:1 pixel scale vs fit-to-screen scale.
-*   **`R`**: Rotate image 90° clockwise.
-*   **`Shift + R`**: Rotate image 90° counter-clockwise.
-*   **`W` / `A` / `S` / `D`**: Pan the image (Up / Left / Down / Right). Hold `Shift` to pan faster.
-*   **`Up Arrow` / `+` / `Numpad +`**: Zoom in (centered locked at the screen center).
-*   **`Down Arrow` / `-` / `Numpad -`**: Zoom out (centered locked at the screen center).
-*   **`Space`**: Pause / Resume animated image playback (GIF/APNG/animated WebP).
-*   **`C`**: Toggle Cyberpunk frame corners.
-*   **`G`**: Toggle Rule-of-thirds grid.
-*   **`T`**: Toggle XMP tagging modal overlay.
-*   **`M`**: Toggle file info/metadata overlay.
-*   **`I`**: Toggle Invert colors filter.
-*   **`P`**: Toggle Pixelated (Nearest Neighbor) vs Smooth (High-Quality Cubic) interpolation on zoom.
-
-### Swapped Mouse Wheel Behavior
-If the setting **"Enable mouse wheel to zoom and Ctrl+mouse wheel to navigate through image list"** is unchecked/disabled, the wheel inputs are swapped:
-*   **Mouse Wheel**: Navigate through folder images (loads previous or next image).
-*   **Ctrl + Mouse Wheel**: Smoothly zoom in/out.
+Estos controles funcionan en toda la aplicación de forma universal:
+*   **`2`**: Cambiar a **Viewer Page** (visor de imagen única con zoom, paneo y rotación acelerados por GPU).
+*   **`3`**: Cambiar a **Board Page** (lienzo virtual infinito estilo PureRef).
+*   **`4`**: Cambiar a **Library Page** (navegador de carpetas y grilla masonry de miniaturas).
+*   **`5`**: Cambiar a **Waterfall Page** (grilla masonry fluida con scroll virtual y visor modal integrado).
+*   **`F11` / `F`**: Alternar el modo **Pantalla Completa** (Fullscreen).
+*   **`Escape`**: Salir de pantalla completa, o cerrar el modal actual. Si no hay elementos activos, cierra la aplicación (o minimiza al área de notificación si la opción *Hide to tray on close* está activa).
+*   **`Alt + F4`**: Cierre universal inmediato y limpio de la ventana.
+*   **`Supr` (Delete)**: En el visor de imágenes (Viewer), muestra un diálogo nativo de Windows para mover el archivo actual a la Papelera de Reciclaje de forma segura sin salir de pantalla completa.
+*   **`Page Up` / `Page Down`**: Aumentar o disminuir la opacidad/traslucencia de la ventana con el escritorio (efecto translúcido DirectComposition).
+*   **`Flecha Izquierda` / `Flecha Arriba` / `Inicio`**: Cargar la imagen anterior de la lista.
+*   **`Flecha Derecha` / `Flecha Abajo` / `Fin`**: Cargar la siguiente imagen de la lista.
+*   **`0` / `Numpad 0`**: Restablecer el zoom, paneo y rotación del visor a su estado por defecto (escala de pantalla completa o 1:1 original).
+*   **`O` / `~` (Tilde)**: Alternar el menú HUD de Opciones de configuración.
+*   **`T`**: Alternar el modal de edición de etiquetas XMP (`TaggingModal`).
 
 ---
 
-## 4. Page 3: Board Page (Infinite Canvas) Controls
+## 3. Página 2: Controles del Visor (Viewer Page)
 
-The Board Page provides an infinite virtual canvas where you can arrange items:
+Esta página sirve como el visor principal de imágenes a pantalla completa:
 
-### Canvas Camera Navigation
-*   **Middle-Mouse Drag**: Pan the camera view (moves around the canvas).
-*   **Mouse Wheel**: Zoom in and out. The point directly under your cursor remains stationary during zoom.
-*   **Double-Click empty space**: Resets camera zoom to 100% and centers view.
+### Interacciones de Ratón
+*   **Arrastrar (Click Izquierdo)**: Panea la imagen por el visor.
+*   **Rueda del Ratón (Defecto)**: Zoom suave centrado en la posición actual del cursor.
+*   **Ctrl + Rueda del Ratón (Defecto)**: Navegar por la lista de imágenes (anterior/siguiente).
+*   **Rueda sobre la tira de miniaturas**: Desplaza horizontalmente la fila de previsualizaciones inferior.
+*   **Doble Click**: Alterna el zoom entre escala 1:1 real y modo fit-to-screen adaptativo (las imágenes pequeñas caben al 100% sin estirarse, y las grandes se adaptan proporcionalmente).
+*   **Click Derecho**: Abre el menú de contexto (Settings, Fullscreen, Exit).
+*   **Ctrl + Arrastre Izquierdo**: Herramienta de lupa de zoom rectangular; al soltar, la cámara encuadra y hace zoom en el recuadro seleccionado.
+*   **Ctrl + Click Izquierdo en Miniatura**: Selección múltiple para operaciones masivas.
+*   **Arrastrar y Soltar Miniaturas**: Permite reordenar el carrusel de miniaturas inferior de forma visual con un cursor rojo guía.
 
-### Creating Items
-*   **Drag & Drop Files/Folders**: Drag any supported image files or folders from Windows Explorer and drop them onto the canvas. They will be instantiated as new items at the dropped cursor location.
-*   **Right-Click (Empty space)**: Opens a pop-up menu allowing you to:
-  1. **Add Note**: Add a new text note card (`ITEM_NOTE`).
-  2. **Add Node**: Add a new node circle (`ITEM_NODE`).
-  3. **Settings...**: Opens the settings modal.
-
-### Item Transforms & Selection
-*   **Left-Click**: Select an item. Click empty space to deselect all.
-*   **Shift + Left Click**: Select multiple items or toggle selection of a single item.
-*   **Left-Click Drag**:
-    *   If dragging empty space: Draws a **rubber-band selection rectangle** to select multiple items inside it.
-    *   If dragging a selected item: Translates (moves) all selected items together across the canvas.
-    *   If dragging corner handles of the selection box: Scales all selected items. Hold `Shift` while scaling to preserve aspect ratio. Note: Images and Node circles preserve aspect ratio by default.
-*   **`Delete`**: Remove all selected items.
-*   **Right-Click (On item)**: Opens a context menu for the item:
-    - **Link this item** (Starts directional connecting link)
-    - **Delete item**
-    - **Delete Link** (If clicked over a connection link segment)
-
-### Creating Connection Links
-*   **Ctrl + Left Click Drag**: Hold `Ctrl` and drag from any item (like a note or image) to another item. A directional connection link line with an arrowhead will be created between them.
-
-### Editing Text Notes (`ITEM_NOTE`) & Nodes
-*   **Double-click Note / Node**: Enter text editing mode. A blinking cursor `|` will appear at the end of the text.
-*   **Keyboard Input**: Type text characters directly (letters, digits, space, punctuation).
-*   **`Backspace`**: Delete characters.
-*   **`Escape` / `Enter`**: Commit text changes and exit editing mode.
-
-### Layout Persistence
-*   **`Ctrl + S`**: Saves the current board state to a binary file named `!board.kbrd` inside the active folder.
-*   **Autoloading**: When opening a folder containing a `!board.kbrd` file, the board layout is automatically restored.
+### Atajos de Teclado
+*   **`1`**: Alternar escala de pixel 1:1 vs fit-to-screen adaptativa.
+*   **`R`**: Rotar la imagen 90° en sentido de las agujas del reloj.
+*   **`Shift + R`**: Rotar la imagen 90° en sentido antihorario.
+*   **`W` / `A` / `S` / `D`**: Paneo rápido de la imagen (Arriba / Izquierda / Abajo / Derecha). Sostener `Shift` aumenta la velocidad de desplazamiento.
+*   **`Flecha Arriba` / `+` / `Numpad +`**: Zoom in centrado.
+*   **`Flecha Abajo` / `-` / `Numpad -`**: Zoom out centrado.
+*   **`Espacio`**: Pausar o reanudar la reproducción de imágenes animadas (GIF, APNG, WebP animado).
+*   **`C`**: Alternar esquinas de decoración Cyberpunk cian.
+*   **`G`**: Alternar grilla de composición fotográfica (tercios).
+*   **`M`**: Alternar HUD flotante de información básica y metadatos de la imagen (se oculta automáticamente tras 2 segundos de inactividad del mouse).
+*   **`I`**: Invertir colores de la imagen.
+*   **`P`**: Alternar interpolación Pixelada (Nearest Neighbor) y Suavizada (High-Quality Cubic).
 
 ---
 
-## 5. Page 4: Library Page Controls
+## 4. Página 3: Lienzo Virtual Infinito (Board Page)
 
-The Library Page features a side-by-side layout:
-*   **Left Panel (Folder List)**: Displays folders you've browsed in the current session.
-    *   **Mouse Wheel**: Scroll through folder cards.
-    *   **Left-Click**: Load the clicked folder.
-    *   **Folder Thumbnails**: Folder cards display the first image as a thumbnail on the left, and a mini row of up to 5 thumbnails at the bottom.
-    *   **Right-Click**: Opens a context menu (Settings..., Toggle Fullscreen, Exit).
-*   **Right Panel (Masonry Previews)**: Displays a grid of image previews for the active folder.
-    *   **Left-Click**: Open the clicked preview card in full view on Page 2 (Viewer).
-    *   **Double-Click**: Open the clicked preview card on Page 2 (Viewer).
-    *   **Hover scrollbars**: Revealed when the cursor is near them; drag with Left Click to scroll.
-    *   **Right-Click**: Opens a context menu (Settings..., Toggle Fullscreen, Exit).
-*   **Live Preview (Left Panel Overlay)**: Hovering over any preview image in the grid displays a full-size preview on the left side of the window (supporting animated files as well).
+El Board funciona como un lienzo virtual infinito para organizar imágenes y notas en flujo libre:
 
----
+### Navegación y Cámara
+*   **Arrastrar (Click Central del Ratón)**: Panea la cámara por el lienzo virtual.
+*   **Rueda del Ratón**: Zoom centrado en el puntero del ratón.
+*   **Doble Click en Fondo Vacío**: Restablece el zoom de la cámara al 100% y la centra.
 
-## 6. Page 5: Waterfall Page Controls
+### Algoritmo de Colocación Radial en Espiral (Evasión de Colisiones)
+Cuando importas múltiples imágenes del directorio actual (`CTRL + O` o arrastrar y soltar) o traes resultados de búsquedas de tags, el sistema **no las apila en la parte inferior**.
+* LenteUV calcula el centro de la pantalla del usuario en el mundo del lienzo.
+* Coloca cada imagen en una espiral de Arquímedes concéntrica hacia afuera en ángulos de salida aleatorios.
+* Cada posición candidata es validada contra las imágenes ya existentes en el tablero y las nuevas imágenes añadidas en la transacción actual, aplicando una holgura de separación de 40px, garantizando un esparcimiento orgánico y libre de solapamientos molestos.
 
-The Waterfall Page displays a dynamic masonry layout grid of image previews with virtual scrolling:
-*   **Mouse Wheel**: Scroll through the masonry grid smoothly.
-*   **Scrollbars**: Hovering scrollbars reveals them on the left and right margins of the grid; drag with Left Click to scroll.
-*   **Ctrl + Mouse Wheel**: Adjust column count dynamically (increases/decreases the grid columns).
-*   **Ctrl + Shift + Mouse Wheel**: Adjust grid spacing/gaps dynamically (values range from 0px to 100px).
-*   **Alt + Mouse Wheel**: Adjust image preview corner rounding radius dynamically (values range from 0px to 50px).
-*   **Hovering Previews**: Enlarges the hovered cell slightly on top of other cells and renders a drop shadow. If the hovered item is an animated image (GIF/APNG/WebP), it plays back in-place inside the card.
-*   **Left-Click / Return / F**: Opens the selected preview in a **Modal Viewer** overlay.
-*   **Right-Click**: Opens a context menu (Settings..., Toggle Fullscreen, Exit).
-*   **Modal Viewer Controls**:
-    - Functions as a full-featured Viewer Page embedded on top of the dimmed grid.
-    - **`Escape` / `Enter`**: Exits the Modal Viewer and returns to the masonry grid.
-    - **All Page 2 shortcuts** (zoom, pan, rotation, space to pause animations) are supported within the modal.
-*   **Keyboard Navigation (Grid Mode)**:
-    - **`Home` / `End`**: Scroll instantly to the top or bottom of the grid.
-    - **`Page Up` / `Page Down`**: Scroll up or down by one screen height.
+### Creación de Elementos
+*   **Arrastrar y Soltar Archivos**: Arrastra imágenes o carpetas desde el Explorador de Windows y suéltalas en el lienzo para añadirlas en el punto del mouse.
+*   **Click Derecho en Espacio Vacío**: Abre un menú flotante para:
+    1. **Add Note**: Crear una tarjeta de notas de texto editable (amarilla).
+    2. **Add Node**: Crear un círculo/nodo conceptual.
+*   **Teclas `CTRL + F` (Búsqueda por Tags en Board)**:
+    * Abre el modal de búsqueda de tags con diseño cyberpunk cian translúcido.
+    * Muestra sugerencias autocompletables dinámicas desde `xmpTags.json`.
+    * Soporta queries booleanos avanzados separando por comas (ej. `vacaciones, -mar` para incluir `vacaciones` y excluir `mar`).
+    * Filtra y elimina las imágenes del tablero que no correspondan con la búsqueda y coloca los nuevos aciertos de manera concéntrica mediante el algoritmo espiral.
+*   **Teclas `CTRL + L` (Barrido e Indexación de Tags)**:
+    * Inicia un hilo de fondo asíncrono que barre todas las imágenes del directorio actual leyendo sus metadatos XMP.
+    * Bloquea temporalmente el lienzo y dibuja una barra de progreso superior que indica el porcentaje analizado.
+    * Escribe los tags únicos detectados en un archivo de configuración unificado `xmpTags.json` ordenado por orden alfabético. Si ya existe, muestra un toast de advertencia de 2.5s.
+    * Actualiza y guarda la caché binaria del proyecto (`xmp_tag_cache.bin`).
 
----
-
-## 7. Options Menu Modal Controls
-
-The Options Menu is a custom HUD dialog that overlays on top of the dimmed application screen.
-*   **`O` / `~` (Tilde) / Right-Click Menu -> Settings**: Toggle options menu visibility.
-*   **Left-Click Tabs (General, Viewer Page, Advanced, Language / About)**: Navigate settings sections.
-*   **Left-Click Checkboxes**: Toggle settings values.
-*   **Left-Click Drag Sliders**: Adjust values dynamically (Thumbnails size, Settings menu opacity, Application window opacity).
-*   **Left-Click Buttons**: Cycle options (Launch Page, Drag & Drop Page, Debug Page) or set UI language (English, Russian).
-*   **Click Outside / Escape**: Dismiss settings menu.
+### Modificación y Enlace de Elementos
+*   **Click Izquierdo**: Seleccionar un ítem. Click en vacío para deseleccionar.
+*   **Shift + Click Izquierdo**: Selección múltiple acumulativa de ítems.
+*   **Arrastrar ítem seleccionado**: Mueve todos los elementos seleccionados juntos.
+*   **Arrastrar manijas de bordes**: Escala los ítems seleccionados. Sostener `Shift` preserva el ratio de aspecto.
+*   **`Delete` / `Supr`**: Elimina todos los elementos seleccionados del tablero.
+*   **Ctrl + Arrastrar Click Izquierdo entre ítems**: Dibuja una flecha de enlace direccional (Link) que conecta visualmente ambos elementos.
+*   **Click Derecho en Ítem**: Menú de contexto para enlazarlo, borrarlo, o borrar un enlace si se hace click sobre su línea conductora.
+*   **Doble Click en Nota o Nodo**: Abre el modo de edición de texto directo con cursor parpadeante. Presiona `Escape` o `Enter` para guardar los cambios de texto.
 
 ---
 
-## 8. Tagging System Implementation Detail
+## 5. Página 4: Explorador de Biblioteca (Library Page)
 
-The image tagging subsystem in the native C++ implementation uses standard-compliant **XMP (Extensible Metadata Platform)** keywords written directly into the image files, replacing the legacy file-based MD5 system.
-
-### 💾 Storage Design
-Tags/keywords are stored within the image file headers using the standard Dublin Core namespace (`dc:subject` Bag property). To optimize access and prevent repeating heavy file scans:
-1. **Direct File Storage**: The image files themselves act as the single source of truth.
-2. **Metadata Cache (`xmp_tag_cache.bin`)**: A binary serialization cache file (using a fast binary format starting with the signature `KTAG` version 1) is saved under the `user_data/` directory. It maps normalized absolute file paths to their last write timestamp and their associated tags array.
-
-### ⚙️ Logical Workflows & Optimizations
-- **Direct Reading (`ReadTags()`)**:
-  - Queries the metadata query reader via WIC (`/iTXt/{str=XML:com.adobe.xmp}` for PNG, `/app1/xmp/` for JPEG/other formats) and extracts the items from the `<rdf:Bag> -> <rdf:li>` block.
-- **Direct Writing (`WriteTags()`)**:
-  - **PNG Raw Chunk Injection**: Since WIC's PNG encoder silences or discards metadata writer blocks during serialization, the manager parses the PNG structure manually, removes any existing `iTXt` XMP chunk, and injects a newly computed `iTXt` chunk with the UTF-8 XMP XML packet and a corrected CRC32.
-  - **JPEG Raw Segment Injection**: If a JPEG lacks an XMP block, WIC's `AddWriter` fails. The manager manually parses the JPEG APP markers, removes old APP1/XMP blocks, and injects a new APP1 segment containing the XMP packet payload.
-  - **Atomic Transactions**: Both PNG and JPEG raw injections are written to a `.tmp` file first and then atomically renamed to prevent file corruption.
-  - **Fast Encoding / Transcoding Fallback**: For other formats (TIFF, etc.), the system uses WIC Fast Metadata Encoding, falling back to full frame transcoding if padding is insufficient.
-- **Asynchronous Search (`SearchTagsAsync()`)**:
-  - Initiates a multithreaded directory traversal using a parallel worker thread pool.
-  - Checks discovered image files against the cache: if the file path and last write timestamp match the cache entry, it is counted as a cache hit (retrieved instantly).
-  - Cache misses are distributed across background threads, each initializing COM and parsing the metadata via `ReadTags()`, then updating the cache in memory.
-  - The binary cache file is saved back to disk once the search is complete.
-- **Search Cancellation (`CancelSearch()`)**:
-  - Safely flags cancellation via atomics and joins the worker/search threads to prevent resources from being leaked or causing destructor exceptions.
-
-### 🖥️ Tagging UI Modal ([TaggingModal](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.h))
-The tag management UI is implemented in [tagging_modal.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.cpp). It features a full-screen blurred dark overlay and a central dialog box with:
-- **Two-Column Available Tags Layout**: The left panel displays a double-column grid of tags read from the folder's `xmpTags.json` file. Clicking a tag selects it (supports `Ctrl` multi-selection), and double-clicking copies it to the image. A copy button `>` copies all selected tags at once.
-- **Interactive Scrollbars**: The available tags list and the active tags grid feature hoverable and draggable scrollbars. Clicking and dragging the scrollbar thumb allows fluid scrolling through large lists.
-- **Editable Metadata Fields**: The right panel displays the image's tags grid, a star rating control, and text input boxes to edit standard metadata: *Title*, *Creator*, and *Description*.
-- **Space Character Caret Fix**: To prevent DirectWrite from ignoring trailing spaces in text fields, any space character `L' '` is temporarily replaced with a non-breaking space `L'\u00A0'` during measurement, ensuring the input cursor advances naturally.
-
-### 🔄 Windows Explorer Keywords Synchronization
-To guarantee that image tags are visible within the standard Windows Explorer file properties (the "Tags" / "Etiquetas" column) and vice-versa, the visualizer integrates with the Windows property system:
-- **Linking `propsys.lib`**: Both `KrumassanViewer` and `tagging_tests` target link against the system `propsys.lib` library configured in [CMakeLists.txt](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/CMakeLists.txt).
-- **COM Property Store**: Writing tags triggers `IPropertyStore` via `SHGetPropertyStoreFromParsingName` using `PKEY_Keywords` to write properties directly back to the operating system's index.
-- **Bidirectional Sync**: If the XMP block of a file is empty or missing when loaded, [XmpTagManager](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/xmp_tag_manager.cpp) falls back to read the Windows `System.Keywords` list, enabling offline tag recovery and cross-app tagging consistency.
+*   **Panel Izquierdo (Carpetas del Historial)**: Muestra las carpetas de imágenes registradas en tu sesión.
+    *   **Click Izquierdo**: Cargar el directorio en la biblioteca.
+    *   **Click Derecho en Carpeta**: Abre un menú contextual para remover permanentemente el directorio de tu lista.
+*   **Panel Derecho (Grilla Masonry)**: Muestra todas las previsualizaciones de la carpeta activa en un diseño masonry dinámico.
+    *   **Click Izquierdo**: Abre la imagen a pantalla completa en la Viewer Page.
+    *   **Atajo Tecla `3` (Hover + 3)**: Al posicionar el mouse sobre una miniatura del panel derecho y presionar la tecla `3`, el visualizador la carga de forma inmediata y cambia de página de forma automática al Board ( lienzo infinito), insertándola en la posición del cursor para agilizar el flujo de referencias.
+*   **Hovering Live Preview**: Posicionar el puntero sobre cualquier imagen de la grilla abre un panel flotante de previsualización a gran escala en el extremo izquierdo de la pantalla (reproduciendo animaciones en tiempo real si el formato lo soporta).
 
 ---
 
-## 9. Running Unit Tests
+## 6. Página 5: Vista en Cascada (Waterfall Page)
 
-The native tagging subsystem contains an isolated test suite to verify XML/iTXt injections, cache persistence, and search cancellation.
+Presenta una rejilla masonry de desplazamiento infinito de miniaturas optimizada para el rendimiento:
+*   **Rueda del Ratón**: Desplazamiento vertical reactivo.
+*   **Ctrl + Rueda del Ratón**: Incrementar o disminuir el número de columnas (ancho del layout).
+*   **Ctrl + Shift + Rueda del Ratón**: Ajustar dinámicamente el espaciado interior de celdas (de 0px a 100px).
+*   **Alt + Rueda del Ratón**: Modificar la curvatura/redondeado de esquinas en las tarjetas (de 0px a 50px).
+*   **Click Izquierdo / Enter**: Abre la imagen en un modal visor superpuesto translúcido. Puedes usar todos los controles del visor en este modal. Presiona `Escape` para cerrarlo.
 
-### 🔨 Compiling the Tests Target
-To compile the test executable, you must target `tagging_tests`. Run this from the project root directory:
+---
+
+## 7. Menú de Opciones (HUD settings)
+
+Accesible desde el atajo `O` o `~` (Tilde). Permite ajustar los parámetros globales de LenteUV:
+*   **Pestaña General**: Habilitar ejecución al inicio de Windows, modo lite multiproceso, ocultar al área de notificación, forzar instancia única, etc.
+*   **Pestaña Viewer Page**: Habilitar zoom animado, encuadrar paneles, activar rotación de mousewheel, y mostrar marcas del HUD de metadatos.
+*   **Pestaña Advanced**: Deslizador de opacidad de la ventana de configuración y opacidad de la ventana principal con el escritorio (canal alpha de DirectComposition). Configuración de páginas por defecto de inicio.
+*   **Pestaña Language / About**: Permite alternar dinámicamente el idioma entre Inglés y Ruso. Muestra los créditos y la versión nativa del software.
+
+---
+
+## 8. Arquitectura y Detalles del Sistema de Tagging XMP
+
+El gestor de metadatos de LenteUV (`XmpTagManager`) abandona los archivos MD5 antiguos y graba los datos de forma estándar dentro de los contenedores de metadatos XMP del propio archivo.
+
+### Almacenamiento
+* **Metadatos del Archivo**: Los tags se inyectan en el espacio Dublin Core (`dc:subject` de tipo Bag).
+* **Caché en Disco (`xmp_tag_cache.bin`)**: Para evitar relecturas costosas de I/O de disco en directorios masivos, el estado de etiquetas y marcas de tiempo (`last_write_time`) se serializa en un mapa binario rápido en la carpeta `user_data/` optimizando las búsquedas.
+* **Inyección Binaria en Caliente**:
+  * **PNG (Chunks iTXt)**: Modifica la estructura de bloques binarios del archivo recalculando el CRC32 manualmente e inyectando un chunk iTXt.
+  * **JPEG (APP1 Segments)**: Inserta directamente segmentos APP1/XMP en los marcadores de cabeceras de archivo JPEG.
+  * Ambas operaciones utilizan escritura de archivos temporales con reemplazo atómico para evitar corrupción en cortes eléctricos o caídas del hilo.
+* **Sincronización Bidireccional con Windows**:
+  * Mediante el uso del componente `propsys.lib` del SDK de Windows, LenteUV lee y escribe directamente en el almacén de propiedades COM de Windows (`PKEY_Keywords` en `System.Keywords`).
+  * Si cargas una imagen sin bloque XMP, la aplicación recuperará automáticamente las etiquetas que le hayas asignado previamente desde el Explorador de archivos de Windows.
+
+---
+
+## 9. Ejecución de Pruebas Unitarias (Tagging Tests)
+
+LenteUV incluye un ejecutable aislado para verificar el estado y consistencia del sistema de metadatos e inyectores.
+
+### Compilar el Target de Pruebas
+Ejecuta esto desde la raíz del proyecto para compilar únicamente los tests unitarios:
 ```powershell
-$cmake = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-# Configure the project
-& $cmake -S native -B native/build
-# Compile only the tagging_tests target
-& $cmake --build native/build --config Release --target tagging_tests
+& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build native/build --config Release --target tagging_tests
 ```
-*(Note: Replace the `$cmake` path above with your corresponding Visual Studio installation path, e.g. Community or Professional edition, if different.)*
 
-### 🏃 Executing the Tests
-Once compiled, the binary is located at:
-```text
-e:\TEMPORAL\Proyectos\Sergkrumas\image_viewer\native\build\bin\Release\tagging_tests.exe
-```
-Execute it from the project root directory:
+### Ejecutar las Pruebas
 ```powershell
-./native/build/bin/Release/tagging_tests.exe
+./native/build/Release/tagging_tests.exe
 ```
 
-### 🔬 Test Cases Coverage
-The [tagging_tests.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/tagging_tests.cpp) file implements the following automated validations:
-1. **Test 1: JPEG Read/Write Tags**: Validates custom APP1/XMP marker injection and retrieval on JPEGs.
-2. **Test 2: PNG Read/Write Tags (iTXt)**: Validates raw `iTXt` chunk injection, CRC32 recalculation, and tag replacement.
-3. **Test 3: Cache Persistence**: Checks binary cache serialization (`xmp_tag_cache.bin`) and high-performance search hits.
-4. **Test 4: Search Cancellation**: Assures thread-pool background workers terminate safely on search cancel commands.
-5. **Test 5: Read/Write Extended Metadata (JPEG/PNG)**: Verifies rating numbers, titles, creators, and descriptions are read/written correctly.
-6. **(Planned) Test 6: Windows Keywords Sync**: Asserts that tags modified in the visualizer match `PKEY_Keywords` in `IPropertyStore`, and tags added via Windows Explorer are successfully synced.
+Las pruebas validan la inyección limpia de tags en formatos JPEG y PNG, la persistencia binaria de la caché, la cancelación segura de hilos asíncronos y la consistencia de sincronización bidireccional con el almacén de propiedades de Windows.
