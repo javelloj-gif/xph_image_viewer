@@ -531,6 +531,13 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
         POINT pt;
         if (GetCursorPos(&pt)) {
             HMENU hMenu = CreatePopupMenu();
+            if (m_hoveredPreviewIdx != -1) {
+                AppendMenuW(hMenu, MF_STRING, 10, L"Open in Modal Viewer (Enter)");
+                AppendMenuW(hMenu, MF_STRING, 11, L"Tagging Modal... (T)");
+                AppendMenuW(hMenu, MF_STRING, 12, L"Delete Image (Del)");
+                AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+            }
+
             HMENU hSortSub = CreatePopupMenu();
             int currentMode = m_app->m_settings.sort_mode;
 
@@ -544,23 +551,30 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
             AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
             AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
 
-            AppendMenuW(hMenu, MF_STRING, 1, L"Settings...");
+            AppendMenuW(hMenu, MF_STRING, 1, L"Settings... (O)");
             AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
-            AppendMenuW(hMenu, MF_STRING, 3, L"Exit");
+            AppendMenuW(hMenu, MF_STRING, 3, L"Exit (Esc)");
 
             int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                           pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);
             DestroyMenu(hMenu);
 
             if (selected == 1) {
-                m_app->m_optionsMenu.Show();
+                m_app->OnKeyDown('O', {});
             } else if (selected == 2) {
-                m_app->m_window.ToggleFullscreen();
+                m_app->OnKeyDown(VK_F11, {});
             } else if (selected == 3) {
-                m_app->m_isQuitting = true;
-                m_app->m_window.Close();
+                m_app->OnKeyDown(VK_ESCAPE, {});
             } else if (selected >= 30 && selected <= 35) {
                 m_app->ApplySortMode(selected - 30);
+            } else if (selected == 10) {
+                m_viewerModal = true;
+                m_app->m_viewerPage.ResetView();
+                m_app->m_window.RequestRedraw();
+            } else if (selected == 11) {
+                m_app->OnKeyDown('T', {});
+            } else if (selected == 12) {
+                m_app->OnKeyDown(VK_DELETE, {});
             }
         }
         return true;
@@ -754,7 +768,7 @@ bool WaterfallPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyMod
 
 bool WaterfallPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     if (m_viewerModal) {
-        if (vk == '2' || vk == VK_NUMPAD2) {
+        if (vk == VK_NUMPAD1) {
             m_viewerModal = false;
             m_app->SetPage(Page::Viewer);
             m_app->m_window.RequestRedraw();

@@ -54,10 +54,15 @@ public:
     bool SaveBoard(const std::wstring& filePath);
     bool LoadBoard(const std::wstring& filePath);
 
+    static constexpr size_t MAX_BOARD_TEXTURES = 150; // Max loaded textures in GPU VRAM
+    void ListCurrentDirectoryImages();
+    void EvictFarBoardTextures();
+
 private:
     void ResetView();
     void LoadItemTexture(BoardItem& item);
     void DeleteSelectedItems();
+    void DeleteItemsByIndices(const std::vector<int>& indicesToDelete);
     void AddNoteAt(const PointF& worldPos, const std::wstring& text = L"Note");
     void AddNodeAt(const PointF& worldPos, const std::wstring& label = L"Node");
     void StartLinking(int fromIdx);

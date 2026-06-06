@@ -161,6 +161,13 @@ private:
     float    m_mouseY = 0.0f;
     bool     m_wasFullscreen = false;
 
+    // ── Radial Menu fullscreen state ──────────────────────────────────────
+    bool    m_radialMenuVisible = false;
+    float   m_radialMenuProgress = 0.0f; // Animated 0.0 to 1.0
+    int     m_radialMenuHoveredIdx = -1;  // -1 if none, 0 to 3
+    void    DrawRadialMenu();
+    PointF  GetRadialButtonCenter(int idx, float progress);
+
     // ── Cached Values ─────────────────────────────────────────────────────
     ComPtr<ID2D1Bitmap1>  m_checkerboardBitmap;  // cached checkerboard pattern
 

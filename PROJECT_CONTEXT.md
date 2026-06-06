@@ -15,7 +15,7 @@
 | **Language** | C++20 (MSVC x64 compiler) |
 | **UI Backend** | Direct2D 1.3 / Direct3D 11 / DirectWrite / DirectComposition |
 | **Platform** | Windows 10 (Build 18362+) / Windows 11 |
-| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L) y el soporte nativo de Alt+F4 en Windows**. Phase 4 (Packaging/Installer) pendiente. |
+| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L), el soporte nativo de Alt+F4 en Windows, y las mejoras de usabilidad/escalabilidad (click directo para copiar, enfoque continuo al crear tag, categorías con cabeceras cian en xmpTags.json, etiquetado masivo, listado de directorio masivo en grid con desalojo VRAM inteligente de texturas lejanas, enlace con Alt+Click y selección cyberpunk cian)**. Phase 4 (Packaging/Installer) pendiente. |
 | **Inspiration** | Google Picasa Photo Viewer + PureRef |
 
 ---
@@ -397,6 +397,276 @@ Se implementaron correcciones de estabilidad y diseño de interfaz:
 3. **Cierre Universal con Alt+F4**:
    - Se modificó la intercepción de `WM_SYSKEYDOWN` en `window.cpp` para dejar fluir el atajo `Alt+F4` a `DefWindowProcW`, permitiendo que la ventana responda de forma estándar en Windows cerrándose de manera inmediata y limpia.
 
+---
+
+## 14. Appendix: Trabajo completado en la Sesión (Junio 5, 2026 — Continuación)
+
+│   │       └── kv_log.txt              # Diagnostic file-logging output
+│   └── src/
+│       ├── main.cpp                    # WinMain entry point
+│       ├── pch.h / pch.cpp             # Precompiled headers (DirectX, STL)
+│       ├── types.h                     # Colors, geometric vectors, clocks
+│       ├── window.h / window.cpp       # Frameless Win32 window logic
+│       ├── renderer.h / renderer.cpp   # Direct2D rendering context
+│       ├── image_loader.h / .cpp       # Async WIC frame decoder
+│       ├── animation.h / .cpp          # Easing timelines & animation states
+│       ├── app.h / app.cpp             # Application orchestrator, game loop
+│       ├── library_data.h / .cpp       # Session, favorites, folders lists
+│       ├── settings.h / settings.cpp   # JSON settings file management
+│       ├── ipc.h / ipc.cpp             # Named pipe instance control
+│       ├── commenting.h / .cpp         # Image region commenting logic
+│       ├── tagging.h / tagging.cpp     # XMP dc:subject tagging — raw PNG iTXt + JPEG APP1/XMP injection, async search, binary cache
+│       ├── tagging_tests.cpp           # Unit tests for tagging subsystem (4 tests)
+│       ├── explorer_integration.h/.cpp # System tray, shell icons, recycle bin
+│       ├── i18n.h / i18n.cpp           # Translate framework (loads PO)
+│       ├── options_menu.h / .cpp       # HUD settings menu modal
+│       ├── viewer_page.h / .cpp        # Page 2: Single-image viewer
+│       ├── thumbnail_strip.h / .cpp    # Sub-component: Bottom thumbnails row
+│       ├── library_page.h / .cpp       # Page 4: Library folders & grids
+│       ├── board_page.h / .cpp         # Page 3: Infinite virtual canvas
+│       ├── waterfall_page.h / .cpp     # Page 5: Virtual masonry grid
+│       └── resources/
+│           ├── app.manifest            # PerMonitorV2 HiDPI compatibility
+│           └── app.rc                  # Binary version resources info
+├── user_data/                          # Persisted runtime directory
+│   ├── settings.json                   # User settings values
+│   ├── session.txt                     # Saved folders list
+│   ├── fav.txt                         # Favorites list
+│   ├── comments.txt                    # Image comment records
+│   ├── xmp_tag_cache.bin               # Persistent binary XMP tags cache
+│   └── boards/                         # Infinite canvas .kbrd states
+├── test/                               # Testing images (PNG, WebP, JPG, etc.)
+└── implementation_plan.md              # Active plan for XMP tagging development
+```
+
+---
+
+## 8. Test Images Asset Inventory
+
+Located in the [test/](file:///E:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/test) directory:
+
+| File | Format | Size | Characteristics |
+|---|---|---|---|
+| `animated.webp` | WebP | 7.4 MB | Heavy animated WebP (multi-frame, transparent background) |
+| `apng.apng` | APNG | 258 KB | Dedicated animated APNG file |
+| `apng_png.png` | APNG (as `.png`) | 258 KB | APNG extension disguised as standard PNG |
+| `copyleft.svg` | SVG | 212 B | Lightweight vector graphics file |
+| `icon.ico` | ICO | 17 KB | Standard multi-resolution Windows icon file |
+| `kimono.avif` | AVIF | 85 KB | Modern compressed AVIF image |
+| `linux.png` | PNG | 818 KB | Large static lossless PNG image |
+| `noname.bmp` | BMP | 4.0 MB | Raw uncompressed Windows Bitmap |
+| `noname.jpeg` | JPEG | 36 KB | Lossy compressed JPEG image |
+| `noname.jpg` | JPG | 45 KB | Standard JPEG image file |
+| `noname.tif` / `.tiff` | TIFF | 22 KB | Lossless tagged image file |
+| `rubik.gif` | GIF | 763 KB | Standard multi-frame animated GIF |
+| `sample.jfif` | JFIF | 81 KB | JPEG File Interchange Format image |
+| `sample.tga` | TGA | 818 KB | Targa image file format |
+| `static.webp` | WebP | 83 KB | Static WebP image |
+
+---
+
+## 9. Build and Compilation Guide
+
+### Prerequisites
+- **Compiler**: Visual Studio 2022 with **"Desktop development with C++"** workload.
+- **Build System**: CMake 3.20+.
+
+### cmake path en este sistema
+```powershell
+$cmake = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+& $cmake -S native -B native/build
+& $cmake --build native/build --config Release
+& $cmake --build native/build --config Release --target tagging_tests
+```
+> **IMPORTANTE**: `cmake` no está en el PATH del sistema. Debe usarse la ruta absoluta del Visual Studio BuildTools.
+
+
+---
+
+## 10. Appendix: Estado del sistema de tagging XMP — Errores Resueltos
+
+### Trabajo realizado y errores resueltos en esta sesión (Junio 3, 2026)
+
+#### ✅ Correcciones de errores críticos y optimizaciones
+
+1. **Resolución del Deadlock de Mutex en `WriteTags`**:
+   - **Problema**: El ejecutable `tagging_tests.exe` lanzaba una excepción `resource deadlock would occur` debido a que el mutex `m_cacheMutex` era adquirido dos veces en el mismo hilo (en `WriteTags` y posteriormente al llamar a `SaveCache()` dentro del mismo lock).
+   - **Solución**: Se separó la adquisición del lock para actualizar la caché en memoria de la llamada a `SaveCache()`. El mutex se libera explícitamente cerrando el bloque de alcance (`scope`) antes de guardar la caché en disco en los bloques de PNG, JPEG, Fast Encoding y Full Transcoding fallback.
+
+2. **Resolución de la Pérdida de Salida en Consola por Codificación (Wide-Character Bug)**:
+   - **Problema**: Windows silenciaba la salida estándar debido a caracteres no ASCII (como la raya de diálogo `—`) escritos en flujos de caracteres anchos (`std::wcout`) sin la configuración adecuada, activando el indicador `failbit` de los flujos de consola.
+   - **Solución**: Se configuraron los flujos `stdout`/`stderr` en modo UTF-16 (`_O_U16TEXT`) usando `_setmode` en la función `wmain` en [tagging_tests.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/tagging_tests.cpp). Además, se reemplazó la raya de diálogo (`—`) con un guión estándar en las salidas de prueba para garantizar una salida de diagnóstico robusta y legible.
+
+3. **Corrección de Discrepancias en Mayúsculas/Minúsculas en Rutas (Path Casing)**:
+   - **Problema**: Variaciones entre rutas en minúsculas y mayúsculas para la letra de unidad (por ejemplo, `e:\...` frente a `E:\...`) causaban fallos en las búsquedas con `std::unordered_map::find`, resultando en falsos fallos en la caché de metadatos.
+   - **Solución**: Se implementó una función `NormalizePath` en [tagging.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/tagging.cpp) para unificar separadores y capitalizar la letra de unidad. Se sombrearon las variables `filePath` en los puntos de entrada públicos (`ReadTags`, `WriteTags`, `LoadCache`, `SearchTagsAsync`) con sus versiones normalizadas.
+
+4. **Corrección de Abortos en el Destructor de Hilos (`std::thread`)**:
+   - **Problema**: Al destruir el objeto `XmpTagManager`, el hilo de búsqueda `m_searchThread` aún se consideraba ejecutable (joinable), lo que resultaba en la llamada a `std::terminate` y la posterior finalización abrupta de la prueba 4 de cancelación.
+   - **Solución**: Se actualizó `CancelSearch()` para llamar a `join()` siempre que el hilo de búsqueda `m_searchThread.joinable()` sea verdadero (true), asegurando la correcta sincronización y finalización limpia del hilo antes de descartar el objeto.
+
+#### ✅ Estado de las Pruebas Unitarias
+Todas las pruebas de metadatos XMP en `tagging_tests.exe` pasan exitosamente:
+- **Test 1 (JPEG Read/Write)**: PASS. Verifica la inyección de segmentos APP1/XMP sin usar el decodificador/codificador nativo WIC.
+- **Test 2 (PNG Read/Write)**: PASS. Verifica la inyección raw de chunks iTXt.
+- **Test 3 (Cache Persistence)**: PASS. Verifica la persistencia binaria (`xmp_tag_cache.bin`) y tiempos rápidos de respuesta en búsquedas.
+- **Test 4 (Search Cancellation)**: PASS. Comprueba la detención segura de hilos de fondo sin fugas ni abortos de programa.
+
+---
+
+## 11. Appendix: Trabajo completado en la Sesión (Junio 4, 2026)
+
+Se implementaron, compilaron y verificaron con éxito las tareas especificadas en el [implementation_plan.md](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/implementation_plan.md):
+
+### A. Refactorización e Infraestructura de Metadatos
+1. **Refactorización de `WicMetadataReaderWriter`**: Se redujo el tamaño de [wic_metadata_reader_writer.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/metadata/wic_metadata_reader_writer.cpp) de ~1220 a ~600 líneas al modularizar tareas de apertura de streams, PROPVARIANTs y transcodificación de archivos.
+2. **Corrección de persistencia de guardado**: Inicialización ordenada del pool de hilos de `ImageLoader` antes de `XmpTagManager`, garantizando la disponibilidad del factory.
+3. **Evitar caché de metadatos de WIC**: Uso de `SHCreateStreamOnFileEx` en los lectores WIC para bypassear la retención de ficheros y caché de metadatos del decodificador.
+4. **Caché rápida de consulta**: Validación rápida por marca de tiempo frente al archivo para retornar de inmediato tags de `MetadataCache` sin leer disco.
+5. **TaggingModal en Doble Columna**: Layout del panel izquierdo modificado a 2 columnas con mapeo adaptado de mouse.
+6. **Interactividad de Scroll en `TaggingModal`**: Arrastre interactivo en el track de scroll derecho.
+7. **Soporte para Espacios en Etiquetas**: Modificación en la medición del ancho del cursor/texto reemplazando espacios con espacios de no-rompimiento.
+8. **Sincronización con Windows Keywords**: Integración bidireccional vía `IPropertyStore` (`System.Keywords`).
+
+### B. Mejoras y Correcciones de Fine-Tuning
+1. **Auto-Ocultamiento de la Isla de Metadatos**: El HUD de metadatos en el Visor se desvanece tras 2 segundos de inactividad del mouse.
+2. **Enviar Imagen de Biblioteca al Tablero**: Menú contextual de previews para mandar imagen directo al Tablero Infinito (`Page::Board`).
+3. **Eliminar Carpeta de Lista Izquierda**: Menú contextual de carpetas en Biblioteca para remover directorios de la sesión.
+4. **Ordenamiento Global (Order-By)**: Modos por Nombre (Asc/Desc), Fecha (Asc/Desc) y Tamaño (Asc/Desc) en Visor, Grid y Waterfall, persistidos en settings.
+5. **Eliminación con Tecla [Supr] Preservando Fullscreen**: Diálogo de confirmación nativo para reciclar imagen sin interrumpir el modo pantalla completa.
+6. **Ajuste de Ventana al Salir de Fullscreen**: Redimensionamiento y centrado inteligente en ventana normal para coincidir con la proporción de la imagen.
+7. **Composición de GIFs con Transparencia**: Mezcla alfa y disposal acumulativo en memoria para evitar el ghosting.
+8. **Navegación con PageUp / PageDown**: Desplazamiento por páginas de contenido en Waterfall, Biblioteca y tira de miniaturas (con prioridad de foco).
+
+#### ✅ Estado de las Pruebas Unitarias
+Todas las pruebas de metadatos XMP en `tagging_tests.exe` pasan exitosamente:
+- **Test 1 (JPEG Read/Write)**: PASS.
+- **Test 2 (PNG Read/Write)**: PASS.
+- **Test 3 (Cache Persistence)**: PASS.
+- **Test 4 (Search Cancellation)**: PASS.
+- **Test 5 (Read/Write Extended Metadata)**: PASS (JPEG/PNG).
+- **Test 6 (Windows Property Store Keywords Sync)**: PASS.
+
+## 12. Appendix: Plan de Trabajo Pendiente (Siguiente Sesión)
+1. **Fase 4: Packaging / Instalador**: Diseñar y empaquetar la aplicación nativa para distribución en sistemas Windows.
+
+---
+
+## 13. Appendix: Trabajo completado en la Sesión (Junio 5, 2026)
+
+Se implementaron correcciones de estabilidad y diseño de interfaz:
+
+### A. Ajuste de Ventana y Estabilidad de Fullscreen
+1. **Resolución del Bug de Reducción en Fullscreen**: En [Window::SetFullscreen](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/window.cpp), se trasladó la asignación de `m_fullscreen = fullscreen` al inicio del método para evitar la desincronización de estado durante el procesamiento del evento síncrono `WM_SIZE` en `OnResize`.
+2. **Refactorización de Sizing y Ajuste de Ventana**: En [App::AdjustWindowToImage](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp), se limitó el tamaño mínimo del cliente a `512*512` píxeles. Se implementó el soporte para compensar bordes en ventanas con marcos (`!IsFrameless()`) a través de la función de Win32 `AdjustWindowRectEx`, escalando de forma proporcional el cliente respetando el aspect ratio y clamps del área útil de trabajo del monitor (`rcWork`) antes de centrar la ventana.
+3. **Ajuste del Zoom de Renderizado de Imagen**: En [App::CalculateImageRect](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp) y [ViewerPage::CalculateImageRect](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/viewer/viewer_page.cpp), se modificó la escala base para que sea `1.0f` (escala 1:1 original, centrada) si la imagen cabe por completo en el área cliente. Si es más grande que la pantalla, se aplica la escala fit-to-screen. El zoom inicial del visor se fijó a `1.0f` (`100%` en imágenes pequeñas y el factor de escala proporcional en imágenes grandes).
+
+### B. Rediseño y Ampliación de TaggingModal (20% Más Grande)
+1. **Aumento de Dimensiones del Modal**: En [tagging_modal.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/ui/tagging_modal.cpp), se incrementó la caja contenedora del modal de `960x700` a `1152x840` píxeles (aumento del 20% respecto del original). Se ajustaron proporcionalmente los anchos de los paneles izquierdo (Available Tags a `456.0f`) y derecho (Image Tags a `528.0f`), el botón de copiado intermedio (`36.0f` de ancho, posicionado en `leftPane.right + 36.0f`), y la altura de ambos paneles a `645.0f` (`bounds.Height() - 195.0f`).
+2. **Legibilidad de las Etiquetas y Textos**:
+   * Se incrementó el tamaño de fuente de las palabras clave de `11.0f` a `14.0f` y la altura de las píldoras de `22.0f` a `28.0f`, ampliando los paddings correspondientes para mantener el layout estético.
+   * Se aumentó el tamaño de los inputs de búsqueda y creación a `15.0f`, y su altura a `36.0f`.
+   * Se aumentó el tamaño de la estrella de clasificación a `22.0f` y las cajas de metadatos (Título, Autor a `40.0f` de alto, Descripción a `90.0f` de alto) con texto a `15.0f` para maximizar la legibilidad en pantallas estándar y de alta resolución.
+
+### C. Correcciones en Modos y UI
+1. **Library Mode hover -> Board Shortcut (`3`)**: En el modo biblioteca, presionar la tecla `3` mientras se posiciona el mouse sobre una miniatura carga esa imagen y redirige de forma automática al Board, insertándola en el canvas.
+2. **Optimización de Sliders en OptionsMenu**: Se corrigió el lag del slider de opacidad de fondo eliminando el guardado síncrono en disco durante el movimiento (`OnMouseMove`). Ahora el guardado se realiza una única vez en `OnMouseUp` al soltar el slider.
+3. **Corrección de Bucle Infinito en OnResize y Ajuste en Ventana**: Se corrigió la recursión infinita en `OnResize` al salir de fullscreen actualizando `m_wasFullscreen` anticipadamente. `AdjustWindowToImage()` escala ahora tanto ancho como alto respetando el aspect ratio y los clamps del área útil de trabajo del monitor (`mi.rcWork`). Se reconstruyen los rectángulos de colisión de los controles de configuración reconstruyendo `OptionsMenu` en `OnResize`.
+
+### D. Mejoras en TaggingModal (Layout Dinámico y Píldoras Envueltas)
+1. **Píldoras Envueltas en Available Tags**: La columna izquierda de etiquetas disponibles presenta ahora las etiquetas como píldoras (pills) envueltas dinámicamente según su longitud, idénticas a la derecha pero sin la "x" de cierre. Se adaptó la lógica de detección de scroll, clicks y hover a esta nueva disposición.
+2. **Ocultamiento Dinámico sin `xmpTags.json`**: Si el archivo `xmpTags.json` no está presente en el directorio de la imagen abierta, el panel izquierdo (Available Tags) y el botón intermedio `[ > ]` se ocultan por completo. El panel derecho (Image Tags) se expande horizontalmente al ancho total del modal (~30px de margen a los lados), y el control de estrellas y clasificación inferior se alinea de forma dinámica al inicio del panel derecho expandido.
+
+### E. Búsqueda por Tags, Barrido e Indexación en Board y Soporte Alt+F4
+1. **Búsqueda por Tags en Board (CTRL+F)**:
+   - Se diseñó e implementó un modal de búsqueda por tags que se activa mediante `CTRL+F` en el modo Board.
+   - El estilo del modal de búsqueda se homologó con la estética de la aplicación (`TaggingModal` y `OptionsMenu`), utilizando un fondo oscuro translúcido `Color::FromRGBA(15, 15, 20, 245)`, borde cian cyberpunk con esquinas redondeadas y botones de acción tipo Save/Cancel.
+   - Cuenta con autocompletado y sugerencias dinámicas obtenidas desde `xmpTags.json`. Al hacer clic en una píldora de sugerencia, se autocompleta el término en el input respetando exclusiones.
+   - Soporta queries booleanos avanzados separando términos por comas (ej. `vacaciones, -mar` para incluir `vacaciones` y excluir `mar`).
+   - Inserta de forma ordenada las imágenes resultantes en una rejilla (grid) de 3 columnas centrada en la posición de cámara actual del board.
+2. **Barrido de Tags del Directorio (CTRL+L)**:
+   - Se implementó un barrido indexador activado por `CTRL+L` que ejecuta la lectura asíncrona de metadatos XMP (`ReadTags`) de todos los archivos soportados en el directorio activo a través de un hilo de fondo (`std::thread`).
+   - Durante el escaneo, se inmovilizan los controles e interacciones del tablero infinity (excepto para cerrar la app o salir vía Escape) y se dibuja una isla de progreso superior con el porcentaje de análisis.
+   - Al finalizar, genera el archivo `xmpTags.json` ordenado con los tags únicos del directorio y persiste la caché de metadatos (`SaveCache`).
+   - Si el archivo `xmpTags.json` ya existe en el directorio activo al pulsar `CTRL+L`, muestra un toast flotante temporal "Tags file already exists" de 2.5 segundos con un desvanecimiento suave de 0.5s en la esquina superior derecha.
+3. **Cierre Universal con Alt+F4**:
+   - Se modificó la intercepción de `WM_SYSKEYDOWN` en `window.cpp` para dejar fluir el atajo `Alt+F4` a `DefWindowProcW`, permitiendo que la ventana responda de forma estándar en Windows cerrándose de manera inmediata y limpia.
+
+---
+
+## 14. Appendix: Trabajo completado en la Sesión (Junio 5, 2026 — Continuación)
+
+Se implementaron mejoras de usabilidad, categorización de tags, atajos de teclado y optimizaciones de escalabilidad en BoardPage:
+
+### A. Mejoras de Usabilidad en `TaggingModal`
+1. **Acción Directa en Tags Disponibles**: Al hacer click izquierdo en un tag de la lista de disponibles, se añade directamente a la imagen, se vacía la búsqueda, se restablece el scroll izquierdo y se re-enfoca automáticamente el buscador.
+2. **Entrada Manual Fluida**: Al crear un tag de forma manual presionando `ENTER` o clickeando en el botón `+`, se mantiene el foco del teclado en el input manual para agilizar inserciones consecutivas.
+3. **Soporte de Categorías**: Se diseñó una carga inteligente en `LoadAvailableTags()` para clasificar etiquetas provenientes de archivos `xmpTags.json` estructurados como diccionarios. Se dibujan cabeceras de categorías en color cian cyberpunk y las etiquetas en píldoras tabuladas.
+4. **Etiquetado Masivo**: Al seleccionar múltiples imágenes en el tablero y presionar la tecla `T`, se abre el modal en modo multi-imagen, inhabilitando metadatos individuales y rating de estrellas. Al guardar, se calculan las diferencias incrementales (tags añadidos y removidos) y se escriben en disco de manera segura para cada archivo.
+
+### B. Escalabilidad y Optimización del Tablero
+1. **Listado Masivo de Directorios (`SHIFT + CTRL + L`)**: Lee de manera no bloqueante todos los archivos de imágenes soportados en la carpeta activa y los posiciona en una cuadrícula masiva de 12 columnas centrada en la cámara. Se ha agregado una dispersión aleatoria uniforme de `[-15.0f, 15.0f]` píxeles en el posicionamiento de las imágenes y una rotación aleatoria uniforme de `[-2.0f, 2.0f]` grados para lograr una sensación visual real y evitar el apilamiento perfecto.
+2. **Carga Diferida**: Los elementos añadidos se inicializan con `texture = nullptr` y se decodifican bajo demanda cuando entran en la pantalla.
+3. **Optimización de Memoria GPU (VRAM eviction)**: Se limita la carga a un máximo de 150 texturas simultáneas (`MAX_BOARD_TEXTURES = 150`). Las texturas de las imágenes lejanas a la vista de la cámara se descargan automáticamente (`texture = nullptr`), manteniendo el rendimiento con +10,000 elementos.
+4. **Liberación de Atajo y Enlaces**: Se modificó la combinación para trazar enlaces de conectores a **ALT + Click**.
+5. **Multi-Selección de Elementos**: Se habilitó la selección acumulativa con **CTRL + Click** y **SHIFT + Click**. Los clicks normales en vacío limpian la selección previa.
+6. **Diseño Visual Cyberpunk**: Si se selecciona más de una imagen, el rectángulo delimitador externo que las agrupa se renderiza con tiradores y líneas en color cian cyberpunk (`0x00E5FF`) en lugar del naranja estándar.
+7. **Filtrado y Dispersión de Búsquedas (CTRL + F)**: Al ejecutar una búsqueda de tags en el tablero, se eliminan del tablero de forma inmediata y segura todas las imágenes que no coinciden con los criterios (junto con sus enlaces asociados). Las nuevas imágenes coincidentes importadas al tablero se ubican en un grid con la misma dispersión y rotación aleatoria de aspecto natural.
+
+---
+
+## 15. Appendix: Trabajo completado en la Sesión - Fine-Tunings y Mejoras de Usabilidad (Junio 5, 2026 — Continuación 2)
+
+Se implementaron y validaron con éxito las siguientes características de fine-tuning solicitadas:
+
+### A. Reorganización de Atajos de Teclado y Teclado Numérico
+1. **Reasignación de Teclas**: Los accesos directos de cambio de modo se movieron en su totalidad y de forma exclusiva al teclado numérico (Numpad):
+   - `VK_NUMPAD1` -> **Viewer Mode** (cambia al modo Visor).
+   - `VK_NUMPAD2` -> **Library Mode** (cambia al modo Library).
+   - `VK_NUMPAD3` -> **Waterfall Mode** (cambia al modo Waterfall).
+   - `VK_NUMPAD4` -> **Board Mode** (cambia al modo Board).
+2. **Fila Numérica Superior**: En la fila numérica superior estándar del teclado, solo se mantiene el atajo `1` dentro del Visor para alternar entre la escala 1:1 original y fit-to-screen (Toggle1To1). Las teclas `1`, `2`, `3`, `4` de la fila numérica superior estándar ya no disparan la navegación entre modos, quedando desligadas de estos.
+   
+### B. Menú Radial Flotante en Pantalla Completa (Fullscreen)
+1. **Lógica de Trigger y Travel Zone**: Al estar en pantalla completa (`F11`), colocar el mouse en la esquina superior derecha activa el menú radial. Se amplió el área de hover de activación a un cuadrante de `100x100` píxeles para lograr un trigger ágil y cómodo. Un área de transición o travel zone superior (`y < 80px`) y una zona de interacción (`x < 200px && y < 200px`) previenen el cierre prematuro del menú.
+2. **Visualización y Estética Cyberpunk**: Se renderiza en la esquina superior izquierda un menú radial con un hub central brillante ("KV") y 4 botones radiales animados (`VIS`, `LIB`, `WAT`, `BRD`) con un arco dinámico. Cuenta con tooltips cyberpunk cian que indican el modo y su respectivo atajo. Bloquea clicks e interacciones sobre elementos del fondo mientras está activo.
+3. **Corrección de Redibujado en Hover**: Se corrigió el refresco de pantalla al cambiar el estado de visibilidad del menú radial, forzando de forma explícita el redibujado de la ventana (`m_window.RequestRedraw()`) tanto al activarse como al desactivarse, lo cual garantiza que el menú se muestre y oculte en tiempo real de manera consistente.
+
+### C. Prevención de Solapamiento en Board y "New Board"
+1. **Posicionamiento Inteligente**: Al realizar una búsqueda masiva de tags (`CTRL+F`) o importar todas las imágenes del directorio (`SHIFT+CTRL+L`), el nuevo grupo de imágenes se coloca de forma automática por debajo de la coordenada vertical más baja (`maxY + spacingY`) de las imágenes existentes, evitando solapamientos de rejillas.
+2. **Opción "New Board"**: Se añadió al menú contextual del lienzo vacío del tablero la opción "New Board", que limpia todos los elementos del canvas actual de forma instantánea.
+
+### D. Eliminación Directa de Directorios en Library
+1. **Botón Rápido "×"**: En la lista de carpetas del panel izquierdo del modo Biblioteca, cada ítem renderiza ahora un botón "×" de color cian/blanco que cambia a rojo tras recibir el hover. Al hacer clic izquierdo en él, se elimina la carpeta de la sesión de manera directa sin necesidad de invocar el menú contextual.
+
+### E. Menús Contextuales Completos
+1. **Mapeo de Atajos**: Los menús contextuales de clic derecho en todos los modos (Viewer, Board, Library, Waterfall) presentan ahora la totalidad de las opciones de interacción y navegación del teclado correspondientes a su respectivo modo de visualización.
+
+---
+
+## 16. Appendix: Corrección de Bugs e Integración de Atajos (Junio 5, 2026 — Continuación 3)
+
+Se corrigieron detalles de navegación de la interfaz de usuario para una experiencia más fluida y consistente:
+
+### A. Corrección del Hover del Menú Radial en Fullscreen
+1. **Detección de Esquina Correcta**: En [app.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp), se cambió la condición de activación del hover de la esquina superior derecha (`x > size.width - 100.0f`) a la **esquina superior izquierda** (`x < 100.0f && y < 100.0f`). Esto hace que el área de activación coincida perfectamente con el lugar de dibujado del menú radial en la pantalla, evitando el comportamiento invertido.
+
+### B. Accesos Adicionales a Páginas (Fila Superior)
+1. **Atajos Adicionales**: Se habilitaron las teclas estándar de la fila numérica del teclado `'2'`, `'3'` y `'4'` para alternar de página de manera idéntica a las teclas del Numpad:
+   - Tecla `2` $\rightarrow$ **Library Mode**
+   - Tecla `3` $\rightarrow$ **Waterfall Mode**
+   - Tecla `4` $\rightarrow$ **Board Mode**
+2. **Preservación del Atajo Zoom (1)**: La tecla numérica estándar `1` no fue modificada, manteniendo su funcionalidad nativa y exclusiva de alternar entre escala 1:1 original y fit-to-screen (`Toggle1To1`) cuando se está en el Visor.
+3. **Comportamiento en Library Page**: En [library_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/library_page.cpp), se actualizó la detección del atajo para enviar la imagen bajo el cursor directo al Board, de modo que responda tanto a `VK_NUMPAD4` como a la tecla estándar `4`.
+
+### C. Reducción de la Transparencia en la Lista de Carpetas
+1. **Mejora de Contraste y Legibilidad**: En [library_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/library_page.cpp), se disminuyó la transparencia de los elementos de la lista de carpetas en un 30% (aumentando su opacidad).
+   * El fondo normal pasó de un alpha de `5` a `10`.
+   * El fondo hovered pasó de un alpha de `15` a `25` (y su borde de `40` a `52`).
+   * El fondo seleccionado pasó de un alpha de `40` a `60` (y su borde de `150` a `195`).
+   * El icono por defecto del folder pasó de un alpha de `180` a `234`.
+   * Los textos de nombre y descripción aumentaron su opacidad para mejorar la visibilidad (nombre de `0.9f` a `1.0f`, descripción de `0.45f` a `0.58f`).
+   Esta modificación no tiene impacto alguno en el desempeño de la renderización acelerada por GPU de la aplicación, pero incrementa significativamente la legibilidad de la lista de directorios.
 
 
 

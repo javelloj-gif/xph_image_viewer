@@ -252,7 +252,8 @@ int App::Run() {
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
                                    || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused())
                                    || (m_currentPage == Page::Board && m_boardPage.m_editor.m_editingNoteIdx != -1)
-                                   || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())));
+                                   || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())))
+                                   || (m_radialMenuProgress > 0.0f && m_radialMenuProgress < 1.0f);
 
         if (!needsContinuousRender) {
             // Wait for next message or 16ms timeout (~60fps max idle rate)
@@ -272,6 +273,19 @@ void App::RenderFrame() {
     double dt = m_frameTimer.Tick();
     // Clamp dt to avoid huge jumps after loading stalls
     dt = std::min(dt, 0.1);
+
+    // Update radial menu animation progress
+    if (m_radialMenuVisible) {
+        if (m_radialMenuProgress < 1.0f) {
+            m_radialMenuProgress = std::min(m_radialMenuProgress + static_cast<float>(dt) * 5.0f, 1.0f);
+            m_window.RequestRedraw();
+        }
+    } else {
+        if (m_radialMenuProgress > 0.0f) {
+            m_radialMenuProgress = std::max(m_radialMenuProgress - static_cast<float>(dt) * 5.0f, 0.0f);
+            m_window.RequestRedraw();
+        }
+    }
 
     // Update animations
     m_animations.Update(dt);
@@ -319,6 +333,9 @@ void App::RenderFrame() {
     }
     if (m_taggingModal.IsVisible()) {
         m_taggingModal.Draw(m_renderer);
+    }
+    if (m_radialMenuProgress > 0.0f) {
+        DrawRadialMenu();
     }
 
     m_renderer.EndFrame();
@@ -858,6 +875,50 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseMove(x, y, mods)) return;
     }
+
+    if (m_window.IsFullscreen()) {
+        auto size = m_renderer.GetTargetSize().ToFloat();
+        if (x < 100.0f && y < 100.0f) {
+            if (!m_radialMenuVisible) {
+                m_radialMenuVisible = true;
+                m_window.RequestRedraw();
+            }
+        } else if (m_radialMenuVisible) {
+            bool inMenuArea = (x < 200.0f && y < 200.0f);
+            bool inTravelBand = (y < 80.0f);
+            if (!inMenuArea && !inTravelBand) {
+                m_radialMenuVisible = false;
+                m_window.RequestRedraw();
+            }
+        }
+    } else {
+        if (m_radialMenuVisible) {
+            m_radialMenuVisible = false;
+            m_window.RequestRedraw();
+        }
+    }
+
+    if (m_radialMenuProgress > 0.1f) {
+        int oldHovered = m_radialMenuHoveredIdx;
+        m_radialMenuHoveredIdx = -1;
+        for (int i = 0; i < 4; ++i) {
+            PointF btnCenter = GetRadialButtonCenter(i, m_radialMenuProgress);
+            float dx = x - btnCenter.x;
+            float dy = y - btnCenter.y;
+            float distSq = dx * dx + dy * dy;
+            if (distSq <= 26.0f * 26.0f) {
+                m_radialMenuHoveredIdx = i;
+                break;
+            }
+        }
+        if (m_radialMenuHoveredIdx != oldHovered) {
+            m_window.RequestRedraw();
+        }
+        if (x < 200.0f && y < 200.0f) {
+            return; // Intercept mouse move so background doesn't hover
+        }
+    }
+
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseMove(x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -879,6 +940,26 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     }
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseDown(btn, x, y, mods)) return;
+    }
+
+    if (m_radialMenuProgress > 0.5f) {
+        if (btn == MouseButton::Left && m_radialMenuHoveredIdx != -1) {
+            Page targetPage;
+            if (m_radialMenuHoveredIdx == 0) targetPage = Page::Viewer;
+            else if (m_radialMenuHoveredIdx == 1) targetPage = Page::Library;
+            else if (m_radialMenuHoveredIdx == 2) targetPage = Page::Waterfall;
+            else targetPage = Page::Board;
+
+            SetPage(targetPage);
+            m_radialMenuVisible = false;
+            m_radialMenuProgress = 0.0f;
+            m_radialMenuHoveredIdx = -1;
+            m_window.RequestRedraw();
+            return;
+        }
+        if (x < 200.0f && y < 200.0f) {
+            return; // Eat the click
+        }
     }
 
     // Global close button check
@@ -913,6 +994,13 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnMouseUp(btn, x, y, mods)) return;
     }
+
+    if (m_radialMenuProgress > 0.5f) {
+        if (x < 200.0f && y < 200.0f) {
+            return; // Eat mouse up
+        }
+    }
+
     if (m_currentPage == Page::Library) {
         if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Board) {
@@ -1030,18 +1118,22 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             }
             break;
         }
-        case '2':
+        case VK_NUMPAD1:
             SetPage(Page::Viewer);
             break;
-        case '3':
-            SetPage(Page::Board);
-            break;
-        case '4':
+        case VK_NUMPAD2:
+        case '2':
             SetPage(Page::Library);
             break;
-        case '5':
+        case VK_NUMPAD3:
+        case '3':
             SetPage(Page::Waterfall);
             break;
+        case VK_NUMPAD4:
+        case '4':
+            SetPage(Page::Board);
+            break;
+
 
         case VK_ESCAPE:
             // Always quit on Escape — do not hide to tray.
@@ -1099,6 +1191,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 m_taggingModal.Hide();
             } else {
                 std::wstring selectedPath = L"";
+                std::vector<std::wstring> boardSelectedPaths;
                 if (m_currentPage == Page::Viewer) {
                     if (m_currentImage) selectedPath = m_currentImage->filePath;
                     else if (m_animatedImage) selectedPath = m_animatedImage->filePath;
@@ -1116,13 +1209,21 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 } else if (m_currentPage == Page::Board) {
                     for (const auto& item : m_boardPage.m_items) {
                         if (item.selected && item.type == BoardItemType::Image && !item.filePath.empty()) {
-                            selectedPath = item.filePath;
-                            break;
+                            if (ImageLoader::IsSupported(item.filePath)) {
+                                boardSelectedPaths.push_back(item.filePath);
+                            }
                         }
                     }
                 }
-                if (!selectedPath.empty() && ImageLoader::IsSupported(selectedPath)) {
-                    m_taggingModal.Show(selectedPath);
+                
+                if (m_currentPage == Page::Board) {
+                    if (!boardSelectedPaths.empty()) {
+                        m_taggingModal.Show(boardSelectedPaths);
+                    }
+                } else {
+                    if (!selectedPath.empty() && ImageLoader::IsSupported(selectedPath)) {
+                        m_taggingModal.Show(selectedPath);
+                    }
                 }
             }
             break;
@@ -1193,6 +1294,93 @@ void App::OnFileDrop(std::vector<std::wstring> files) {
 void App::OnMouseLeave() {
     if (m_currentPage == Page::Viewer) {
         m_thumbnailStrip.HandleMouseLeave();
+    }
+}
+
+PointF App::GetRadialButtonCenter(int idx, float progress) {
+    float startAngle = 0.0f; // 0 degrees
+    float stepAngle = 3.14159265f / 6.0f; // 30 degrees (pi / 6)
+    float angle = startAngle + idx * stepAngle;
+    
+    // Distance from the hub center (50, 50)
+    float distance = 95.0f * progress;
+    
+    float x = 50.0f + distance * cos(angle);
+    float y = 50.0f + distance * sin(angle);
+    return PointF{ x, y };
+}
+
+void App::DrawRadialMenu() {
+    if (m_radialMenuProgress <= 0.0f) return;
+
+    PointF hubCenter(50.0f, 50.0f);
+    float progress = m_radialMenuProgress;
+
+    // Draw connection lines to each active button center
+    for (int i = 0; i < 4; ++i) {
+        PointF btnCenter = GetRadialButtonCenter(i, progress);
+        Color lineCol = (m_radialMenuHoveredIdx == i) 
+            ? Color::FromHex(0x00ffff, 0.4f * progress) 
+            : Color::FromHex(0x00ff88, 0.2f * progress);
+        m_renderer.DrawLine(hubCenter, btnCenter, lineCol, 1.5f);
+    }
+
+    // Draw Hub
+    // Glowing ring
+    m_renderer.DrawEllipse(hubCenter, 40.0f, 40.0f, Color::FromHex(0x00ffff, 0.3f * progress), 2.0f);
+    // Inner fill
+    m_renderer.FillEllipse(hubCenter, 36.0f, 36.0f, Color::FromRGBA(15, 20, 25, static_cast<uint8_t>(220.0f * progress)));
+    // Border ring
+    m_renderer.DrawEllipse(hubCenter, 36.0f, 36.0f, Color::FromHex(0x00ff88, 0.6f * progress), 1.0f);
+    // Hub Label
+    m_renderer.DrawText(L"KV", RectF::FromXYWH(10.0f, 10.0f, 80.0f, 80.0f), Color::FromHex(0x00ffff, 0.8f * progress), 14.0f, TextAlign::Center, TextVAlign::Center);
+
+    // Draw Buttons
+    const wchar_t* labels[] = { L"VIS", L"LIB", L"WAT", L"BRD" };
+    Page pages[] = { Page::Viewer, Page::Library, Page::Waterfall, Page::Board };
+
+    for (int i = 0; i < 4; ++i) {
+        PointF btnCenter = GetRadialButtonCenter(i, progress);
+        bool hovered = (m_radialMenuHoveredIdx == i);
+        bool isActive = (m_currentPage == pages[i]);
+
+        Color ringColor;
+        Color fillColor;
+        Color textColor;
+
+        if (hovered) {
+            ringColor = Color::FromHex(0x00ffff, 0.9f * progress);
+            fillColor = Color::FromHex(0x00ffff, 0.25f * progress);
+            textColor = Color::White(0.95f * progress);
+        } else if (isActive) {
+            ringColor = Color::FromHex(0x00ff88, 0.7f * progress);
+            fillColor = Color::FromHex(0x00ff88, 0.15f * progress);
+            textColor = Color::FromHex(0x00ff88, 0.9f * progress);
+        } else {
+            ringColor = Color::White(0.3f * progress);
+            fillColor = Color::FromRGBA(10, 10, 10, static_cast<uint8_t>(180.0f * progress));
+            textColor = Color::White(0.6f * progress);
+        }
+
+        // Fill background
+        m_renderer.FillEllipse(btnCenter, 26.0f, 26.0f, fillColor);
+        // Draw ring
+        m_renderer.DrawEllipse(btnCenter, 26.0f, 26.0f, ringColor, hovered ? 2.0f : 1.0f);
+        // Draw Text
+        RectF textRect = RectF::FromXYWH(btnCenter.x - 26.0f, btnCenter.y - 26.0f, 52.0f, 52.0f);
+        m_renderer.DrawText(labels[i], textRect, textColor, 11.0f, TextAlign::Center, TextVAlign::Center);
+    }
+
+    // Draw Tooltip / Label
+    if (m_radialMenuHoveredIdx != -1) {
+        const wchar_t* modeNames[] = {
+            L"Viewer Mode (num1)",
+            L"Library Mode (num2)",
+            L"Waterfall Mode (num3)",
+            L"Board Mode (num4)"
+        };
+        RectF tooltipRect = RectF::FromXYWH(15.0f, 155.0f, 220.0f, 25.0f);
+        m_renderer.DrawText(modeNames[m_radialMenuHoveredIdx], tooltipRect, Color::FromHex(0x00ffff, 0.9f * progress), 12.0f, TextAlign::Left, TextVAlign::Center);
     }
 }
 

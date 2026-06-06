@@ -199,13 +199,13 @@ void LibraryPage::DrawFoldersList(Renderer& renderer, const RectF& rect) {
         bool isHovered = (i == m_hoveredFolderIdx);
 
         if (isCurrent) {
-            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 160, 0, 40));
-            renderer.DrawRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 160, 0, 150), 1.5f);
+            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 160, 0, 60));
+            renderer.DrawRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 160, 0, 195), 1.5f);
         } else if (isHovered) {
-            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 15));
-            renderer.DrawRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 40), 1.0f);
+            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 25));
+            renderer.DrawRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 52), 1.0f);
         } else {
-            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 5));
+            renderer.FillRoundedRect(itemRect, 6.0f, 6.0f, Color::FromRGBA(255, 255, 255, 10));
         }
 
         RectF thumbRect = RectF::FromXYWH(itemRect.left + 10.0f, itemRect.top + 10.0f, 90.0f, 90.0f);
@@ -222,18 +222,18 @@ void LibraryPage::DrawFoldersList(Renderer& renderer, const RectF& rect) {
 
         if (!thumbnailDrawn) {
             renderer.FillRoundedRect(thumbRect, 4.0f, 4.0f, Color::FromRGBA(50, 50, 50, 180));
-            renderer.DrawText(L"📁", thumbRect, Color::FromRGBA(255, 200, 50, 180), 28.0f, TextAlign::Center, TextVAlign::Center);
+            renderer.DrawText(L"📁", thumbRect, Color::FromRGBA(255, 200, 50, 234), 28.0f, TextAlign::Center, TextVAlign::Center);
         }
 
         float textLeft = thumbRect.right + 15.0f;
         float textWidth = itemRect.right - textLeft - 10.0f;
 
         RectF nameRect = RectF::FromXYWH(textLeft, itemRect.top + 12.0f, textWidth, 24.0f);
-        renderer.DrawText(folder.folderName, nameRect, Color::White(0.9f), 16.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(folder.folderName, nameRect, Color::White(1.0f), 16.0f, TextAlign::Left, TextVAlign::Center);
 
         std::wstring descText = std::format(L"{} images | {}", folder.filePaths.size(), folder.folderPath);
         RectF descRect = RectF::FromXYWH(textLeft, itemRect.top + 38.0f, textWidth, 20.0f);
-        renderer.DrawText(descText, descRect, Color::White(0.45f), 11.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(descText, descRect, Color::White(0.58f), 11.0f, TextAlign::Left, TextVAlign::Center);
 
         float miniThumbY = itemRect.top + 64.0f;
         float miniThumbW = 36.0f;
@@ -250,6 +250,15 @@ void LibraryPage::DrawFoldersList(Renderer& renderer, const RectF& rect) {
                 renderer.FillRect(miniRect, Color::FromRGBA(40, 40, 40, 100));
             }
         }
+
+        // Draw the close button 'x'
+        RectF closeRect = RectF::FromXYWH(itemRect.right - 35.0f, itemRect.top + 10.0f, 25.0f, 25.0f);
+        bool closeHovered = (i == m_hoveredFolderIdx && m_hoveredCloseBtn);
+        Color closeBtnColor = closeHovered ? Color::FromRGBA(220, 50, 50, 200) : Color::FromRGBA(255, 255, 255, 40);
+        Color closeTextColor = closeHovered ? Color::White() : Color::White(0.6f);
+        
+        renderer.FillRoundedRect(closeRect, 4.0f, 4.0f, closeBtnColor);
+        renderer.DrawText(L"×", closeRect, closeTextColor, 16.0f, TextAlign::Center, TextVAlign::Center);
     }
 
     renderer.PopClip();
@@ -512,6 +521,7 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     int newHoveredFolderIdx = -1;
+    bool newHoveredCloseBtn = false;
     int newHoveredPreviewIdx = -1;
 
     if (x < cxp - CENTER_OFFSET) {
@@ -519,6 +529,15 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
         int folderIdx = static_cast<int>((relativeY - 10.0f) / FOLDER_ITEM_HEIGHT);
         if (folderIdx >= 0 && folderIdx < static_cast<int>(m_app->m_folders.size())) {
             newHoveredFolderIdx = folderIdx;
+
+            float top = 10.0f + folderIdx * FOLDER_ITEM_HEIGHT + m_foldersScrollY;
+            float left = 0.0f;
+            float width = cxp - CENTER_OFFSET;
+            RectF itemRect = RectF::FromXYWH(left + 15.0f, top, width - 30.0f, FOLDER_ITEM_HEIGHT - 10.0f);
+            RectF closeRect = RectF::FromXYWH(itemRect.right - 35.0f, itemRect.top + 10.0f, 25.0f, 25.0f);
+            if (closeRect.Contains(x, y)) {
+                newHoveredCloseBtn = true;
+            }
         }
     }
     else if (x > cxp + CENTER_OFFSET && m_app->m_currentFolderIdx >= 0) {
@@ -536,6 +555,11 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 
     if (newHoveredFolderIdx != m_hoveredFolderIdx) {
         m_hoveredFolderIdx = newHoveredFolderIdx;
+        changed = true;
+    }
+
+    if (newHoveredCloseBtn != m_hoveredCloseBtn) {
+        m_hoveredCloseBtn = newHoveredCloseBtn;
         changed = true;
     }
 
@@ -610,7 +634,9 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
             bool isOverFolders = (x < cxp - CENTER_OFFSET);
 
             if (isOverPreviews && m_hoveredPreviewIdx != -1) {
-                AppendMenuW(hMenu, MF_STRING, 10, L"Send to Board Workspace");
+                AppendMenuW(hMenu, MF_STRING, 10, L"Send to Board Workspace (num4)");
+                AppendMenuW(hMenu, MF_STRING, 12, L"Tagging Modal... (T)");
+                AppendMenuW(hMenu, MF_STRING, 13, L"Delete Image (Del)");
                 AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
             } else if (isOverFolders && m_hoveredFolderIdx != -1) {
                 AppendMenuW(hMenu, MF_STRING, 11, L"Remove Folder from List");
@@ -628,21 +654,20 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
             AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
             AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
 
-            AppendMenuW(hMenu, MF_STRING, 1, L"Settings...");
+            AppendMenuW(hMenu, MF_STRING, 1, L"Settings... (O)");
             AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
-            AppendMenuW(hMenu, MF_STRING, 3, L"Exit");
+            AppendMenuW(hMenu, MF_STRING, 3, L"Exit (Esc)");
 
             int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                            pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);
             DestroyMenu(hMenu);
 
             if (selected == 1) {
-                m_app->m_optionsMenu.Show();
+                m_app->OnKeyDown('O', {});
             } else if (selected == 2) {
-                m_app->m_window.ToggleFullscreen();
+                m_app->OnKeyDown(VK_F11, {});
             } else if (selected == 3) {
-                m_app->m_isQuitting = true;
-                m_app->m_window.Close();
+                m_app->OnKeyDown(VK_ESCAPE, {});
             } else if (selected >= 20 && selected <= 25) {
                 m_app->ApplySortMode(selected - 20);
             } else if (selected == 10) {
@@ -673,6 +698,10 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
                     CalculateLayout();
                     m_app->m_window.RequestRedraw();
                 }
+            } else if (selected == 12) {
+                m_app->OnKeyDown('T', {});
+            } else if (selected == 13) {
+                m_app->OnKeyDown(VK_DELETE, {});
             }
         }
         return true;
@@ -731,6 +760,27 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
     }
 
     if (x < cxp - CENTER_OFFSET && m_hoveredFolderIdx != -1) {
+        if (m_hoveredCloseBtn) {
+            bool wasActive = (m_hoveredFolderIdx == m_app->m_currentFolderIdx);
+            m_app->m_libraryData.RemoveFolder(m_hoveredFolderIdx);
+            if (wasActive) {
+                if (m_app->m_currentFolderIdx >= 0) {
+                    SetCurrentFolder(m_app->m_currentFolderIdx);
+                } else {
+                    m_app->m_fileList.clear();
+                    m_app->m_currentIndex = -1;
+                    m_app->m_currentImage = nullptr;
+                    m_app->m_animatedImage = nullptr;
+                    m_app->m_thumbnailStrip.SetFileList({});
+                }
+            }
+            m_hoveredFolderIdx = -1;
+            m_hoveredCloseBtn = false;
+            CalculateLayout();
+            m_app->m_window.RequestRedraw();
+            return true;
+        }
+
         SetCurrentFolder(m_hoveredFolderIdx);
         return true;
     }
@@ -806,7 +856,7 @@ bool LibraryPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModif
 }
 
 bool LibraryPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
-    if (vk == '3') {
+    if (vk == VK_NUMPAD4 || vk == '4') {
         if (m_app->m_currentFolderIdx >= 0 && m_app->m_currentFolderIdx < static_cast<int>(m_app->m_folders.size())) {
             auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
             if (m_hoveredPreviewIdx >= 0 && m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {

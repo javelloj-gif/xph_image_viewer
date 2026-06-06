@@ -23,6 +23,7 @@ public:
 
     void Initialize(App* app);
     void Show(const std::wstring& filePath);
+    void Show(const std::vector<std::wstring>& filePaths);
     void Hide();
     bool IsVisible() const { return m_visible; }
 
@@ -51,6 +52,16 @@ private:
     std::vector<std::wstring> m_availableTags;    // all tags from JSON (left)
     std::vector<std::wstring> m_filteredTags;     // left tags filtered by search
     std::vector<bool> m_selectedAvailableIndices;  // track ctrl multi-selection on the left list
+
+    // Categorized tags
+    std::vector<std::wstring> m_categories; // Order of appearance of categories
+    std::unordered_map<std::wstring, std::wstring> m_tagToCategory; // Tag to category name mapping
+
+    // Multi-image mode state
+    std::vector<std::wstring> m_filePaths;
+    std::vector<std::vector<std::wstring>> m_originalFileTags;
+    std::vector<std::wstring> m_initialCommonTags;
+    bool m_multiImageMode = false;
 
     // Metadata and Rating
     int m_rating = 0;           // 0 to 5 stars

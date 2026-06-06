@@ -64,6 +64,7 @@ private:
     // Selection/Hover state
     int m_hoveredFolderIdx = -1;
     int m_hoveredPreviewIdx = -1;
+    bool m_hoveredCloseBtn = false;
 
     // Hovered full-size preview
     std::wstring m_hoveredOriginalPath;

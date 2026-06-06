@@ -93,6 +93,10 @@ void TaggingModal::Show(const std::wstring& filePath) {
     m_searchText.clear();
     m_manualTagText.clear();
     m_editingTagText.clear();
+    m_multiImageMode = false;
+    m_filePaths.clear();
+    m_originalFileTags.clear();
+    m_initialCommonTags.clear();
 
     // Read tags and extended metadata from the file
     if (m_app) {
@@ -101,6 +105,60 @@ void TaggingModal::Show(const std::wstring& filePath) {
             filePath, m_title, m_creator, m_description, m_rating, m_deviceMake, m_deviceModel
         );
     }
+
+    // Load available tags from folder's xmpTags.json
+    LoadAvailableTags();
+
+    if (m_app) {
+        m_app->m_window.RequestRedraw();
+    }
+}
+
+void TaggingModal::Show(const std::vector<std::wstring>& filePaths) {
+    if (filePaths.empty()) return;
+    if (filePaths.size() == 1) {
+        Show(filePaths[0]);
+        return;
+    }
+
+    m_filePaths = filePaths;
+    m_filePath = filePaths[0]; // For relative path to xmpTags.json
+    m_visible = true;
+    m_currentTab = 0;
+    m_leftScroll = 0.0f;
+    m_rightScroll = 0.0f;
+    m_editingTagIdx = -1;
+    m_activeInputType = 0;
+    m_searchText.clear();
+    m_manualTagText.clear();
+    m_editingTagText.clear();
+    m_multiImageMode = true;
+
+    m_originalFileTags.clear();
+    m_originalFileTags.resize(filePaths.size());
+
+    // Read tags for each file
+    if (m_app) {
+        for (size_t i = 0; i < filePaths.size(); ++i) {
+            m_app->m_tagManager.ReadTags(filePaths[i], m_originalFileTags[i]);
+        }
+    }
+
+    // Compute intersection of all tag lists (common tags)
+    m_imageTags.clear();
+    if (!m_originalFileTags.empty()) {
+        m_imageTags = m_originalFileTags[0];
+        for (size_t i = 1; i < m_originalFileTags.size(); ++i) {
+            std::vector<std::wstring> intersection;
+            for (const auto& tag : m_imageTags) {
+                if (std::find(m_originalFileTags[i].begin(), m_originalFileTags[i].end(), tag) != m_originalFileTags[i].end()) {
+                    intersection.push_back(tag);
+                }
+            }
+            m_imageTags = intersection;
+        }
+    }
+    m_initialCommonTags = m_imageTags;
 
     // Load available tags from folder's xmpTags.json
     LoadAvailableTags();
@@ -121,6 +179,8 @@ bool TaggingModal::LoadAvailableTags() {
     m_availableTags.clear();
     m_filteredTags.clear();
     m_selectedAvailableIndices.clear();
+    m_categories.clear();
+    m_tagToCategory.clear();
 
     if (m_filePath.empty()) return false;
 
@@ -145,37 +205,89 @@ bool TaggingModal::LoadAvailableTags() {
         return false;
     }
 
-    int arrayDepth = 0;
-    size_t i = 0;
-    while (i < wcontent.size()) {
-        wchar_t ch = wcontent[i];
-        if (ch == L'[') {
-            arrayDepth++;
-            i++;
-        } else if (ch == L']') {
-            if (arrayDepth > 0) arrayDepth--;
-            i++;
-        } else if (ch == L'"') {
-            std::wstring str = L"";
-            i++; // skip open quote
-            while (i < wcontent.size() && wcontent[i] != L'"') {
-                if (wcontent[i] == L'\\' && i + 1 < wcontent.size()) {
-                    str += wcontent[i + 1];
-                    i += 2;
-                } else {
-                    str += wcontent[i];
-                    i++;
-                }
-            }
-            if (i < wcontent.size()) i++; // skip close quote
+    size_t firstCharPos = wcontent.find_first_not_of(L" \t\r\n");
+    if (firstCharPos == std::wstring::npos) return false;
+    wchar_t startChar = wcontent[firstCharPos];
 
-            if (arrayDepth > 0 && !str.empty()) {
-                if (std::find(m_availableTags.begin(), m_availableTags.end(), str) == m_availableTags.end()) {
-                    m_availableTags.push_back(str);
+    if (startChar == L'{') {
+        // Categorized JSON: {"personajes": ["tag1", "tag2"], "lugares": ["tag3"]}
+        size_t i = firstCharPos + 1;
+        std::wstring currentKey = L"";
+        bool inArray = false;
+
+        while (i < wcontent.size()) {
+            wchar_t ch = wcontent[i];
+            if (ch == L'"') {
+                std::wstring str = L"";
+                i++; // skip open quote
+                while (i < wcontent.size() && wcontent[i] != L'"') {
+                    if (wcontent[i] == L'\\' && i + 1 < wcontent.size()) {
+                        str += wcontent[i + 1];
+                        i += 2;
+                    } else {
+                        str += wcontent[i];
+                        i++;
+                    }
                 }
+                if (i < wcontent.size()) i++; // skip close quote
+
+                if (!inArray) {
+                    currentKey = str;
+                    if (!currentKey.empty() && std::find(m_categories.begin(), m_categories.end(), currentKey) == m_categories.end()) {
+                        m_categories.push_back(currentKey);
+                    }
+                } else {
+                    if (!str.empty()) {
+                        if (std::find(m_availableTags.begin(), m_availableTags.end(), str) == m_availableTags.end()) {
+                            m_availableTags.push_back(str);
+                        }
+                        m_tagToCategory[str] = currentKey;
+                    }
+                }
+            } else if (ch == L'[') {
+                inArray = true;
+                i++;
+            } else if (ch == L']') {
+                inArray = false;
+                i++;
+            } else {
+                i++;
             }
-        } else {
-            i++;
+        }
+    } else {
+        // Flat JSON list: ["tag1", "tag2"]
+        int arrayDepth = 0;
+        size_t i = firstCharPos;
+        while (i < wcontent.size()) {
+            wchar_t ch = wcontent[i];
+            if (ch == L'[') {
+                arrayDepth++;
+                i++;
+            } else if (ch == L']') {
+                if (arrayDepth > 0) arrayDepth--;
+                i++;
+            } else if (ch == L'"') {
+                std::wstring str = L"";
+                i++; // skip open quote
+                while (i < wcontent.size() && wcontent[i] != L'"') {
+                    if (wcontent[i] == L'\\' && i + 1 < wcontent.size()) {
+                        str += wcontent[i + 1];
+                        i += 2;
+                    } else {
+                        str += wcontent[i];
+                        i++;
+                    }
+                }
+                if (i < wcontent.size()) i++; // skip close quote
+
+                if (arrayDepth > 0 && !str.empty()) {
+                    if (std::find(m_availableTags.begin(), m_availableTags.end(), str) == m_availableTags.end()) {
+                        m_availableTags.push_back(str);
+                    }
+                }
+            } else {
+                i++;
+            }
         }
     }
 
@@ -188,9 +300,54 @@ bool TaggingModal::LoadAvailableTags() {
 
 void TaggingModal::SaveChanges() {
     if (m_app) {
-        m_app->m_tagManager.WriteMetadataExtended(
-            m_filePath, m_imageTags, m_title, m_creator, m_description, m_rating
-        );
+        if (m_multiImageMode) {
+            // Find added and removed tags relative to initial common tags
+            std::vector<std::wstring> addedTags;
+            std::vector<std::wstring> removedTags;
+
+            for (const auto& tag : m_imageTags) {
+                if (std::find(m_initialCommonTags.begin(), m_initialCommonTags.end(), tag) == m_initialCommonTags.end()) {
+                    addedTags.push_back(tag);
+                }
+            }
+
+            for (const auto& tag : m_initialCommonTags) {
+                if (std::find(m_imageTags.begin(), m_imageTags.end(), tag) == m_imageTags.end()) {
+                    removedTags.push_back(tag);
+                }
+            }
+
+            // Apply differences to each file
+            for (size_t i = 0; i < m_filePaths.size(); ++i) {
+                std::vector<std::wstring> currentTags = m_originalFileTags[i];
+
+                // Remove tags
+                for (const auto& rTag : removedTags) {
+                    auto it = std::find_if(currentTags.begin(), currentTags.end(), [&](const std::wstring& s) {
+                        return _wcsicmp(s.c_str(), rTag.c_str()) == 0;
+                    });
+                    if (it != currentTags.end()) {
+                        currentTags.erase(it);
+                    }
+                }
+
+                // Add tags (if not present)
+                for (const auto& aTag : addedTags) {
+                    auto it = std::find_if(currentTags.begin(), currentTags.end(), [&](const std::wstring& s) {
+                        return _wcsicmp(s.c_str(), aTag.c_str()) == 0;
+                    });
+                    if (it == currentTags.end()) {
+                        currentTags.push_back(aTag);
+                    }
+                }
+
+                m_app->m_tagManager.WriteTags(m_filePaths[i], currentTags);
+            }
+        } else {
+            m_app->m_tagManager.WriteMetadataExtended(
+                m_filePath, m_imageTags, m_title, m_creator, m_description, m_rating
+            );
+        }
     }
     Hide();
 }
@@ -225,28 +382,106 @@ void TaggingModal::GetScrollLimits(float& leftTotalH, float& leftMaxScroll, floa
         float spacingX = 6.0f;
         float spacingY = 6.0f;
 
-        for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
-            std::wstring tagStr = m_filteredTags[i];
-            if (tagStr.length() > 30) {
-                tagStr = tagStr.substr(0, 27) + L"...";
-            }
-            float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
-            float pillW = textW + 22.0f;
+        if (!m_categories.empty()) {
+            std::unordered_map<std::wstring, std::vector<size_t>> categoryToTagIndices;
+            std::vector<size_t> uncategorizedIndices;
 
-            if (availX + pillW > listRect.right - 8.0f) {
+            for (size_t idx = 0; idx < m_filteredTags.size(); ++idx) {
+                const auto& tag = m_filteredTags[idx];
+                auto catIt = m_tagToCategory.find(tag);
+                if (catIt != m_tagToCategory.end() && !catIt->second.empty()) {
+                    categoryToTagIndices[catIt->second].push_back(idx);
+                } else {
+                    uncategorizedIndices.push_back(idx);
+                }
+            }
+
+            for (const auto& catName : m_categories) {
+                auto tagIt = categoryToTagIndices.find(catName);
+                if (tagIt == categoryToTagIndices.end() || tagIt->second.empty()) {
+                    continue;
+                }
+
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + spacingY;
+                }
+
+                availY += 24.0f + spacingY;
                 availX = listRect.left + 8.0f;
+
+                for (size_t idx : tagIt->second) {
+                    std::wstring tagStr = m_filteredTags[idx];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + spacingY;
+                    }
+                    availX += pillW + spacingX;
+                }
+
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + spacingY;
+                }
+            }
+
+            if (!uncategorizedIndices.empty()) {
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + spacingY;
+                }
+
+                availY += 24.0f + spacingY;
+                availX = listRect.left + 8.0f;
+
+                for (size_t idx : uncategorizedIndices) {
+                    std::wstring tagStr = m_filteredTags[idx];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
+                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + spacingY;
+                    }
+                    availX += pillW + spacingX;
+                }
+
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + spacingY;
+                }
+            }
+        } else {
+            for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                std::wstring tagStr = m_filteredTags[i];
+                if (tagStr.length() > 30) {
+                    tagStr = tagStr.substr(0, 27) + L"...";
+                }
+                float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                float pillW = textW + 22.0f;
+
+                if (availX + pillW > listRect.right - 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + spacingY;
+                }
+                availX += pillW + spacingX;
+            }
+            if (!m_filteredTags.empty()) {
                 availY += availH + spacingY;
             }
-            availX += pillW + spacingX;
         }
 
-        if (m_filteredTags.empty()) {
-            leftTotalH = 0.0f;
-            leftMaxScroll = 0.0f;
-        } else {
-            leftTotalH = (availY + availH) - listRect.top;
-            leftMaxScroll = std::max(0.0f, leftTotalH - listRect.Height());
-        }
+        leftTotalH = availY - listRect.top;
+        leftMaxScroll = std::max(0.0f, leftTotalH - listRect.Height());
     }
 
     // Right scroll limits
@@ -308,11 +543,20 @@ void TaggingModal::Draw(Renderer& renderer) {
     renderer.FillRoundedRect(bounds, 8.0f, 8.0f, panelBg);
     renderer.DrawRoundedRect(bounds, 8.0f, 8.0f, panelBorder, 1.5f);
 
-    // 3. Draw Title (Filename)
-    std::wstring filename = std::filesystem::path(m_filePath).filename().wstring();
+    // 3. Draw Title (Filename or Multi-Image Title)
+    std::wstring dialogTitle;
+    if (m_multiImageMode) {
+        dialogTitle = _(L"Etiquetado Múltiple ({} imágenes)");
+        size_t placeholder = dialogTitle.find(L"{}");
+        if (placeholder != std::wstring::npos) {
+            dialogTitle.replace(placeholder, 2, std::to_wstring(m_filePaths.size()));
+        }
+    } else {
+        dialogTitle = std::filesystem::path(m_filePath).filename().wstring();
+    }
     RectF titleRect = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 20.0f, bounds.Width() - 60.0f, 30.0f);
     renderer.DrawText(
-        filename,
+        dialogTitle,
         titleRect,
         Color::White(),
         22.0f,
@@ -333,7 +577,14 @@ void TaggingModal::Draw(Renderer& renderer) {
 
         bool active = (m_currentTab == i);
         bool hovered = (m_hoveredTabIdx == i);
-        Color textColor = active ? Color::White() : (hovered ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(160, 160, 160));
+        bool disabled = (i == 1 && m_multiImageMode);
+
+        Color textColor;
+        if (disabled) {
+            textColor = Color::FromRGBA(80, 80, 80);
+        } else {
+            textColor = active ? Color::White() : (hovered ? Color::FromRGBA(0, 240, 255) : Color::FromRGBA(160, 160, 160));
+        }
 
         renderer.DrawText(label, tabRect, textColor, 17.0f, TextAlign::Center, TextVAlign::Center);
         if (active) {
@@ -426,7 +677,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
             }
         }
 
-        // 2. Scrollable List of Available Tags (Pills wrapped)
+        // 2. Scrollable List of Available Tags (Pills wrapped, categorized)
         RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
         renderer.FillRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(20, 20, 25, 150));
         renderer.DrawRoundedRect(listRect, 4.0f, 4.0f, Color::FromRGBA(255, 255, 255, 15), 1.0f);
@@ -439,38 +690,181 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
         float availSpacingX = 6.0f;
         float availSpacingY = 6.0f;
 
-        for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
-            std::wstring tagStr = m_filteredTags[i];
-            if (tagStr.length() > 30) {
-                tagStr = tagStr.substr(0, 27) + L"...";
+        if (!m_categories.empty()) {
+            std::unordered_map<std::wstring, std::vector<size_t>> categoryToTagIndices;
+            std::vector<size_t> uncategorizedIndices;
+
+            for (size_t idx = 0; idx < m_filteredTags.size(); ++idx) {
+                const auto& tag = m_filteredTags[idx];
+                auto catIt = m_tagToCategory.find(tag);
+                if (catIt != m_tagToCategory.end() && !catIt->second.empty()) {
+                    categoryToTagIndices[catIt->second].push_back(idx);
+                } else {
+                    uncategorizedIndices.push_back(idx);
+                }
             }
 
-            float textW = renderer.MeasureText(tagStr, 14.0f).x;
-            float pillW = textW + 22.0f; // no close 'x', only 11px padding on each side
+            for (const auto& catName : m_categories) {
+                auto tagIt = categoryToTagIndices.find(catName);
+                if (tagIt == categoryToTagIndices.end() || tagIt->second.empty()) {
+                    continue;
+                }
 
-            if (availX + pillW > listRect.right - 8.0f) {
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + availSpacingY;
+                }
+
+                // Render Header
+                RectF headerRect = RectF::FromXYWH(listRect.left + 8.0f, availY + 4.0f, listRect.Width() - 16.0f, 20.0f);
+                if (headerRect.bottom > listRect.top && headerRect.top < listRect.bottom) {
+                    renderer.DrawText(
+                        catName,
+                        headerRect,
+                        Color::FromRGBA(0, 240, 255, 180),
+                        14.0f,
+                        TextAlign::Left,
+                        TextVAlign::Center
+                    );
+                }
+                availY += 24.0f + availSpacingY;
                 availX = listRect.left + 8.0f;
-                availY += availH + availSpacingY;
+
+                for (size_t idx : tagIt->second) {
+                    std::wstring tagStr = m_filteredTags[idx];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
+
+                    float textW = renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
+
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + availSpacingY;
+                    }
+
+                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+
+                    if (pillRect.bottom > listRect.top && pillRect.top < listRect.bottom) {
+                        bool selected = m_selectedAvailableIndices[idx];
+                        bool hovered = (m_hoveredAvailableIdx == idx);
+
+                        Color pillBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10));
+                        Color pillBorder = selected ? Color::FromRGBA(0, 240, 255, 150) : (hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20));
+
+                        renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
+                        renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+
+                        Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
+                        RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
+                        renderer.DrawText(tagStr, textRect, textColor, 14.0f, TextAlign::Left, TextVAlign::Center);
+                    }
+
+                    availX += pillW + availSpacingX;
+                }
+
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + availSpacingY;
+                }
             }
 
-            RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+            if (!uncategorizedIndices.empty()) {
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + availSpacingY;
+                }
 
-            if (pillRect.bottom > listRect.top && pillRect.top < listRect.bottom) {
-                bool selected = m_selectedAvailableIndices[i];
-                bool hovered = (m_hoveredAvailableIdx == i);
+                // Render Header
+                RectF headerRect = RectF::FromXYWH(listRect.left + 8.0f, availY + 4.0f, listRect.Width() - 16.0f, 20.0f);
+                if (headerRect.bottom > listRect.top && headerRect.top < listRect.bottom) {
+                    renderer.DrawText(
+                        _(L"Otros"),
+                        headerRect,
+                        Color::FromRGBA(0, 240, 255, 180),
+                        14.0f,
+                        TextAlign::Left,
+                        TextVAlign::Center
+                    );
+                }
+                availY += 24.0f + availSpacingY;
+                availX = listRect.left + 8.0f;
 
-                Color pillBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10));
-                Color pillBorder = selected ? Color::FromRGBA(0, 240, 255, 150) : (hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20));
+                for (size_t idx : uncategorizedIndices) {
+                    std::wstring tagStr = m_filteredTags[idx];
+                    if (tagStr.length() > 30) {
+                        tagStr = tagStr.substr(0, 27) + L"...";
+                    }
 
-                renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
-                renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+                    float textW = renderer.MeasureText(tagStr, 14.0f).x;
+                    float pillW = textW + 22.0f;
 
-                Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
-                RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
-                renderer.DrawText(tagStr, textRect, textColor, 14.0f, TextAlign::Left, TextVAlign::Center);
+                    if (availX + pillW > listRect.right - 8.0f) {
+                        availX = listRect.left + 8.0f;
+                        availY += availH + availSpacingY;
+                    }
+
+                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+
+                    if (pillRect.bottom > listRect.top && pillRect.top < listRect.bottom) {
+                        bool selected = m_selectedAvailableIndices[idx];
+                        bool hovered = (m_hoveredAvailableIdx == idx);
+
+                        Color pillBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10));
+                        Color pillBorder = selected ? Color::FromRGBA(0, 240, 255, 150) : (hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20));
+
+                        renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
+                        renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+
+                        Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
+                        RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
+                        renderer.DrawText(tagStr, textRect, textColor, 14.0f, TextAlign::Left, TextVAlign::Center);
+                    }
+
+                    availX += pillW + availSpacingX;
+                }
+
+                if (availX > listRect.left + 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + availSpacingY;
+                }
             }
+        } else {
+            // Flat list
+            for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                std::wstring tagStr = m_filteredTags[i];
+                if (tagStr.length() > 30) {
+                    tagStr = tagStr.substr(0, 27) + L"...";
+                }
 
-            availX += pillW + availSpacingX;
+                float textW = renderer.MeasureText(tagStr, 14.0f).x;
+                float pillW = textW + 22.0f;
+
+                if (availX + pillW > listRect.right - 8.0f) {
+                    availX = listRect.left + 8.0f;
+                    availY += availH + availSpacingY;
+                }
+
+                RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+
+                if (pillRect.bottom > listRect.top && pillRect.top < listRect.bottom) {
+                    bool selected = m_selectedAvailableIndices[i];
+                    bool hovered = (m_hoveredAvailableIdx == i);
+
+                    Color pillBg = selected ? Color::FromRGBA(0, 240, 255, 50) : (hovered ? Color::FromRGBA(255, 255, 255, 15) : Color::FromRGBA(255, 255, 255, 10));
+                    Color pillBorder = selected ? Color::FromRGBA(0, 240, 255, 150) : (hovered ? Color::FromRGBA(255, 255, 255, 35) : Color::FromRGBA(255, 255, 255, 20));
+
+                    renderer.FillRoundedRect(pillRect, 4.0f, 4.0f, pillBg);
+                    renderer.DrawRoundedRect(pillRect, 4.0f, 4.0f, pillBorder, 1.0f);
+
+                    Color textColor = selected ? Color::FromRGBA(0, 240, 255) : Color::White(0.9f);
+                    RectF textRect = RectF::FromXYWH(pillRect.left + 11.0f, pillRect.top, textW, pillRect.Height());
+                    renderer.DrawText(tagStr, textRect, textColor, 14.0f, TextAlign::Left, TextVAlign::Center);
+                }
+
+                availX += pillW + availSpacingX;
+            }
         }
 
         renderer.PopClip();
@@ -615,23 +1009,30 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
     }
 
     // --- BOTTOM PANE: STAR RATING ---
-    float startX = hasAvailable ? leftPane.left : rightPane.left;
-    RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
-    renderer.DrawText(_(L"Clasificación") + L":", starsTextRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Center);
+    RectF bounds = GetBounds();
+    if (m_multiImageMode) {
+        float startX = hasAvailable ? leftPane.left : rightPane.left;
+        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, bounds.Width() - 60.0f, 30.0f);
+        renderer.DrawText(_(L"Clasificación: No disponible en modo múltiple"), starsTextRect, Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
+    } else {
+        float startX = hasAvailable ? leftPane.left : rightPane.left;
+        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+        renderer.DrawText(_(L"Clasificación") + L":", starsTextRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Center);
 
-    float starX = starsTextRect.right + 12.0f;
-    float starY = starsTextRect.top;
-    float starW = 28.0f;
+        float starX = starsTextRect.right + 12.0f;
+        float starY = starsTextRect.top;
+        float starW = 28.0f;
 
-    for (int i = 1; i <= 5; ++i) {
-        RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
-        bool filled = (m_hoveredStars > 0) ? (i <= m_hoveredStars) : (i <= m_rating);
+        for (int i = 1; i <= 5; ++i) {
+            RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
+            bool filled = (m_hoveredStars > 0) ? (i <= m_hoveredStars) : (i <= m_rating);
 
-        Color starColor = filled ? Color::FromRGBA(255, 185, 0) : Color::FromRGBA(80, 80, 80);
-        std::wstring starChar = filled ? L"★" : L"☆";
-        renderer.DrawText(starChar, starRect, starColor, 22.0f, TextAlign::Center, TextVAlign::Center);
+            Color starColor = filled ? Color::FromRGBA(255, 185, 0) : Color::FromRGBA(80, 80, 80);
+            std::wstring starChar = filled ? L"★" : L"☆";
+            renderer.DrawText(starChar, starRect, starColor, 22.0f, TextAlign::Center, TextVAlign::Center);
 
-        starX += starW + 2.0f;
+            starX += starW + 2.0f;
+        }
     }
 }
 
@@ -748,8 +1149,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     RectF bounds = GetBounds();
 
     if (m_leftScrollCaptured) {
-        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 435.0f, bounds.Height() - 185.0f);
-        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 45.0f, leftPane.Width(), leftPane.Height() - 45.0f);
+        RectF leftPane = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 105.0f, 456.0f, bounds.Height() - 195.0f);
+        RectF listRect = RectF::FromXYWH(leftPane.left, leftPane.top + 46.0f, leftPane.Width(), leftPane.Height() - 46.0f);
         float leftTotalH = 0.0f, maxScroll = 0.0f;
         float gridTotalH = 0.0f, maxRightScroll = 0.0f;
         GetScrollLimits(leftTotalH, maxScroll, gridTotalH, maxRightScroll);
@@ -769,8 +1170,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     if (m_rightScrollCaptured) {
-        RectF rightPane = RectF::FromXYWH(bounds.left + 569.0f, bounds.top + 105.0f, 505.0f, bounds.Height() - 185.0f);
-        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 45.0f, rightPane.Width(), rightPane.Height() - 45.0f);
+        RectF rightPane = RectF::FromXYWH(bounds.left + 594.0f, bounds.top + 105.0f, 528.0f, bounds.Height() - 195.0f);
+        RectF gridRect = RectF::FromXYWH(rightPane.left, rightPane.top + 46.0f, rightPane.Width(), rightPane.Height() - 46.0f);
         float leftTotalH = 0.0f, maxScroll = 0.0f;
         float gridTotalH = 0.0f, maxRightScroll = 0.0f;
         GetScrollLimits(leftTotalH, maxScroll, gridTotalH, maxRightScroll);
@@ -802,6 +1203,9 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     for (int i = 0; i < 2; ++i) {
         RectF tabRect = RectF::FromXYWH(tabX, tabY, 100.0f, tabH);
         if (tabRect.Contains(x, y)) {
+            if (i == 1 && m_multiImageMode) {
+                break;
+            }
             m_hoveredTabIdx = i;
             if (m_app) m_app->m_window.RequestRedraw();
             return true;
@@ -810,8 +1214,8 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     // Save & Cancel buttons
-    RectF cancelRect = RectF::FromXYWH(bounds.right - 140.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
-    RectF saveRect = RectF::FromXYWH(bounds.right - 260.0f, bounds.bottom - 50.0f, 110.0f, 30.0f);
+    RectF cancelRect = RectF::FromXYWH(bounds.right - 150.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
+    RectF saveRect = RectF::FromXYWH(bounds.right - 285.0f, bounds.bottom - 52.0f, 120.0f, 32.0f);
 
     if (saveRect.Contains(x, y)) {
         m_hoveredButton = 1;
@@ -864,27 +1268,114 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
                 float spacingX = 6.0f;
                 float spacingY = 6.0f;
 
-                for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
-                    std::wstring tagStr = m_filteredTags[i];
-                    if (tagStr.length() > 30) {
-                        tagStr = tagStr.substr(0, 27) + L"...";
-                    }
-                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
-                    float pillW = textW + 22.0f;
+                if (!m_categories.empty()) {
+                    std::unordered_map<std::wstring, std::vector<size_t>> categoryToTagIndices;
+                    std::vector<size_t> uncategorizedIndices;
 
-                    if (availX + pillW > listRect.right - 8.0f) {
+                    for (size_t idx = 0; idx < m_filteredTags.size(); ++idx) {
+                        const auto& tag = m_filteredTags[idx];
+                        auto catIt = m_tagToCategory.find(tag);
+                        if (catIt != m_tagToCategory.end() && !catIt->second.empty()) {
+                            categoryToTagIndices[catIt->second].push_back(idx);
+                        } else {
+                            uncategorizedIndices.push_back(idx);
+                        }
+                    }
+
+                    auto processIdx = [&](size_t idx) -> bool {
+                        std::wstring tagStr = m_filteredTags[idx];
+                        if (tagStr.length() > 30) {
+                            tagStr = tagStr.substr(0, 27) + L"...";
+                        }
+                        float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                        float pillW = textW + 22.0f;
+
+                        if (availX + pillW > listRect.right - 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                        if (pillRect.Contains(x, y)) {
+                            m_hoveredAvailableIdx = static_cast<int>(idx);
+                            return true;
+                        }
+
+                        availX += pillW + spacingX;
+                        return false;
+                    };
+
+                    for (const auto& catName : m_categories) {
+                        auto tagIt = categoryToTagIndices.find(catName);
+                        if (tagIt == categoryToTagIndices.end() || tagIt->second.empty()) {
+                            continue;
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        availY += 24.0f + spacingY;
                         availX = listRect.left + 8.0f;
-                        availY += availH + spacingY;
+
+                        for (size_t idx : tagIt->second) {
+                            if (processIdx(idx)) {
+                                if (m_app) m_app->m_window.RequestRedraw();
+                                return true;
+                            }
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
                     }
 
-                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
-                    if (pillRect.Contains(x, y)) {
-                        m_hoveredAvailableIdx = i;
-                        if (m_app) m_app->m_window.RequestRedraw();
-                        return true;
-                    }
+                    if (!uncategorizedIndices.empty()) {
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
 
-                    availX += pillW + spacingX;
+                        availY += 24.0f + spacingY;
+                        availX = listRect.left + 8.0f;
+
+                        for (size_t idx : uncategorizedIndices) {
+                            if (processIdx(idx)) {
+                                if (m_app) m_app->m_window.RequestRedraw();
+                                return true;
+                            }
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                        std::wstring tagStr = m_filteredTags[i];
+                        if (tagStr.length() > 30) {
+                            tagStr = tagStr.substr(0, 27) + L"...";
+                        }
+                        float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                        float pillW = textW + 22.0f;
+
+                        if (availX + pillW > listRect.right - 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                        if (pillRect.Contains(x, y)) {
+                            m_hoveredAvailableIdx = i;
+                            if (m_app) m_app->m_window.RequestRedraw();
+                            return true;
+                        }
+
+                        availX += pillW + spacingX;
+                    }
                 }
             }
         }
@@ -923,20 +1414,22 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
         }
 
         // Star ratings
-        float startX = hasAvailable ? leftPane.left : rightPane.left;
-        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
-        float starX = starsTextRect.right + 12.0f;
-        float starY = starsTextRect.top;
-        float starW = 28.0f;
+        if (!m_multiImageMode) {
+            float startX = hasAvailable ? leftPane.left : rightPane.left;
+            RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+            float starX = starsTextRect.right + 12.0f;
+            float starY = starsTextRect.top;
+            float starW = 28.0f;
 
-        for (int i = 1; i <= 5; ++i) {
-            RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
-            if (starRect.Contains(x, y)) {
-                m_hoveredStars = i;
-                if (m_app) m_app->m_window.RequestRedraw();
-                return true;
+            for (int i = 1; i <= 5; ++i) {
+                RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
+                if (starRect.Contains(x, y)) {
+                    m_hoveredStars = i;
+                    if (m_app) m_app->m_window.RequestRedraw();
+                    return true;
+                }
+                starX += starW + 2.0f;
             }
-            starX += starW + 2.0f;
         }
     }
 
@@ -1009,6 +1502,9 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
     for (int i = 0; i < 2; ++i) {
         RectF tabRect = RectF::FromXYWH(tabX, tabY, 110.0f, tabH);
         if (tabRect.Contains(x, y)) {
+            if (i == 1 && m_multiImageMode) {
+                return true;
+            }
             m_currentTab = i;
             if (m_app) m_app->m_window.RequestRedraw();
             return true;
@@ -1059,45 +1555,139 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
                 float spacingX = 6.0f;
                 float spacingY = 6.0f;
 
-                for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
-                    std::wstring tagStr = m_filteredTags[i];
-                    if (tagStr.length() > 30) {
-                        tagStr = tagStr.substr(0, 27) + L"...";
-                    }
-                    float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
-                    float pillW = textW + 22.0f;
+                if (!m_categories.empty()) {
+                    std::unordered_map<std::wstring, std::vector<size_t>> categoryToTagIndices;
+                    std::vector<size_t> uncategorizedIndices;
 
-                    if (availX + pillW > listRect.right - 8.0f) {
-                        availX = listRect.left + 8.0f;
-                        availY += availH + spacingY;
-                    }
-
-                    RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
-                    if (pillRect.Contains(x, y)) {
-                        if (mods.ctrl) {
-                            m_selectedAvailableIndices[i] = !m_selectedAvailableIndices[i];
+                    for (size_t idx = 0; idx < m_filteredTags.size(); ++idx) {
+                        const auto& tag = m_filteredTags[idx];
+                        auto catIt = m_tagToCategory.find(tag);
+                        if (catIt != m_tagToCategory.end() && !catIt->second.empty()) {
+                            categoryToTagIndices[catIt->second].push_back(idx);
                         } else {
-                            m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
-                            m_selectedAvailableIndices[i] = true;
+                            uncategorizedIndices.push_back(idx);
+                        }
+                    }
 
-                            // Double click simulation to copy
-                            static double lastClickTime = 0;
-                            static int lastClickIdx = -1;
-                            double now = m_app ? m_app->m_frameTimer.Elapsed() : 0;
-                            if (lastClickIdx == i && now - lastClickTime < 0.3) {
+                    auto processClickIdx = [&](size_t idx) -> bool {
+                        std::wstring tagStr = m_filteredTags[idx];
+                        if (tagStr.length() > 30) {
+                            tagStr = tagStr.substr(0, 27) + L"...";
+                        }
+                        float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                        float pillW = textW + 22.0f;
+
+                        if (availX + pillW > listRect.right - 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                        if (pillRect.Contains(x, y)) {
+                            if (mods.ctrl) {
+                                m_selectedAvailableIndices[idx] = !m_selectedAvailableIndices[idx];
+                            } else {
+                                // Add directly
+                                std::wstring tagToCopy = m_filteredTags[idx];
+                                if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
+                                    m_imageTags.push_back(tagToCopy);
+                                }
+                                m_searchText.clear();
+                                m_filteredTags = m_availableTags;
+                                m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
+                                m_leftScroll = 0.0f;
+                                m_activeInputType = 1;
+                            }
+                            return true;
+                        }
+
+                        availX += pillW + spacingX;
+                        return false;
+                    };
+
+                    for (const auto& catName : m_categories) {
+                        auto tagIt = categoryToTagIndices.find(catName);
+                        if (tagIt == categoryToTagIndices.end() || tagIt->second.empty()) {
+                            continue;
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        availY += 24.0f + spacingY;
+                        availX = listRect.left + 8.0f;
+
+                        for (size_t idx : tagIt->second) {
+                            if (processClickIdx(idx)) {
+                                if (m_app) m_app->m_window.RequestRedraw();
+                                return true;
+                            }
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+                    }
+
+                    if (!uncategorizedIndices.empty()) {
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        availY += 24.0f + spacingY;
+                        availX = listRect.left + 8.0f;
+
+                        for (size_t idx : uncategorizedIndices) {
+                            if (processClickIdx(idx)) {
+                                if (m_app) m_app->m_window.RequestRedraw();
+                                return true;
+                            }
+                        }
+
+                        if (availX > listRect.left + 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+                    }
+                } else {
+                    for (int i = 0; i < static_cast<int>(m_filteredTags.size()); ++i) {
+                        std::wstring tagStr = m_filteredTags[i];
+                        if (tagStr.length() > 30) {
+                            tagStr = tagStr.substr(0, 27) + L"...";
+                        }
+                        float textW = m_app->m_renderer.MeasureText(tagStr, 14.0f).x;
+                        float pillW = textW + 22.0f;
+
+                        if (availX + pillW > listRect.right - 8.0f) {
+                            availX = listRect.left + 8.0f;
+                            availY += availH + spacingY;
+                        }
+
+                        RectF pillRect = RectF::FromXYWH(availX, availY, pillW, availH);
+                        if (pillRect.Contains(x, y)) {
+                            if (mods.ctrl) {
+                                m_selectedAvailableIndices[i] = !m_selectedAvailableIndices[i];
+                            } else {
                                 std::wstring tagToCopy = m_filteredTags[i];
                                 if (std::find(m_imageTags.begin(), m_imageTags.end(), tagToCopy) == m_imageTags.end()) {
                                     m_imageTags.push_back(tagToCopy);
                                 }
+                                m_searchText.clear();
+                                m_filteredTags = m_availableTags;
+                                m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
+                                m_leftScroll = 0.0f;
+                                m_activeInputType = 1;
                             }
-                            lastClickTime = now;
-                            lastClickIdx = i;
+                            if (m_app) m_app->m_window.RequestRedraw();
+                            return true;
                         }
-                        if (m_app) m_app->m_window.RequestRedraw();
-                        return true;
-                    }
 
-                    availX += pillW + spacingX;
+                        availX += pillW + spacingX;
+                    }
                 }
             }
         }
@@ -1114,6 +1704,11 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
                         }
                     }
                 }
+                m_searchText.clear();
+                m_filteredTags = m_availableTags;
+                m_selectedAvailableIndices.assign(m_filteredTags.size(), false);
+                m_leftScroll = 0.0f;
+                m_activeInputType = 1;
                 if (m_app) m_app->m_window.RequestRedraw();
                 return true;
             }
@@ -1136,6 +1731,7 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
                 }
                 m_manualTagText.clear();
             }
+            m_activeInputType = 6; // Keep focus on manual tag input!
             if (m_app) m_app->m_window.RequestRedraw();
             return true;
         }
@@ -1183,20 +1779,22 @@ bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers m
         }
 
         // Star rating clicks
-        float startX = hasAvailable ? leftPane.left : rightPane.left;
-        RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
-        float starX = starsTextRect.right + 12.0f;
-        float starY = starsTextRect.top;
-        float starW = 28.0f;
+        if (!m_multiImageMode) {
+            float startX = hasAvailable ? leftPane.left : rightPane.left;
+            RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
+            float starX = starsTextRect.right + 12.0f;
+            float starY = starsTextRect.top;
+            float starW = 28.0f;
 
-        for (int i = 1; i <= 5; ++i) {
-            RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
-            if (starRect.Contains(x, y)) {
-                m_rating = i;
-                if (m_app) m_app->m_window.RequestRedraw();
-                return true;
+            for (int i = 1; i <= 5; ++i) {
+                RectF starRect = RectF::FromXYWH(starX, starY, starW, 30.0f);
+                if (starRect.Contains(x, y)) {
+                    m_rating = i;
+                    if (m_app) m_app->m_window.RequestRedraw();
+                    return true;
+                }
+                starX += starW + 2.0f;
             }
-            starX += starW + 2.0f;
         }
     } else {
         // --- METADATA TAB CLICKS ---
@@ -1316,7 +1914,7 @@ bool TaggingModal::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 }
                 m_manualTagText.clear();
             }
-            m_activeInputType = 0;
+            m_activeInputType = 6; // Keep focus on manual tag input!
         } else if (m_activeInputType == 3 || m_activeInputType == 4 || m_activeInputType == 5) {
             // Metadata fields: dismiss focus
             m_activeInputType = 0;

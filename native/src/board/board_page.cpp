@@ -13,6 +13,7 @@
 #include <fstream>
 #include <set>
 #include <thread>
+#include <random>
 
 namespace kv {
 
@@ -134,15 +135,21 @@ void BoardPage::Draw(Renderer& renderer) {
 
     RectF selBox = m_selection.GetSelectionBoundingBox(m_items);
     if (selBox.Width() > 0.0f) {
+        size_t selectedCount = 0;
+        for (const auto& item : m_items) {
+            if (item.selected) {
+                selectedCount++;
+            }
+        }
+        Color selectionColor = (selectedCount > 1) ? Color::FromHex(0x00E5FF) : Color::FromHex(0xFF9800);
         RectF selScreenBox = WorldToScreen(selBox);
-        renderer.DrawRect(selScreenBox, Color::FromHex(0xFF9800), 1.0f);
+        renderer.DrawRect(selScreenBox, selectionColor, 1.0f);
 
         float handleSize = 8.0f;
-        Color handleColor = Color::FromHex(0xFF9800);
-        renderer.FillRect(RectF::FromXYWH(selScreenBox.left - handleSize * 0.5f, selScreenBox.top - handleSize * 0.5f, handleSize, handleSize), handleColor);
-        renderer.FillRect(RectF::FromXYWH(selScreenBox.right - handleSize * 0.5f, selScreenBox.top - handleSize * 0.5f, handleSize, handleSize), handleColor);
-        renderer.FillRect(RectF::FromXYWH(selScreenBox.right - handleSize * 0.5f, selScreenBox.bottom - handleSize * 0.5f, handleSize, handleSize), handleColor);
-        renderer.FillRect(RectF::FromXYWH(selScreenBox.left - handleSize * 0.5f, selScreenBox.bottom - handleSize * 0.5f, handleSize, handleSize), handleColor);
+        renderer.FillRect(RectF::FromXYWH(selScreenBox.left - handleSize * 0.5f, selScreenBox.top - handleSize * 0.5f, handleSize, handleSize), selectionColor);
+        renderer.FillRect(RectF::FromXYWH(selScreenBox.right - handleSize * 0.5f, selScreenBox.top - handleSize * 0.5f, handleSize, handleSize), selectionColor);
+        renderer.FillRect(RectF::FromXYWH(selScreenBox.right - handleSize * 0.5f, selScreenBox.bottom - handleSize * 0.5f, handleSize, handleSize), selectionColor);
+        renderer.FillRect(RectF::FromXYWH(selScreenBox.left - handleSize * 0.5f, selScreenBox.bottom - handleSize * 0.5f, handleSize, handleSize), selectionColor);
     }
 
     if (m_selection.m_boxSelecting) {
@@ -165,7 +172,7 @@ void BoardPage::Draw(Renderer& renderer) {
     renderer.DrawRoundedRect(islandRect, 8.0f, 8.0f, Color::FromHex(0xFF9800, 0.5f), 1.0f);
 
     RectF textRect = RectF::FromXYWH(islandX + 15.0f, islandY + 5.0f, islandWidth - 30.0f, islandHeight - 10.0f);
-    renderer.DrawText(L"Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Ctrl+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save", 
+    renderer.DrawText(L"Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Alt+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save", 
                       textRect, Color::White(0.9f), 11.0f, TextAlign::Center, TextVAlign::Center);
 
     DrawSearchModal(renderer);
@@ -385,18 +392,18 @@ bool BoardPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods
         if (clickedIdx != -1) {
             auto& clickedItem = m_items[clickedIdx];
 
-            if (mods.ctrl) {
+            if (mods.alt) {
                 StartLinking(clickedIdx);
                 return true;
             }
 
-            if (!clickedItem.selected) {
-                if (!mods.shift) {
+            if (mods.ctrl || mods.shift) {
+                clickedItem.selected = !clickedItem.selected;
+            } else {
+                if (!clickedItem.selected) {
                     for (auto& item : m_items) item.selected = false;
+                    clickedItem.selected = true;
                 }
-                clickedItem.selected = true;
-            } else if (mods.shift) {
-                clickedItem.selected = false;
             }
 
             m_selection.StartDragging(worldPos, m_items);
@@ -459,17 +466,28 @@ bool BoardPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) 
             HMENU hMenu = CreatePopupMenu();
             if (clickedIdx != -1) {
                 if (m_items[clickedIdx].type == BoardItemType::Link) {
-                    AppendMenuW(hMenu, MF_STRING, 5, L"Delete Link");
+                    AppendMenuW(hMenu, MF_STRING, 5, L"Delete Link (Del)");
                 } else {
-                    AppendMenuW(hMenu, MF_STRING, 1, L"Link this item");
-                    AppendMenuW(hMenu, MF_STRING, 2, L"Delete item");
+                    AppendMenuW(hMenu, MF_STRING, 1, L"Link this item (Alt+Click)");
+                    AppendMenuW(hMenu, MF_STRING, 2, L"Delete item (Del)");
+                    if (m_items[clickedIdx].type == BoardItemType::Image) {
+                        AppendMenuW(hMenu, MF_STRING, 12, L"Tagging Modal... (T)");
+                    }
                 }
-            } else {
-                AppendMenuW(hMenu, MF_STRING, 3, L"Add Note");
-                AppendMenuW(hMenu, MF_STRING, 4, L"Add Node");
                 AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-                AppendMenuW(hMenu, MF_STRING, 6, L"Settings...");
             }
+            
+            AppendMenuW(hMenu, MF_STRING, 3, L"Add Note");
+            AppendMenuW(hMenu, MF_STRING, 4, L"Add Node");
+            AppendMenuW(hMenu, MF_STRING, 8, L"New Board");
+            AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(hMenu, MF_STRING, 9, L"Buscar por tags... (Ctrl+F)");
+            AppendMenuW(hMenu, MF_STRING, 10, L"Escanear tags del directorio (Ctrl+L)");
+            AppendMenuW(hMenu, MF_STRING, 7, L"Listar imágenes de carpeta (Shift+Ctrl+L)");
+            AppendMenuW(hMenu, MF_STRING, 11, L"Save Board (Ctrl+S)");
+            AppendMenuW(hMenu, MF_STRING, 13, L"Deselect All (Esc)");
+            AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+            AppendMenuW(hMenu, MF_STRING, 6, L"Settings... (O)");
 
             int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                           pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);
@@ -492,7 +510,24 @@ bool BoardPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) 
                 m_items[clickedIdx].selected = true;
                 DeleteSelectedItems();
             } else if (selected == 6) {
-                m_app->m_optionsMenu.Show();
+                m_app->OnKeyDown('O', {});
+            } else if (selected == 7) {
+                ListCurrentDirectoryImages();
+            } else if (selected == 8) {
+                m_items.clear();
+                ResetView();
+                m_app->m_window.RequestRedraw();
+            } else if (selected == 9) {
+                OnKeyDown('F', { false, true, false });
+            } else if (selected == 10) {
+                OnKeyDown('L', { false, true, false });
+            } else if (selected == 11) {
+                OnKeyDown('S', { false, true, false });
+            } else if (selected == 12) {
+                m_app->OnKeyDown('T', {});
+            } else if (selected == 13) {
+                for (auto& item : m_items) item.selected = false;
+                m_app->m_window.RequestRedraw();
             }
         }
         return true;
@@ -628,14 +663,18 @@ bool BoardPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
 
     if (vk == 'L' && mods.ctrl) {
         if (!m_editor.IsEditing()) {
-            std::filesystem::path activeDir = GetActiveDirectory();
-            std::filesystem::path jsonPath = activeDir / "xmpTags.json";
-            if (std::filesystem::exists(jsonPath)) {
-                m_toastMessage = L"Tags file already exists";
-                m_toastTimeRemaining = 2.5;
-                m_app->m_window.RequestRedraw();
+            if (mods.shift) {
+                ListCurrentDirectoryImages();
             } else {
-                StartDirectoryTagScan(activeDir);
+                std::filesystem::path activeDir = GetActiveDirectory();
+                std::filesystem::path jsonPath = activeDir / "xmpTags.json";
+                if (std::filesystem::exists(jsonPath)) {
+                    m_toastMessage = L"Tags file already exists";
+                    m_toastTimeRemaining = 2.5;
+                    m_app->m_window.RequestRedraw();
+                } else {
+                    StartDirectoryTagScan(activeDir);
+                }
             }
             return true;
         }
@@ -785,6 +824,8 @@ void BoardPage::LoadItemTexture(BoardItem& item) {
     if (item.texture || item.isLoading || item.loadFailed) return;
     if (item.filePath.empty()) return;
 
+    EvictFarBoardTextures();
+
     item.isLoading = true;
     std::wstring path = item.filePath;
     
@@ -798,6 +839,7 @@ void BoardPage::LoadItemTexture(BoardItem& item) {
                         float aspect = static_cast<float>(img->height) / static_cast<float>(img->width);
                         it.height = it.width * aspect;
                     }
+                    EvictFarBoardTextures();
                 } else {
                     it.loadFailed = true;
                 }
@@ -806,6 +848,173 @@ void BoardPage::LoadItemTexture(BoardItem& item) {
         }
         m_app->m_window.RequestRedraw();
     }, 400, 400);
+}
+
+void BoardPage::ListCurrentDirectoryImages() {
+    std::filesystem::path activeDir = GetActiveDirectory();
+    std::vector<std::filesystem::path> files;
+    try {
+        if (std::filesystem::exists(activeDir) && std::filesystem::is_directory(activeDir)) {
+            for (const auto& entry : std::filesystem::directory_iterator(activeDir)) {
+                if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
+                    std::wstring pathStr = entry.path().wstring();
+                    bool alreadyExists = false;
+                    for (const auto& item : m_items) {
+                        if (item.type == BoardItemType::Image && _wcsicmp(item.filePath.c_str(), pathStr.c_str()) == 0) {
+                            alreadyExists = true;
+                            break;
+                        }
+                    }
+                    if (!alreadyExists) {
+                        files.push_back(entry.path());
+                    }
+                }
+            }
+        }
+    } catch (...) {}
+
+    if (files.empty()) {
+        m_toastMessage = L"No new images found in active folder";
+        m_toastTimeRemaining = 2.0;
+        m_app->m_window.RequestRedraw();
+        return;
+    }
+
+    std::sort(files.begin(), files.end());
+
+    auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
+    PointF worldCenter = ScreenToWorld(screenCenter);
+
+    int columns = 12;
+    float spacingX = 40.0f;
+    float spacingY = 40.0f;
+    float itemW = 400.0f;
+    float itemH = 300.0f;
+
+    int count = static_cast<int>(files.size());
+    int gridCols = std::min(count, columns);
+    int gridRows = (count + columns - 1) / columns;
+
+    float gridWidth = gridCols * itemW + (gridCols - 1) * spacingX;
+    float gridHeight = gridRows * itemH + (gridRows - 1) * spacingY;
+
+    float startX = worldCenter.x - gridWidth * 0.5f;
+    float startY = worldCenter.y - gridHeight * 0.5f;
+
+    float maxY = -1e9f;
+    bool hasExisting = false;
+    for (const auto& item : m_items) {
+        if (item.type != BoardItemType::Link) {
+            RectF r = item.GetWorldRect();
+            if (r.bottom > maxY) {
+                maxY = r.bottom;
+            }
+            hasExisting = true;
+        }
+    }
+    if (hasExisting) {
+        startY = maxY + spacingY;
+    }
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> distOffset(-15.0f, 15.0f);
+    std::uniform_real_distribution<float> distRotation(-2.0f, 2.0f);
+
+    for (int i = 0; i < count; ++i) {
+        int row = i / columns;
+        int col = i % columns;
+
+        float cellLeft = startX + col * (itemW + spacingX);
+        float cellTop = startY + row * (itemH + spacingY);
+        float centerX = cellLeft + itemW * 0.5f + distOffset(gen);
+        float centerY = cellTop + itemH * 0.5f + distOffset(gen);
+
+        BoardItem imgItem;
+        imgItem.type = BoardItemType::Image;
+        imgItem.position = { centerX, centerY };
+        imgItem.rotation = distRotation(gen);
+        imgItem.filePath = files[i].wstring();
+        imgItem.label = files[i].filename().wstring();
+        imgItem.width = itemW;
+        imgItem.height = itemH;
+
+        m_items.push_back(imgItem);
+    }
+
+    EvictFarBoardTextures();
+    m_app->m_window.RequestRedraw();
+}
+
+void BoardPage::EvictFarBoardTextures() {
+    struct LoadedItemRef {
+        size_t index;
+        float distanceSq;
+    };
+
+    auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
+    PointF worldCenter = ScreenToWorld(screenCenter);
+
+    std::vector<LoadedItemRef> loadedItems;
+    for (size_t i = 0; i < m_items.size(); ++i) {
+        auto& item = m_items[i];
+        if (item.type == BoardItemType::Image && item.texture != nullptr) {
+            float dx = item.position.x - worldCenter.x;
+            float dy = item.position.y - worldCenter.y;
+            float distSq = dx * dx + dy * dy;
+            loadedItems.push_back({ i, distSq });
+        }
+    }
+
+    if (loadedItems.size() <= MAX_BOARD_TEXTURES) {
+        return;
+    }
+
+    std::sort(loadedItems.begin(), loadedItems.end(), [](const LoadedItemRef& a, const LoadedItemRef& b) {
+        return a.distanceSq < b.distanceSq;
+    });
+
+    for (size_t i = MAX_BOARD_TEXTURES; i < loadedItems.size(); ++i) {
+        size_t idx = loadedItems[i].index;
+        m_items[idx].texture = nullptr;
+    }
+}
+
+void BoardPage::DeleteItemsByIndices(const std::vector<int>& indicesToDelete) {
+    if (indicesToDelete.empty()) return;
+
+    std::vector<BoardItem> remainingItems;
+    for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
+        if (std::find(indicesToDelete.begin(), indicesToDelete.end(), i) != indicesToDelete.end()) {
+            if (i == m_editor.GetEditingIndex()) m_editor.StopEditing();
+            continue;
+        }
+
+        if (m_items[i].type == BoardItemType::Link) {
+            auto& link = m_items[i];
+            
+            bool fromDeleted = std::find(indicesToDelete.begin(), indicesToDelete.end(), link.fromItemIdx) != indicesToDelete.end();
+            bool toDeleted = std::find(indicesToDelete.begin(), indicesToDelete.end(), link.toItemIdx) != indicesToDelete.end();
+            if (fromDeleted || toDeleted) {
+                continue;
+            }
+
+            int shiftFrom = 0;
+            int shiftTo = 0;
+            for (int delIdx : indicesToDelete) {
+                if (delIdx < link.fromItemIdx) shiftFrom++;
+                if (delIdx < link.toItemIdx) shiftTo++;
+            }
+            link.fromItemIdx -= shiftFrom;
+            link.toItemIdx -= shiftTo;
+        }
+
+        remainingItems.push_back(m_items[i]);
+    }
+
+    m_items = std::move(remainingItems);
 }
 
 void BoardPage::DeleteSelectedItems() {
@@ -818,36 +1027,7 @@ void BoardPage::DeleteSelectedItems() {
 
     if (selectedIndices.empty()) return;
 
-    std::vector<BoardItem> remainingItems;
-    for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
-        if (m_items[i].selected) {
-            if (i == m_editor.GetEditingIndex()) m_editor.StopEditing();
-            continue;
-        }
-
-        if (m_items[i].type == BoardItemType::Link) {
-            auto& link = m_items[i];
-            
-            bool fromDeleted = std::find(selectedIndices.begin(), selectedIndices.end(), link.fromItemIdx) != selectedIndices.end();
-            bool toDeleted = std::find(selectedIndices.begin(), selectedIndices.end(), link.toItemIdx) != selectedIndices.end();
-            if (fromDeleted || toDeleted) {
-                continue;
-            }
-
-            int shiftFrom = 0;
-            int shiftTo = 0;
-            for (int delIdx : selectedIndices) {
-                if (delIdx < link.fromItemIdx) shiftFrom++;
-                if (delIdx < link.toItemIdx) shiftTo++;
-            }
-            link.fromItemIdx -= shiftFrom;
-            link.toItemIdx -= shiftTo;
-        }
-
-        remainingItems.push_back(m_items[i]);
-    }
-
-    m_items = std::move(remainingItems);
+    DeleteItemsByIndices(selectedIndices);
     m_app->m_window.RequestRedraw();
 }
 
@@ -1403,7 +1583,30 @@ void BoardPage::PerformTagQueryAndInsert() {
         }
     } catch (...) {}
     
+    // Prune non-matching images and their connected links
+    std::vector<int> indicesToDelete;
+    for (int i = 0; i < static_cast<int>(m_items.size()); ++i) {
+        auto& item = m_items[i];
+        if (item.type == BoardItemType::Image && !item.filePath.empty()) {
+            bool matches = false;
+            for (const auto& path : matchingFiles) {
+                if (_wcsicmp(item.filePath.c_str(), path.wstring().c_str()) == 0) {
+                    matches = true;
+                    break;
+                }
+            }
+            if (!matches) {
+                indicesToDelete.push_back(i);
+            }
+        }
+    }
+
+    if (!indicesToDelete.empty()) {
+        DeleteItemsByIndices(indicesToDelete);
+    }
+
     if (matchingFiles.empty()) {
+        m_app->m_window.RequestRedraw();
         return;
     }
     
@@ -1425,6 +1628,7 @@ void BoardPage::PerformTagQueryAndInsert() {
     }
     
     if (newFiles.empty()) {
+        m_app->m_window.RequestRedraw();
         return;
     }
     
@@ -1447,19 +1651,40 @@ void BoardPage::PerformTagQueryAndInsert() {
     
     float startX = worldCenter.x - gridWidth * 0.5f;
     float startY = worldCenter.y - gridHeight * 0.5f;
+
+    float maxY = -1e9f;
+    bool hasExisting = false;
+    for (const auto& item : m_items) {
+        if (item.type != BoardItemType::Link) {
+            RectF r = item.GetWorldRect();
+            if (r.bottom > maxY) {
+                maxY = r.bottom;
+            }
+            hasExisting = true;
+        }
+    }
+    if (hasExisting) {
+        startY = maxY + spacingY;
+    }
     
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_real_distribution<float> distOffset(-15.0f, 15.0f);
+    std::uniform_real_distribution<float> distRotation(-2.0f, 2.0f);
+
     for (int i = 0; i < count; ++i) {
         int row = i / columns;
         int col = i % columns;
         
         float cellLeft = startX + col * (itemW + spacingX);
         float cellTop = startY + row * (itemH + spacingY);
-        float centerX = cellLeft + itemW * 0.5f;
-        float centerY = cellTop + itemH * 0.5f;
+        float centerX = cellLeft + itemW * 0.5f + distOffset(gen);
+        float centerY = cellTop + itemH * 0.5f + distOffset(gen);
         
         BoardItem imgItem;
         imgItem.type = BoardItemType::Image;
         imgItem.position = { centerX, centerY };
+        imgItem.rotation = distRotation(gen);
         imgItem.filePath = newFiles[i].wstring();
         imgItem.label = newFiles[i].filename().wstring();
         imgItem.width = itemW;
