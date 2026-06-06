@@ -49,6 +49,9 @@ set(SOURCES
     src/board/board_selection_manager.cpp
     src/board/board_text_editor.cpp
     src/board/board_serializer.cpp
+    src/board/board_search_manager.cpp
+    src/board/board_tag_scanner.cpp
+    src/board/board_layout_helper.cpp
     src/viewer/viewer_page.cpp
     src/waterfall/waterfall_page.cpp
     src/ui/thumbnail_strip.cpp
@@ -86,6 +89,9 @@ set(HEADERS
     src/board/board_selection_manager.h
     src/board/board_text_editor.h
     src/board/board_serializer.h
+    src/board/board_search_manager.h
+    src/board/board_tag_scanner.h
+    src/board/board_layout_helper.h
     src/viewer/viewer_page.h
     src/waterfall/waterfall_page.h
     src/ui/thumbnail_strip.h

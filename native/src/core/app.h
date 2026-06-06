@@ -112,6 +112,9 @@ private:
     friend class ThumbnailStrip;
     friend class LibraryPage;
     friend class BoardPage;
+    friend class BoardSearchManager;
+    friend class BoardTagScanner;
+    friend class BoardLayoutHelper;
     friend class WaterfallPage;
     friend class FolderDataManager;
     friend class Settings;

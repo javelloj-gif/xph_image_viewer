@@ -378,9 +378,6 @@ void ViewerPage::DrawThirds(Renderer& renderer, const RectF& rect) {
 void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
     auto size = renderer.GetTargetSize().ToFloat();
 
-    auto fpsText = std::format(L"FPS: {:.0f} | Opacity: {:.2f} (PageUp / PageDown)", m_app->m_currentFps, m_app->m_settings.window_opacity);
-    renderer.DrawText(fpsText, RectF::FromXYWH(15, 15, 500, 30), Color::FromRGBA(255, 255, 255, 180), 12.0f);
-
     bool isWaterfallModal = (m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal);
     if (m_app->m_settings.show_metadata || isWaterfallModal) {
         auto currentImage = m_app->m_currentImage;

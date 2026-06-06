@@ -1,145 +1,98 @@
-# Plan de Implementación — Opciones de Búsqueda en Board y Limpieza de HUD en Visor
+# Plan de Implementación — Fase 4: Empaquetamiento e Instalador para Windows
 
-Este plan detalla los cambios necesarios para cumplir con los requerimientos previos a la distribución del visor de imágenes **LenteUV**:
-1. **Eliminar el mensaje flotante** de depuración en la esquina superior izquierda del visor (FPS y Opacidad).
-2. **Implementar el comportamiento de Agrupación y Enfoque** por defecto al buscar etiquetas (`CTRL+F`) en el modo Tablero (`BoardPage`), con la posibilidad de alternar al comportamiento original de filtrado mediante un botón toggle en la esquina inferior derecha.
+Este plan detalla el proceso para estructurar el empaquetamiento y la distribución de **LenteUV Image Viewer** en dos formatos para sistemas Windows 10/11:
+1. **Instalador Interactivo (`.exe`):** Creado con **Inno Setup**, que permite la selección de directorio de destino, accesos directos y la integración nativa en el menú contextual de Windows.
+2. **Versión Portable Standalone (`.zip`):** Un archivo comprimido que incluye el ejecutable compilado junto con todos sus assets, traducciones y dependencias, operable directamente sin instalación previa.
+
+Adicionalmente, se automatiza la generación de los recursos gráficos oficiales de la aplicación a partir de su logo vectorial base.
 
 ---
 
 ## User Review Required
 
 > [!IMPORTANT]
-> - **Comportamiento por Defecto:** La búsqueda por etiquetas (`CTRL+F`) en Board ahora agrupará y enfocará las imágenes coincidentes alrededor del centro de la pantalla actual en coordenadas del mundo (`worldCenter`), sin eliminar del lienzo las imágenes que no coincidan.
-> - **Botón Toggle Flotante:** Se añadirá un botón con estilo Cyberpunk en la esquina inferior derecha de la pantalla para alternar de manera síncrona entre "Búsqueda: Agrupar" (predeterminado) y "Búsqueda: Filtrar" (comportamiento original de eliminación).
-> - **Persistencia:** De acuerdo con las preferencias del usuario, este estado se mantendrá únicamente en memoria durante la sesión activa del tablero (inicializándose siempre en "Agrupar" al arrancar).
-> - **Limpieza de HUD:** Se eliminará por completo la cadena flotante de FPS y Opacidad en la parte superior izquierda del visor de imagen única para asegurar una experiencia limpia y libre de ruidos visuales.
+> - **Claves de Registro del Menú Contextual:** La integración clásica se realizará a través de claves en `HKEY_CLASSES_ROOT` (vía `SystemFileAssociations` para no romper otras aplicaciones de visualización predeterminadas) y claves de `Directory` / `Directory\Background` para poder abrir carpetas enteras con un clic derecho en el Explorador de Windows.
+> - **Generación de Icono Multibanda:** Se requiere un script de Python con soporte para `cairosvg` and `Pillow`. Si `cairosvg` requiere librerías nativas de C que no estén presentes, se proveerá un fallback automático que renderizará los PNGs necesarios si se provee una imagen PNG base de alta resolución, o bien utilizará comandos de CLI disponibles en el entorno.
 
 ---
 
 ## Proposed Changes
 
-### 1. Segmento: Visor de Imagen Única (`viewer/`)
+### 1. Recursos Gráficos e Iconografía
 
-#### [MODIFY] [viewer_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/viewer/viewer_page.cpp)
-* **Objetivo:** Eliminar el renderizado del texto flotante en la esquina superior izquierda.
+#### [NEW] [generate_icons.py](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/generate_icons.py)
+* **Objetivo:** Convertir el archivo vectorial [lente_uv.svg](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/lente_uv.svg) en un archivo de ícono estándar de Windows `.ico` con soporte multibanda (`16x16`, `32x32`, `48x48`, `256x256`).
+* **Implementación:**
+  * Script en Python que utiliza `cairosvg` para exportar a PNG de alta resolución.
+  * Utiliza `Pillow` (`PIL.Image`) para reescalar a las resoluciones estándar y empaquetar todo como un único archivo `lenteuv.ico` en `native/src/resources/lenteuv.ico`.
+
+#### [MODIFY] [app.rc](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/resources/app.rc)
+* **Objetivo:** Asociar el nuevo archivo `.ico` generado al identificador del ícono de aplicación principal del ejecutable.
 * **Cambios:**
-  * En el método `ViewerPage::DrawOverlayInfo(Renderer& renderer)` (líneas ~381-382):
-    * Comentar o eliminar la inicialización de `fpsText` y la llamada a `renderer.DrawText()` que renderiza las métricas de FPS y Opacidad.
-    * Conservar intacta la lógica posterior de visualización de metadatos de la imagen (la isla inferior).
+  * Reemplazar la referencia del ícono antiguo `image_viewer.ico` (eliminado) para que apunte al nuevo `lenteuv.ico`.
 
 ---
 
-### 2. Segmento: Tablero Virtual Infinito (`board/`)
+### 2. Automatización del Empaquetamiento Portable
 
-#### [MODIFY] [board_page.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_page.h)
-* **Objetivo:** Declarar las variables de estado y helpers necesarios para el control del toggle de búsqueda.
-* **Cambios:**
-  * Añadir las siguientes variables miembro privadas:
-    ```cpp
-    bool m_searchModeGroup = true;   // true = Agrupar y enfocar (default), false = Filtrar (original)
-    bool m_hoveredToggleBtn = false; // Indica si el puntero está sobre el botón toggle
-    ```
-  * Declarar un método auxiliar privado:
-    ```cpp
-    RectF GetSearchToggleRect(const SizeF& screenSize) const;
-    ```
+#### [NEW] [create_portable_zip.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/create_portable_zip.ps1)
+* **Objetivo:** Recopilar el binario compilado y sus dependencias para la versión portable.
+* **Flujo del script:**
+  * Crear un directorio temporal `lenteuv_portable/`.
+  * Copiar el binario compilado `native/build/bin/Release/lenteuv.exe` a `lenteuv_portable/`.
+  * Copiar el directorio `locales/` (contiene traducciones de localización `.mo`).
+  * Copiar el directorio `resources/` (cursores y otros assets).
+  * Comprimir todo el lote en `lenteuv_portable.zip`.
 
-#### [MODIFY] [board_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/board/board_page.cpp)
-* **Objetivo:** Implementar la UI del botón flotante y el nuevo algoritmo de búsqueda.
-* **Cambios:**
-  * **Inicialización:**
-    * En el constructor o en `BoardPage::Initialize`, inicializar `m_searchModeGroup = true;` y `m_hoveredToggleBtn = false;`.
-  * **Posicionamiento del Botón:**
-    * Implementar `GetSearchToggleRect` para calcular los límites del botón en la esquina inferior derecha:
-      ```cpp
-      RectF BoardPage::GetSearchToggleRect(const SizeF& screenSize) const {
-          float btnW = 200.0f;
-          float btnH = 35.0f;
-          return RectF::FromXYWH(
-              screenSize.width - btnW - 20.0f,
-              screenSize.height - btnH - 20.0f,
-              btnW,
-              btnH
-          );
-      }
-      ```
-  * **Dibujo (Draw):**
-    * En `BoardPage::Draw(Renderer& renderer)` (al final, antes de dibujar modales o toasts):
-      * Obtener el rectángulo usando `GetSearchToggleRect(size)`.
-      * Renderizar el botón flotante con diseño Cyberpunk:
-        * Fondo: `Color::FromHex(0x1E1E1E, m_hoveredToggleBtn ? 0.95f : 0.85f)`.
-        * Borde: `Color::FromHex(0x00E5FF, m_hoveredToggleBtn ? 0.65f : 0.35f)` de espesor `1.0f` (o `1.5f` si está hovered).
-        * Texto: `m_searchModeGroup ? L"Búsqueda: Agrupar" : L"Búsqueda: Filtrar"` dibujado de forma centrada en color blanco/cian, tamaño `11.0f`.
-  * **Interacción del Mouse (OnMouseMove):**
-    * En `BoardPage::OnMouseMove`:
-      * Si el buscador modal o el escaneo están activos, omitir.
-      * Evaluar si `GetSearchToggleRect` contiene las coordenadas del mouse `{x, y}`.
-      * Actualizar `m_hoveredToggleBtn` y llamar a `m_app->m_window.RequestRedraw()` si el estado cambia.
-  * **Interacción del Mouse (OnMouseDown):**
-    * Al principio de `BoardPage::OnMouseDown`:
-      * Si se hace click izquierdo dentro de `GetSearchToggleRect(screenSize)`:
-        * Alternar `m_searchModeGroup = !m_searchModeGroup;`.
-        * Solicitar redibujado y retornar `true` de inmediato para interceptar el evento.
-  * **Algoritmo de Búsqueda (PerformTagQueryAndInsert):**
-    * Reestructurar `PerformTagQueryAndInsert` para condicionar el flujo según el modo:
-      ```cpp
-      if (m_searchModeGroup) {
-          // --- NUEVO COMPORTAMIENTO B (AGRUPAR Y ENFOCAR) ---
-          
-          // 1. Obtener la lista de archivos coincidentes (matchingFiles) según la búsqueda actual.
-          // 2. Identificar cuáles imágenes en m_items ya existen y coinciden. Almacenar sus índices.
-          // 3. Establecer temporalmente la posición de estas imágenes a coordenadas muy lejanas (ej. {-999999.0f, -999999.0f})
-          //    para evitar que colisionen en la búsqueda espacial de la espiral.
-          // 4. Calcular el centro actual de la pantalla en coordenadas de mundo (worldCenter).
-          // 5. Inicializar un vector temporal de colisión local 'addedItems'.
-          // 6. Para cada imagen coincidente existente (usando sus índices):
-          //    - Calcular su nueva posición en espiral: FindSpiralPosition(worldCenter, item.width, item.height, 40.0f, addedItems).
-          //    - Asignar la nueva posición en m_items.
-          //    - Agregar una copia de la imagen posicionada a 'addedItems'.
-          // 7. Para cada archivo coincidente que no estuviera ya en el tablero:
-          //    - Instanciar un nuevo BoardItem (Image) de 400x300.
-          //    - Calcular su posición en espiral: FindSpiralPosition(worldCenter, 400.0f, 300.0f, 40.0f, addedItems).
-          //    - Asignar posición y agregarlo a m_items y a 'addedItems'.
-          //    - Solicitar la carga de su textura.
-          // 8. Desplazar la cámara del tablero (m_canvas.m_pan) para centrarla en 'worldCenter':
-          //    - m_canvas.m_pan.x = (targetSize.width / 2.0f) - worldCenter.x * m_canvas.m_zoom;
-          //    - m_canvas.m_pan.y = (targetSize.height / 2.0f) - worldCenter.y * m_canvas.m_zoom;
-      } else {
-          // --- COMPORTAMIENTO ORIGINAL A (FILTRAR / ELIMINAR) ---
-          // Ejecutar la lógica actual: eliminar de m_items las imágenes no coincidentes
-          // e insertar las nuevas imágenes coincidentes en espiral partiendo del worldCenter.
-      }
-      ```
+---
+
+### 3. Instalador Interactivo (Inno Setup)
+
+#### [NEW] [lenteuv_setup.iss](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/lenteuv_setup.iss)
+* **Objetivo:** Definir el instalador oficial de Windows.
+* **Secciones del Script de Inno Setup:**
+  * `[Setup]`: Define nombres, versión, editor, e ícono del instalador.
+    * Nombre: `LenteUV Image Viewer`
+    * Carpeta por defecto: `{autopf}\LenteUV`
+    * Permite la personalización de la ruta mediante `DisableDirPage=no`.
+  * `[Files]`: Copia `lenteuv.exe`, `locales/*` y `resources/*` a los directorios de destino correspondientes.
+  * `[Icons]`: Crea accesos directos en el menú de Inicio y en el Escritorio.
+  * `[Registry]`: Integración nativa del menú contextual:
+    * **Para archivos de imágenes soportadas (ej. `.png`, `.jpg`, `.webp`, `.gif`):**
+      * Crear la clave `HKCR\SystemFileAssociations\<ext>\shell\LenteUV` con el valor de texto `Abrir con LenteUV`.
+      * Crear la subclave `command` apuntando a `"{app}\lenteuv.exe" "%1"`.
+    * **Para directorios y fondos de carpeta:**
+      * Crear la clave `HKCR\Directory\shell\LenteUV` con el valor `Abrir carpeta en LenteUV`.
+      * Crear la subclave `command` con `"{app}\lenteuv.exe" "%1"`.
+      * Crear la clave `HKCR\Directory\Background\shell\LenteUV` con el valor `Abrir aquí con LenteUV`.
+      * Crear la subclave `command` con `"{app}\lenteuv.exe" "%V"`.
+  * `[Run]`: Opción de iniciar la aplicación al finalizar la instalación.
 
 ---
 
 ## Verification Plan
 
-### Automated Tests
-* Compilar el proyecto en modo Release usando el comando CMake absoluto para asegurar que no existan errores sintácticos ni de enlazado:
-  ```powershell
-  & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -S native -B native/build
-  & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build native/build --config Release
-  ```
-* Ejecutar las pruebas unitarias existentes (`tagging_tests.exe`) para garantizar que la caché de metadatos mantenga su consistencia al 100%.
+### Automated Verification
+1. **Generación del ícono:**
+   * Ejecutar el script `python native/generate_icons.py`.
+   * Verificar que se crea el archivo `native/src/resources/lenteuv.ico`.
+2. **Compilación del ejecutable con el nuevo recurso:**
+   * Ejecutar la compilación en configuración **Release**.
+   * Validar que el compilador de recursos (`rc.exe`) integre de manera correcta el nuevo ícono y enlace sin errores.
+3. **Compilación del Instalador ISS:**
+   * Si el compilador de línea de comandos de Inno Setup (`ISCC.exe`) está disponible en el PATH:
+     ```powershell
+     ISCC.exe lenteuv_setup.iss
+     ```
+   * Comprobar que genere el binario `Output/lenteuv_setup.exe`.
 
 ### Manual Verification
-1. **Comprobación del HUD del Visor:**
-   * Entrar en el visor de imagen única (Viewer Page).
-   * Confirmar visualmente que la esquina superior izquierda está completamente vacía (no se dibuja el texto de FPS ni de Opacidad).
-   * Verificar que la isla inferior de metadatos siga apareciendo en hover/inactividad normal de acuerdo al temporizador de 2s.
-2. **Comprobación del Toggle de Búsqueda:**
-   * Entrar en el modo Tablero (Board Page).
-   * Confirmar que el botón flotante "Búsqueda: Agrupar" se dibuja en la esquina inferior derecha.
-   * Probar el hover (debe iluminarse de color cian brillante) y hacer click izquierdo. Confirmar que alterna cíclicamente a "Búsqueda: Filtrar".
-3. **Comprobación del Comportamiento de Agrupación (Por defecto):**
-   * Configurar el toggle en "Búsqueda: Agrupar".
-   * Agregar varias imágenes al tablero.
-   * Realizar una búsqueda con `CTRL+F` por una etiqueta existente.
-   * Verificar que **ninguna** imagen no coincidente se borre del lienzo.
-   * Confirmar que todas las imágenes coincidentes (las que ya estaban en el lienzo + las nuevas descubiertas en el directorio) se posicionan de manera concéntrica (patrón radial/espiral) y que la cámara del tablero centra la vista automáticamente en este grupo recién formado.
-   * Confirmar que las conexiones o flechas (links) que tenían estas imágenes se actualicen dinámicamente sin romperse.
-4. **Comprobación del Comportamiento de Filtrado:**
-   * Configurar el toggle en "Búsqueda: Filtrar".
-   * Realizar otra búsqueda por tags.
-   * Confirmar que las imágenes que no coinciden se eliminan del tablero y sus enlaces se purgan (comportamiento original).
+1. **Prueba de la versión Portable:**
+   * Descomprimir `lenteuv_portable.zip` en una ruta limpia.
+   * Ejecutar `lenteuv.exe` y verificar que la interfaz cargue correctamente en el idioma detectado y localice sus recursos.
+2. **Prueba del Instalador:**
+   * Ejecutar el instalador `lenteuv_setup.exe`.
+   * Verificar la pantalla de selección de ruta y la creación de accesos directos.
+   * Hacer clic derecho sobre un archivo de imagen en el explorador y seleccionar la opción "Abrir con LenteUV".
+   * Hacer clic derecho sobre un directorio y verificar la opción "Abrir carpeta en LenteUV".
+   * Desinstalar la aplicación y corroborar que se eliminen todos los accesos directos, archivos instalados y claves del registro de manera limpia.
