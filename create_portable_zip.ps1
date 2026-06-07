@@ -64,6 +64,14 @@ $ExeSize = (Get-Item $BinaryPath).Length
 $ExeSizeKB = [math]::Round($ExeSize / 1KB, 1)
 Write-Host "  [OK] lenteuv.exe ($ExeSizeKB KB)" -ForegroundColor Green
 
+# --- Crear user_data/session.txt vacio para evitar heredar sesiones malformed ---
+Write-Host "[STEP 2/5] Creando user_data/session.txt vacio..." -ForegroundColor White
+$UserDataDir = Join-Path $TempDir "user_data"
+New-Item -ItemType Directory -Path $UserDataDir | Out-Null
+$SessionTxtPath = Join-Path $UserDataDir "session.txt"
+"" | Out-File -FilePath $SessionTxtPath -Encoding UTF8
+Write-Host "  [OK] user_data/session.txt (vacio)" -ForegroundColor Green
+
 # --- Copiar locales (traducciones) --------------------------------------------
 Write-Host "[STEP 3/5] Copiando traducciones (locales/)..." -ForegroundColor White
 if (Test-Path $LocalesDir) {

@@ -149,23 +149,29 @@ bool FolderDataManager::LoadSession() {
         lines.push_back(line);
     }
 
+    if (lines.size() < 4) return false;
+
     auto toWString = [](const std::string& str) -> std::wstring {
+        if (str.empty()) return L"";
         int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-        if (len > 0) {
-            std::vector<wchar_t> w(len);
-            MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, w.data(), len);
-            return std::wstring(w.data());
+        if (len <= 0) return L"";
+        std::vector<wchar_t> w(len);
+        if (MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, w.data(), len) == 0) {
+            return L"";
         }
-        return L"";
+        return std::wstring(w.data());
     };
 
     bool loadedAny = false;
-    for (size_t i = 0; i < lines.size(); i += 4) {
-        if (i >= lines.size()) break;
+    for (size_t i = 0; i + 3 < lines.size(); i += 4) {
         std::wstring fPath = toWString(lines[i]);
-        if (std::filesystem::exists(fPath)) {
+        if (fPath.empty()) continue;
+        if (!std::filesystem::exists(fPath)) continue;
+        try {
             AddFolder(fPath, true);
             loadedAny = true;
+        } catch (...) {
+            LogError(std::format(L"Failed to add folder from session: {}", fPath));
         }
     }
 
@@ -225,21 +231,25 @@ bool FolderDataManager::LoadFavorites() {
         lines.push_back(line);
     }
 
+    if (lines.size() < 4) return false;
+
     auto toWString = [](const std::string& str) -> std::wstring {
+        if (str.empty()) return L"";
         int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
-        if (len > 0) {
-            std::vector<wchar_t> w(len);
-            MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, w.data(), len);
-            return std::wstring(w.data());
+        if (len <= 0) return L"";
+        std::vector<wchar_t> w(len);
+        if (MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, w.data(), len) == 0) {
+            return L"";
         }
-        return L"";
+        return std::wstring(w.data());
     };
 
     m_favorites.clear();
-    for (size_t i = 0; i < lines.size(); i += 4) {
-        if (i >= lines.size()) break;
+    for (size_t i = 0; i + 3 < lines.size(); i += 4) {
         std::wstring fPath = toWString(lines[i]);
-        m_favorites.push_back(fPath);
+        if (!fPath.empty()) {
+            m_favorites.push_back(fPath);
+        }
     }
     return true;
 }

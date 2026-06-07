@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
   <assemblyIdentity
-    version="0.90.0.0"
+    version="1.00.3.0"
     processorArchitecture="amd64"
-    name="Sergkrumas.LenteUV"
+    name="xPhang.LenteUV"
     type="win32"
   />
 
