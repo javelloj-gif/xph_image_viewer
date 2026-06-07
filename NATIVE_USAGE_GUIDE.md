@@ -1,6 +1,6 @@
 # LenteUV — Native C++ Usage and Testing Guide
 
-Esta guía describe cómo compilar, ejecutar y realizar pruebas funcionales de la implementación nativa en C++ de **LenteUV** (Win32 + Direct2D/Direct3D 11/DirectComposition), un visor de imágenes de alta velocidad y lienzo infinito basado en el visualizador original de Sergei Krumas (Sergkruma's image viewer) y Google Picasa.
+Esta guía describe cómo compilar, ejecutar y realizar pruebas funcionales de la implementación nativa en C++ de **LenteUV** (Win32 + Direct2D/Direct3D 11/DirectComposition), un visor de imágenes de alta velocidad y lienzo infinito. LenteUV es un fork del visualizador original de Sergei Krumas ([github.com/sergkrumas](https://github.com/sergkrumas)), extendido con soporte XMP, tablero infinito, integración de shell de Windows e i18n. Autor del fork: **xPhang**.
 
 ---
 
@@ -228,3 +228,196 @@ Ejecuta esto desde la raíz del proyecto para compilar únicamente los tests uni
 ```
 
 Las pruebas validan la inyección limpia de tags en formatos JPEG y PNG, la persistencia binaria de la caché, la cancelación segura de hilos asíncronos y la consistencia de sincronización bidireccional con el almacén de propiedades de Windows.
+
+---
+
+## 10. Distribución y Empaquetamiento (Fase 4)
+
+Esta sección documenta el pipeline completo para generar los entregables oficiales de distribución de LenteUV: el ícono multibanda, la versión portable en ZIP y el instalador interactivo de Windows.
+
+> [!IMPORTANT]
+> Todos los comandos de packaging se ejecutan desde el directorio **raíz** del proyecto (`image_viewer/`), no desde `native/` ni `native/build/`.
+
+---
+
+### 10.1 Prerrequisitos de Packaging
+
+| Herramienta | Versión mínima | Notas |
+|---|---|---|
+| Python 3 | 3.9+ | Necesario para `generate_icons.py` |
+| Pillow (PIL) | Cualquiera reciente | `pip install Pillow`. Requerido para el fallback del renderer de íconos |
+| cairosvg | Opcional | `pip install cairosvg`. Si está presente, mejora la calidad del SVG rasterizado |
+| Inno Setup 6 | 6.7.3 | Instalado en `%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe` |
+| CMake + MSVC | Ver sección 1 | Requerido para compilar `lenteuv.exe` antes de empaquetar |
+
+**Instalar Inno Setup** (si no está presente):
+```powershell
+winget install JRSoftware.InnoSetup --source winget
+```
+> Ruta de instalación en este sistema: `C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe`
+
+---
+
+### 10.2 Pipeline Completo Automatizado (`build_release.ps1`)
+
+El script maestro `build_release.ps1` ejecuta todos los pasos del pipeline en una sola llamada:
+
+```powershell
+# Pipeline completo: icono + compilacion + ZIP portable + instalador
+.\build_release.ps1
+
+# Omitir la recompilacion C++ (usar lenteuv.exe existente)
+.\build_release.ps1 -SkipBuild
+
+# Omitir la regeneracion del icono
+.\build_release.ps1 -SkipIcons
+```
+
+**Artefactos generados:**
+
+| Artefacto | Ruta | Descripción |
+|---|---|---|
+| `lenteuv.ico` | `native/src/resources/lenteuv.ico` | Ícono Windows multibanda (16/32/48/256 px) |
+| `lenteuv.exe` | `native/build/bin/Release/lenteuv.exe` | Ejecutable con ícono embebido en el PE |
+| `lenteuv_portable.zip` | Raíz del proyecto | Paquete portable listo para distribución |
+| `lenteuv_setup.exe` | `Output/lenteuv_setup.exe` | Instalador interactivo de Windows |
+
+---
+
+### 10.3 Paso 1 — Generar el Ícono Multibanda
+
+El script `native/generate_icons.py` convierte el logo vectorial `native/lente_uv.svg` en un archivo `.ico` estándar de Windows con cuatro resoluciones empaquetadas: 16×16, 32×32, 48×48 y 256×256 px.
+
+```powershell
+python native/generate_icons.py
+```
+
+**Salida esperada:**
+```
+LenteUV Icon Generator
+  SVG source : ...\native\lente_uv.svg
+  Output ICO : ...\native\src\resources\lenteuv.ico
+  Sizes      : [16, 32, 48, 256]
+
+[cairosvg] Not available — switching to Pillow fallback renderer.
+[Pillow] Using built-in fallback renderer.
+  [Pillow] Rendered 16x16
+  [Pillow] Rendered 32x32
+  [Pillow] Rendered 48x48
+  [Pillow] Rendered 256x256
+
+[OK] ICO written successfully: ...\lenteuv.ico
+     File size: 9,952 bytes
+     Verified ICO — format: ICO, size: (256, 256)
+```
+
+> [!NOTE]
+> El script intenta usar `cairosvg` para renderizado de alta fidelidad SVG. Si no está instalado, usa automáticamente un renderer propio basado en Pillow que reproduce fielmente el diseño (sol radiante + cuerpo de lente UV + recubrimiento cian/azul). Instala `cairosvg` con `pip install cairosvg` para obtener la máxima calidad.
+
+---
+
+### 10.4 Paso 2 — Compilar `lenteuv.exe` con el Ícono Embebido
+
+Después de generar el `.ico`, recompila el ejecutable para que el ícono quede integrado en el PE de Windows (el Explorador de archivos lo mostrará correctamente):
+
+```powershell
+$cmake = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
+& $cmake --build native/build --config Release
+```
+
+**Verificación**: El tamaño de `lenteuv.exe` debe ser aproximadamente **10 KB mayor** que antes de añadir el ícono (el ICO multibanda ocupa ~9.95 KB dentro del PE).
+
+---
+
+### 10.5 Paso 3 — Generar el Paquete Portable ZIP
+
+El script `create_portable_zip.ps1` ensambla todos los archivos necesarios en un ZIP listo para descomprimir y ejecutar directamente, sin instalación:
+
+```powershell
+.\create_portable_zip.ps1
+
+# Con nombre personalizado (ej. para versiones numeradas):
+.\create_portable_zip.ps1 -OutputName "lenteuv_portable_v0.90"
+```
+
+**Estructura del ZIP generado (`lenteuv_portable.zip`):**
+```
+lenteuv_portable.zip
+├── lenteuv.exe              ← Ejecutable principal (~883 KB)
+├── locales/                 ← Traducciones i18n
+│   ├── base.pot
+│   ├── de/LC_MESSAGES/      ← Alemán (.mo + .po)
+│   ├── es/LC_MESSAGES/      ← Español (.mo + .po)
+│   ├── fr/LC_MESSAGES/      ← Francés (.mo + .po)
+│   ├── it/LC_MESSAGES/      ← Italiano (.mo + .po)
+│   └── ru/LC_MESSAGES/      ← Ruso (.mo + .po)
+├── resources/               ← Assets de interfaz gráfica (switch icons)
+│   ├── switch_on.png
+│   ├── switch_off.png
+│   └── ...
+├── cursors/                 ← Cursores personalizados
+│   ├── arrow.png
+│   ├── rotate.svg
+│   └── ...
+└── README.txt               ← Instrucciones de uso y atajos
+```
+
+> [!TIP]
+> La versión portable no requiere instalación ni permisos de administrador. No incluye integración de menú contextual en el Explorador de Windows; para ello, usa el instalador (`lenteuv_setup.exe`).
+
+---
+
+### 10.6 Paso 4 — Compilar el Instalador Interactivo (Inno Setup)
+
+El script `lenteuv_setup.iss` define el instalador oficial de Windows. Compílalo con `ISCC.exe`:
+
+```powershell
+$iscc = "C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
+& $iscc lenteuv_setup.iss
+```
+
+**Salida esperada:**
+```
+Inno Setup 6 Command-Line Compiler
+Compiler engine version: Inno Setup 6.7.3
+...
+Successful compile (X.XXX sec). Resulting Setup program filename is:
+E:\...\image_viewer\Output\lenteuv_setup.exe
+```
+
+**Capacidades del instalador (`Output/lenteuv_setup.exe`):**
+
+| Característica | Detalle |
+|---|---|
+| Carpeta de destino | `%ProgramFiles%\LenteUV` (configurable durante la instalación) |
+| Idioma del asistente | Autodetectado: ES, EN, DE, FR, IT, RU |
+| Accesos directos | Menú de Inicio (siempre) + Escritorio (opcional, desmarcado por defecto) |
+| Menú contextual — Imágenes | 19 extensiones registradas vía `HKCR\SystemFileAssociations` (ver lista abajo) |
+| Menú contextual — Carpetas | "Abrir carpeta en LenteUV" en `HKCR\Directory\shell\LenteUV` |
+| Menú contextual — Fondo | "Abrir aquí con LenteUV" en `HKCR\Directory\Background\shell\LenteUV` |
+| Desinstalador | Limpia todos los archivos, accesos directos y claves de registro |
+| Refresco del Explorador | Ejecuta `ie4uinit.exe -show` al finalizar para mostrar los nuevos iconos |
+
+**Extensiones de imagen registradas en el menú contextual:**
+
+`.jpg` · `.jpeg` · `.jfif` · `.png` · `.apng` · `.gif` · `.webp` · `.bmp` · `.ico` · `.tif` · `.tiff` · `.avif` · `.heif` · `.heic` · `.jxr` · `.wdp` · `.hdp` · `.svg` · `.svgz`
+
+> [!NOTE]
+> La estrategia `SystemFileAssociations` añade "Abrir con LenteUV" al menú contextual de cada formato **sin** cambiar el programa predeterminado del sistema para esas extensiones. Otras aplicaciones de visualización no se ven afectadas.
+
+> [!IMPORTANT]
+> El instalador requiere **privilegios de administrador** para escribir en `Program Files` y en `HKEY_CLASSES_ROOT`. Windows solicitará elevación automáticamente al ejecutarlo.
+
+---
+
+### 10.7 Resumen de Archivos del Pipeline de Packaging
+
+| Archivo | Descripción |
+|---|---|
+| [`native/generate_icons.py`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/generate_icons.py) | Generador de ícono SVG → ICO (cairosvg + fallback Pillow) |
+| [`native/lente_uv.svg`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/lente_uv.svg) | Logo vectorial fuente del ícono |
+| [`native/src/resources/lenteuv.ico`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/resources/lenteuv.ico) | ICO multibanda generado (16/32/48/256 px) |
+| [`native/src/resources/app.rc`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/resources/app.rc) | Resource script con referencia al ícono embebido |
+| [`create_portable_zip.ps1`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/create_portable_zip.ps1) | Script PowerShell para ensamblar el ZIP portable |
+| [`lenteuv_setup.iss`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/lenteuv_setup.iss) | Script Inno Setup para el instalador interactivo |
+| [`build_release.ps1`](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/build_release.ps1) | Script maestro: ejecuta todo el pipeline de release en un comando |

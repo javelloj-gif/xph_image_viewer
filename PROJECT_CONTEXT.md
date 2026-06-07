@@ -10,12 +10,12 @@
 |---|---|
 | **Name** | LenteUV Image Viewer (Native) |
 | **Version** | v0.90 Alpha (C++20 Migration) |
-| **Author** | Sergei Krumas ([github.com/sergkrumas](https://github.com/sergkrumas)) |
+| **Author** | xPhang (fork) — based on Sergkruma's image viewer by Sergei Krumas ([github.com/sergkrumas](https://github.com/sergkrumas)) |
 | **License** | GPL v2+ |
 | **Language** | C++20 (MSVC x64 compiler) |
 | **UI Backend** | Direct2D 1.3 / Direct3D 11 / DirectWrite / DirectComposition |
 | **Platform** | Windows 10 (Build 18362+) / Windows 11 |
-| **Status** | **Fases 1-3 estructuralmente COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L), el soporte nativo de Alt+F4 en Windows, y las mejoras de usabilidad/escalabilidad (click directo para copiar, enfoque continuo al crear tag, categorías con cabeceras cian en xmpTags.json, etiquetado masivo, listado de directorio masivo en grid con desalojo VRAM inteligente de texturas lejanas, enlace con Alt+Click y selección cyberpunk cian)**. **Recientemente, se implementó por completo la eliminación de la info flotante de FPS/Opacidad en la parte superior izquierda del visor y la búsqueda de tags en el tablero por agrupación y enfoque automático. Se corrigió el bug del cálculo del centroide y se configuró la espiral de agrupación para omitir colisiones con elementos que no coinciden con la búsqueda, logrando un agrupamiento concéntrico perfecto en el centro de la pantalla y el paneo de cámara sobre dicho centroide. Se solucionó el bug de solapamiento de imágenes y se implementó el empuje radial de no coincidentes con holgura de 160px. Asimismo, se completó exitosamente la optimización, refactorización y subdivisión de la clase BoardPage (reduciéndola de 1969 a 579 líneas de código) en tres submódulos especializados: BoardSearchManager (búsqueda, autocompletado y empuje radial), BoardTagScanner (barrido e indexación asíncrona de tags) y BoardLayoutHelper (espiral, distancia y menús contextuales)**. Phase 4 (Packaging/Installer) pendiente. |
+| **Status** | **Fases 1-4 COMPLETAS**. Core engine, UI pages, settings, IPC, shell integration, commenting, i18n, Options HUD, y el modal transversal de tagging (`TaggingModal`) completamente implementados. El sistema de tagging XMP lee/escribe palabras clave (`System.Keywords` bidireccional), estrellas y metadatos Dublin Core. Se corrigieron de manera definitiva todos los bugs de ajuste de ventana (límite mínimo `512*512` e inflado no-cliente por `AdjustWindowRectEx`), estabilidad en las transiciones a fullscreen de doble click, el zoom de visualización (escala 1:1 para imágenes pequeñas y fit-to-screen para imágenes grandes sin deformaciones), y se rediseñó el `TaggingModal` ampliándolo un 20% (1152x840). **Adicionalmente, se completó la búsqueda por tags en Board (CTRL+F), el barrido e indexación en segundo plano (CTRL+L), el soporte nativo de Alt+F4 en Windows, y las mejoras de usabilidad/escalabilidad (click directo para copiar, enfoque continuo al crear tag, categorías con cabeceras cian en xmpTags.json, etiquetado masivo, listado de directorio masivo en grid con desalojo VRAM inteligente de texturas lejanas, enlace con Alt+Click y selección cyberpunk cian)**. **Recientemente, se implementó por completo la eliminación de la info flotante de FPS/Opacidad en la parte superior izquierda del visor y la búsqueda de tags en el tablero por agrupación y enfoque automático. Se corrigió el bug del cálculo del centroide y se configuró la espiral de agrupación para omitir colisiones con elementos que no coinciden con la búsqueda, logrando un agrupamiento concéntrico perfecto en el centro de la pantalla y el paneo de cámara sobre dicho centroide. Se solucionó el bug de solapamiento de imágenes y se implementó el empuje radial de no coincidentes con holgura de 160px. Asimismo, se completó exitosamente la optimización, refactorización y subdivisión de la clase BoardPage (reduciéndola de 1969 a 579 líneas de código) en tres submódulos especializados: BoardSearchManager (búsqueda, autocompletado y empuje radial), BoardTagScanner (barrido e indexación asíncrona de tags) y BoardLayoutHelper (espiral, distancia y menús contextuales)**. **FASE 4 COMPLETADA: Se generó el ícono multibanda `lenteuv.ico` (16/32/48/256px) desde el SVG vectorial, se recompiló `lenteuv.exe` con el ícono embebido, se empaquetó la versión portable `lenteuv_portable.zip` (0.49 MB) con locales/resources/cursors, y se compiló el instalador interactivo `Output/lenteuv_setup.exe` (2.32 MB) con Inno Setup 6.7.3, incluyendo integración del menú contextual de Windows para 19 extensiones de imagen y directorios, soporte multiidioma y desinstalador limpio.** |
 | **Inspiration** | Google Picasa Photo Viewer + PureRef |
 
 ---
@@ -696,6 +696,79 @@ En esta sesión se completaron los cambios fundamentales solicitados por el usua
 2. Se ejecutaron y pasaron exitosamente todas las pruebas de tagging y metadatos en tagging_tests.exe.
 3. Se actualizó la guía de uso native (NATIVE_USAGE_GUIDE.md) para reflejar las nuevas características y el comportamiento espiral del tablero.
 
+---
 
+## 18. Appendix: Fase 4 — Empaquetamiento e Instalador (Junio 6, 2026)
 
+Se completó la Fase 4 de distribución y empaquetamiento con los siguientes entregables:
+
+### A. Iconografía (generate_icons.py)
+1. **Script `native/generate_icons.py`**: Script Python que convierte `native/lente_uv.svg` en un archivo `.ico` multibanda estándar de Windows. Usa `cairosvg` si está disponible, con fallback a un renderer propio usando solo `Pillow` que reproduce fielmente el diseño del SVG (sol radiante, cuerpo de lente UV, recubrimiento cian/azul).
+2. **`native/src/resources/lenteuv.ico`**: ICO generado con 4 bandas — 16×16, 32×32, 48×48, 256×256 (~9.95 KB).
+3. **`native/src/resources/app.rc`**: Actualizado para incluir `1 ICON "lenteuv.ico"` — el ícono queda integrado en el ejecutable PE.
+4. **Compilación exitosa**: `lenteuv.exe` creció de 894,464 a 904,704 bytes (+10 KB por el ícono embebido).
+
+### B. Ejecutable con Ícono Embebido
+- Se recompiló `lenteuv.exe` en Release con el nuevo recurso de ícono integrado.
+- Verificado: Windows Explorer muestra el ícono del filtro UV/sol en el ejecutable.
+
+### C. Paquete Portable (create_portable_zip.ps1)
+- **`create_portable_zip.ps1`**: Script PowerShell que ensambla el paquete portable en un ZIP listo para distribución. Estructura del ZIP:
+  - `lenteuv.exe` (904 KB)
+  - `locales/` — 5 idiomas (de, es, fr, it, ru) con archivos .mo/.po
+  - `resources/` — Assets de UI (switch icons)
+  - `cursors/` — Cursores personalizados (SVG + PNG)
+  - `README.txt` — Instrucciones de uso y atajos de teclado
+- **`lenteuv_portable.zip`**: 0.49 MB generado y verificado correctamente.
+
+### D. Instalador Interactivo (lenteuv_setup.iss + Inno Setup 6.7.3)
+- **`lenteuv_setup.iss`**: Script completo de Inno Setup 6 con:
+  - Soporte multiidioma (es, en, de, fr, it, ru — auto-detectado).
+  - Carpeta de instalación configurable (default: `%ProgramFiles%\LenteUV`).
+  - Accesos directos en Menú de Inicio y Escritorio (opcional).
+  - **Integración completa del menú contextual de Windows** vía `HKCR\SystemFileAssociations` para 19 extensiones de imagen soportadas: `.jpg`, `.jpeg`, `.jfif`, `.png`, `.apng`, `.gif`, `.webp`, `.bmp`, `.ico`, `.tif`, `.tiff`, `.avif`, `.heif`, `.heic`, `.jxr`, `.wdp`, `.hdp`, `.svg`, `.svgz`.
+  - **Integración para carpetas**: `HKCR\Directory\shell\LenteUV` (Abrir carpeta en LenteUV) y `HKCR\Directory\Background\shell\LenteUV` (Abrir aquí con LenteUV).
+  - Desinstalador limpio que elimina todos los archivos, accesos directos y claves de registro.
+  - Refresco del caché de íconos del Explorador al finalizar (`ie4uinit.exe -show`).
+- **Inno Setup instalado**: `C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe` (v6.7.3, instalado vía `winget install JRSoftware.InnoSetup`).
+- **`Output\lenteuv_setup.exe`**: 2.32 MB — instalador compilado y verificado sin errores.
+
+### E. Script Maestro de Release (build_release.ps1)
+- **`build_release.ps1`**: Automatiza todo el pipeline en un solo comando:
+  1. Genera el ícono desde el SVG.
+  2. Compila `lenteuv.exe` en Release con CMake.
+  3. Empaqueta `lenteuv_portable.zip`.
+  4. Compila `Output\lenteuv_setup.exe` con Inno Setup.
+  - Soporta flags `-SkipBuild` y `-SkipIcons` para iteraciones rápidas.
+
+### F. Archivos Añadidos/Modificados en esta Fase
+
+| Archivo | Estado | Rol |
+|---|---|---|
+| `native/generate_icons.py` | NEW | Generador SVG → ICO (cairosvg/Pillow fallback) |
+| `native/src/resources/lenteuv.ico` | NEW | ICO multibanda (16/32/48/256px) |
+| `native/src/resources/app.rc` | MODIFIED | Referencia al nuevo ícono embebido |
+| `create_portable_zip.ps1` | NEW | Script PowerShell para paquete portable ZIP |
+| `lenteuv_setup.iss` | NEW | Script Inno Setup para instalador interactivo |
+| `build_release.ps1` | NEW | Script maestro de release (pipeline completo) |
+| `.gitignore` | MODIFIED | Exclusiones de artefactos generados |
+
+### G. Ruta de ISCC.exe en este sistema
+```
+C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe
+```
+Para compilar el instalador manualmente:
+```powershell
+$iscc = "C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
+& $iscc lenteuv_setup.iss
+```
+
+### H. Estado de las Fases del Proyecto
+
+| Fase | Descripción | Estado |
+|---|---|---|
+| Fase 1 | Core engine, UI pages, settings, IPC | ✅ COMPLETA |
+| Fase 2 | XMP Tagging, MetadataCache, tests | ✅ COMPLETA |
+| Fase 3 | BoardPage refactoring, búsqueda de tags, rebranding | ✅ COMPLETA |
+| **Fase 4** | **Packaging / Instalador** | ✅ **COMPLETA** |
 

@@ -21,3 +21,11 @@ user_data/default_miltifolder_path.txt
 ips_utils_debug_input.data
 user_data/board_history.log
 native/build/
+
+# --- Packaging artifacts (generated — do not commit) -------------------------
+# Regenerar con: .\build_release.ps1
+/Output/
+/lenteuv_portable.zip
+/lenteuv_portable_*.zip
+# El .ico se genera desde el SVG — se incluye en repo para evitar requerir Pillow en CI
+# /native/src/resources/lenteuv.ico

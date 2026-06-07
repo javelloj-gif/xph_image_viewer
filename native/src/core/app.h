@@ -1,8 +1,17 @@
 // ============================================================================
 // Class: App
-// Description: App is the central coordinator for the [IMAGE_VIEWER_APP_NAME] application, managing the main event loop, routing system messages, and page navigation.
-// Responsibility: Orchestrate the Win32 window message loop and delegate actions to page components.
+// Project: LenteUV Image Viewer
+// Author: xPhang
+// Based on: Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)
+//           Fork extended with Direct2D/Direct3D 11, XMP tagging, Board page,
+//           multi-language support and Windows shell integration.
+// Description: App is the central coordinator for the LenteUV application,
+//              managing the main event loop, routing system messages, and
+//              page navigation across Viewer, Board, Library and Waterfall pages.
+// Responsibility: Orchestrate the Win32 window message loop and delegate
+//                 actions to page components.
 // ============================================================================
+
 #pragma once
 
 #include "common/types.h"

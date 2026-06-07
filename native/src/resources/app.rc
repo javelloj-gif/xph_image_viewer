@@ -5,14 +5,17 @@
 
 #include <winresrc.h>
 
+// ─── Application Icon ─────────────────────────────────────────────────────────
+1 ICON "lenteuv.ico"
+
 // ─── Application Manifest ────────────────────────────────────────────────────
 // Note: The manifest is embedded via CMake's LINK_FLAGS instead of via RC.
 // This avoids "duplicate resource" errors with MSVC's auto-manifest linking.
 
 // ─── Version Information ─────────────────────────────────────────────────────
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION    0,90,0,0
-    PRODUCTVERSION 0,90,0,0
+    FILEVERSION    1,00,0,0
+    PRODUCTVERSION 1,00,0,0
     FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
 #ifdef _DEBUG
     FILEFLAGS      VS_FF_DEBUG
@@ -27,14 +30,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"  // English (US), Unicode
         BEGIN
-            VALUE "CompanyName",      "Sergei Krumas"
+            VALUE "CompanyName",      "xPhang"
             VALUE "FileDescription",  "LenteUV Image Viewer"
-            VALUE "FileVersion",      "0.90.0.0"
+            VALUE "FileVersion",      "1.00.0.0"
             VALUE "InternalName",     "lenteuv"
-            VALUE "LegalCopyright",   "Copyright (C) 2022-2026 Sergei Krumas. LenteUV based on Sergkruma's image viewer."
+            VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. LenteUV is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
             VALUE "OriginalFilename", "lenteuv.exe"
             VALUE "ProductName",      "LenteUV"
-            VALUE "ProductVersion",   "0.90.0.0"
+            VALUE "ProductVersion",   "1.00.0.0"
         END
     END
     BLOCK "VarFileInfo"
