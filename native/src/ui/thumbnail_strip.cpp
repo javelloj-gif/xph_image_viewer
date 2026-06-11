@@ -165,6 +165,12 @@ void ThumbnailStrip::DrawMirror(Renderer& renderer, ID2D1Bitmap1* bitmap, const 
 }
 
 void ThumbnailStrip::Draw(Renderer& renderer) {
+    if (detail::g_enableDebugIpc) {
+        std::string traceMsg = "[THUMBSTRIP] Draw: empty=" + std::to_string(m_thumbnails.empty()) + ", opacity=" + std::to_string(m_opacity);
+        std::ofstream dbg("debug_ipc.txt", std::ios::app);
+        dbg << traceMsg << std::endl;
+        dbg.close();
+    }
     if (m_thumbnails.empty() || m_opacity == 0.0f) return;
 
     auto targetSize = renderer.GetTargetSize().ToFloat();

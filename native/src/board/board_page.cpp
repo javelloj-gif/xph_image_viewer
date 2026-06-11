@@ -40,18 +40,17 @@ void BoardPage::Initialize(App* app) {
         m_items.push_back(imgItem);
         LoadItemTexture(m_items.back());
     }
-
-    if (!m_app->m_fileList.empty()) {
-        namespace fs = std::filesystem;
-        fs::path activePath(m_app->m_fileList[0]);
-        auto boardPath = (activePath.parent_path() / L"!board.kbrd").wstring();
-        if (fs::exists(boardPath)) {
-            LoadBoard(boardPath);
-        }
-    }
 }
 
 void BoardPage::OnEnterPage() {
+    namespace fs = std::filesystem;
+
+    fs::path activeDir = GetActiveDirectory();
+    auto boardPath = (activeDir / L"!board.kbrd").wstring();
+    if (fs::exists(boardPath)) {
+        LoadBoard(boardPath);
+    }
+
     std::wstring activePath;
     if (m_app->m_currentImage) {
         activePath = m_app->m_currentImage->filePath;

@@ -64,9 +64,11 @@ AppConfig App::ParseCommandLine(int argc, wchar_t* argv[]) {
 
 InitResult App::Initialize(const AppConfig& config) {
     auto trace = [](std::string_view msg) {
-        std::ofstream dbg("debug_ipc.txt", std::ios::app);
-        dbg << "[APP] Initialize step: " << msg << std::endl;
-        dbg.close();
+        if (detail::g_enableDebugIpc) {
+            std::ofstream dbg("debug_ipc.txt", std::ios::app);
+            dbg << "[APP] Initialize step: " << msg << std::endl;
+            dbg.close();
+        }
     };
     trace("Start");
 
@@ -76,12 +78,9 @@ InitResult App::Initialize(const AppConfig& config) {
     I18nEngine::Initialize(m_settings.ui_lang);
     trace("I18n initialized");
 
-    // Initialize Library Data
     m_libraryData.Initialize(this);
     trace("FolderDataManager initialized");
     m_libraryData.LoadFavorites();
-    m_libraryData.LoadSession();
-    trace("Session loaded");
     // Initialize Image Loader early to provide WIC Factory to TagManager
     if (!m_imageLoader.Initialize(4)) {
         LogError(L"Failed to initialize image loader");
@@ -200,6 +199,9 @@ InitResult App::Initialize(const AppConfig& config) {
     SetPage(static_cast<Page>(m_settings.page_on_app_launch_from_explorer));
 
     // ── Load Initial Content ──────────────────────────────────────────────
+    bool loadSessionImage = config.initialFilePath.empty() && config.initialFolderPath.empty();
+    m_libraryData.LoadSession(loadSessionImage);
+
     if (!config.initialFilePath.empty()) {
         LoadImage(config.initialFilePath);
     } else if (!config.initialFolderPath.empty()) {

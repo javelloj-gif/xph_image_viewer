@@ -71,7 +71,7 @@ if (-not $SkipBuild) {
 
 # ─── PASO 3: Paquete portable ZIP ───────────────────────────────────────────
 Step 3 $TotalSteps "Generando paquete portable lenteuv_portable.zip..."
-powershell -ExecutionPolicy Bypass -File "$ScriptDir\create_portable_zip.ps1" -OutputName "lenteuv_portable"
+powershell -ExecutionPolicy Bypass -File "$ScriptDir\build_portable.ps1" -OutputName "lenteuv_portable"
 if (-not (Test-Path "$ScriptDir\lenteuv_portable.zip")) {
     Write-Host "[ERROR] No se genero lenteuv_portable.zip" -ForegroundColor Red
     exit 1

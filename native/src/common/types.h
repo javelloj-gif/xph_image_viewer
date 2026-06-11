@@ -7,6 +7,7 @@
 
 #include "common/pch.h"
 #include <share.h>
+#include <cwctype>
 
 namespace kv {
 
@@ -17,10 +18,17 @@ using ComPtr = Microsoft::WRL::ComPtr<T>;
 // ─── Logging ─────────────────────────────────────────────────────────────────
 // Simple debug logging. In Release builds, Info/Debug are compiled out.
 // All log messages go to OutputDebugString (visible in VS Output window).
+// File logging (kv_log.txt) is disabled by default; enable via settings:
+//   "enable_file_log": true
 
 enum class LogLevel { Debug, Info, Warn, Error };
 
 namespace detail {
+
+// Global flag set by Settings::Load() — controls file logging to kv_log.txt
+inline bool g_enableFileLog = false;
+// Global flag controls debug IPC logging to debug_ipc.txt
+inline bool g_enableDebugIpc = false;
 
 inline void LogImpl(LogLevel level, std::wstring_view message) {
     const wchar_t* prefix = L"";
@@ -33,13 +41,13 @@ inline void LogImpl(LogLevel level, std::wstring_view message) {
     std::wstring full = std::wstring(prefix) + std::wstring(message) + L"\n";
     OutputDebugStringW(full.c_str());
 
-    // Also write to a log file next to the executable for post-mortem diagnostics
+    if (!g_enableFileLog) return;
+
     static std::once_flag s_initFlag;
     static FILE* s_logFile = nullptr;
     std::call_once(s_initFlag, []() {
         wchar_t exePath[MAX_PATH] = {};
         GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        // Replace filename with kv_log.txt
         wchar_t* lastSlash = wcsrchr(exePath, L'\\');
         if (lastSlash) *(lastSlash + 1) = L'\0';
         wcscat_s(exePath, L"kv_log.txt");
@@ -294,6 +302,32 @@ inline float DpiScale(uint32_t dpi) {
 
 inline int DpiScaleInt(int value, uint32_t dpi) {
     return MulDiv(value, static_cast<int>(dpi), 96);
+}
+
+// ─── Path Helper Utilities ───────────────────────────────────────────────────
+
+inline std::wstring NormalizeFolderPath(const std::wstring& pathStr) {
+    namespace fs = std::filesystem;
+    try {
+        fs::path p(pathStr);
+        if (fs::exists(p)) {
+            return fs::canonical(p).wstring();
+        }
+    } catch (...) {}
+    try {
+        return fs::path(pathStr).lexically_normal().wstring();
+    } catch (...) {}
+    return pathStr;
+}
+
+inline bool PathEquals(const std::wstring& a, const std::wstring& b) {
+    auto normA = NormalizeFolderPath(a);
+    auto normB = NormalizeFolderPath(b);
+    if (normA.size() != normB.size()) return false;
+    for (size_t i = 0; i < normA.size(); ++i) {
+        if (std::towlower(normA[i]) != std::towlower(normB[i])) return false;
+    }
+    return true;
 }
 
 } // namespace kv

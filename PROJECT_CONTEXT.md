@@ -772,3 +772,56 @@ $iscc = "C:\Users\xxx_h\AppData\Local\Programs\Inno Setup 6\ISCC.exe"
 | Fase 3 | BoardPage refactoring, búsqueda de tags, rebranding | ✅ COMPLETA |
 | **Fase 4** | **Packaging / Instalador** | ✅ **COMPLETA** |
 
+---
+
+## 15. Appendix: Trabajo completado en la Sesión (Junio 10, 2026)
+
+Se implementaron correcciones de diagnóstico, optimizaciones clave en el tiempo de arranque de la aplicación y mejoras en la robustez del script de empaquetado portable:
+
+### A. Diagnóstico y Control de debug_ipc.txt
+1. **Control mediante Settings**: Se añadió la opción `"debug_ipc"` en la clase [Settings](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/settings.h) y se integró en la serialización y deserialización de [settings.json](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/user_data/settings.json). Por defecto, está en `false`.
+2. **Pre-inicialización Rápida**: Se creó `Settings::PreInitDebugIpc()`, que realiza una lectura superficial del archivo JSON de configuración al inicio de `wWinMain` para setear la bandera global `detail::g_enableDebugIpc`.
+3. **Escritura Condicionada**: Se condicionaron todas las llamadas de escritura a `debug_ipc.txt` en [main.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/main.cpp), [app.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp) y [settings.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/settings.cpp). Esto detiene por completo la creación automática y la escritura en este archivo en entornos de producción/usuario final.
+4. **Prevención de C2712**: Para evitar errores de compilación MSVC C2712 en funciones que usan `__try`/`__except` (como `wWinMain`), se crearon funciones auxiliares C-style `SafeTraceIpc` y `TraceIpcSEH` en [main.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/main.cpp) que no requieren desenredo de objetos C++.
+
+### B. Optimización del Arranque
+1. **Desacoplamiento de I/O en SortFolder**: En [FolderDataManager::SortFolder](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp#L312-L380), se añadió una comprobación lógica para determinar si el modo de ordenamiento activo es por fecha o tamaño. Si el ordenamiento es por nombre (el predeterminado), el bucle omite por completo las llamadas síncronas a disco `std::filesystem::last_write_time` y `std::filesystem::file_size`.
+2. **Efecto de Rendimiento**: Al eliminar miles de llamadas de consulta de atributos de archivos en disco en directorios grandes durante la inicialización de la sesión de inicio, el arranque de la aplicación se percibe instantáneo.
+
+### C. Script Portable Robusto y Empaquetamiento
+1. **Resolución Dinámica de MSVC Redist**: Se modificó [build_portable.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/build_portable.ps1) para buscar dinámicamente el directorio del Redistribuible de MSVC en las carpetas comunes de VS2022 (BuildTools, Community, Professional, Enterprise) y ordenar por versión de forma descendente para encontrar las DLLs correctas (`msvcp140.dll`, `vcruntime140.dll`, `vcruntime140_1.dll`) de forma automática en cualquier entorno de desarrollo.
+2. **Prevención de Bloqueos de Archivos**: Se introdujo un sleep de seguridad de 2 segundos antes de la compresión del ZIP en [build_portable.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/build_portable.ps1) para evitar fallos cuando el antivirus bloquea temporalmente los archivos recién copiados.
+3. **Parámetro por Defecto**: Se agregó `"debug_ipc": [false]` a la plantilla predeterminada de `settings.json` generada en el paquete portable.
+4. **Pipeline Sincronizado**: Se actualizó [build_release.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/build_release.ps1) para ejecutar [build_portable.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/build_portable.ps1) en lugar de `create_portable_zip.ps1`, asegurando que la build oficial de release portable siempre sea autocontenida con las dependencias runtime.
+
+---
+
+## 16. Appendix: Trabajo completado en la Sesión (Junio 11, 2026)
+
+Se corrigió de raíz un error de arranque crítico relacionado con la carga prematura de la sesión al abrir imágenes mediante la asociación de archivos de Windows:
+
+### A. Corrección del Crash de Arranque por Carga de Imagen Prematura
+1. **Problema**: `App::Initialize` invocaba síncronamente `m_libraryData.LoadSession()` antes de que la ventana del visor y el renderizador Direct2D estuvieran inicializados. Si el archivo `session.txt` contenía carpetas con imágenes, la carga de la sesión intentaba cargar y subir automáticamente la primera imagen a la GPU llamando a `ImageLoader::UploadToGpu(*image, m_renderer)`. Al estar el contexto de `m_renderer` en un estado nulo/no inicializado, esto desencadenaba un fallo de violación de acceso de puntero (crash).
+2. **Solución**:
+   * Se modificó la firma del método `FolderDataManager::LoadSession(bool loadImage)` en [folder_data_manager.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.h) y [folder_data_manager.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp) para recibir una bandera que controla si se debe gatillar la carga física de la primera imagen de la carpeta restaurada.
+   * Se movió la llamada de carga de sesión en [app.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp) desde la fase temprana del método `App::Initialize` al final del mismo, justo antes de procesar el contenido inicial y después de que todas las páginas y el renderizador Direct2D estén completamente creados y enlazados con la ventana Win32.
+   * Se determina si se debe cargar la imagen de la sesión basándose en si se ha suministrado una ruta de imagen en la línea de comandos (`config.initialFilePath.empty() && config.initialFolderPath.empty()`), previniendo doble lectura y asegurando que las asociaciones de archivo abran la imagen especificada sin interferencias ni crashes de segmentación.
+
+### B. Corrección del Mosaico de Miniaturas Vacío en el Visor Principal al Restaurar Carpeta
+1. **Problema**: Al posponer la inicialización de la sesión y desactivar `loadImage` en el arranque desde asociación de archivos, el visor principal cargaba correctamente la imagen especificada, pero la tira inferior de miniaturas (`ThumbnailStrip`) no mostraba las imágenes de la carpeta correspondiente (mosaico vacío). Esto sucedía porque la lista de archivos se cargaba en memoria (`m_fileList`), pero nunca se propagaba a la tira de miniaturas mediante `SetFileList()`.
+2. **Solución**:
+   * En [FolderDataManager::SetCurrentFolderIndex](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp#L122-L135), se añadió una llamada directa a `m_app->m_thumbnailStrip.SetFileList(folder.filePaths)` al seleccionar una carpeta activa. Adicionalmente, se valida y clampa `folder.currentIndex` para evitar índices de archivo huérfanos/corruptos por borrados en disco.
+   * Se refactorizó la función `LibraryPage::SetCurrentFolder` en [library_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/library_page.cpp#L399) para delegar de forma limpia en el método centralizado `FolderDataManager::SetCurrentFolderIndex` en lugar de duplicar la asignación manual de índices, garantizando que el visor y la tira de miniaturas estén siempre perfectamente sincronizados con la carpeta activa.
+
+### C. Corrección de Mosaicos Vacíos, Carpetas Duplicadas y Salto de Selección por Normalización Inconsistente de Rutas
+1. **Problema**: Tras el cierre y la restauración de la sesión, la primera carpeta cargada desde `session.txt` a veces no creaba o no mostraba su miniatura (mosaico) en la grilla y el panel lateral del visor principal (Library Page). Esto ocurría porque:
+   - `FolderDataManager::AddFolder` utilizaba una normalización léxica (`lexically_normal()`) sin resolver mayúsculas/minúsculas ni rutas canónicas de unidades (ej. `e:\` vs `E:\`).
+   - `LibraryPage::AddFolder` y `SyncCurrentFolderWithApp` utilizaban `fs::canonical()`.
+   - Debido a esta inconsistencia, la ruta guardada en la sesión no coincidía exactamente en la comparación de cadenas simples (`==`). Esto causaba que `SyncCurrentFolderWithApp` no detectara la carpeta cargada de la sesión y agregara un duplicado con la ruta canónica. Al haber duplicados, la selección saltaba de índice, rompiendo la interacción y el renderizado correcto de las miniaturas en el panel visor.
+   - Adicionalmente, si el directorio de trabajo actual no tenía imágenes (como al compilar e iniciar el ejecutable directamente desde el subdirectorio de compilación `Release`), se guardaba una carpeta vacía sin imágenes en `session.txt`, lo que provocaba un mosaico vacío sin tiles en ejecuciones posteriores.
+2. **Solución**:
+   - Se crearon las utilidades centralizadas `NormalizeFolderPath` y `PathEquals` en [types.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/common/types.h) para garantizar una normalización uniforme (mediante `canonical` con fallback y comparación de mayúsculas/minúsculas de forma robusta e insensible).
+   - Se refactorizó `FolderDataManager::AddFolder` en [folder_data_manager.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp) para utilizar estas utilidades, almacenar siempre la ruta normalizada y verificar que la carpeta no esté vacía (descartando directorios sin imágenes soportadas para evitar registrar sesiones vacías corruptas).
+   - Se actualizaron `AddFolder` y `SyncCurrentFolderWithApp` en [library_page.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/library_page.cpp) para sincronizarse bajo el mismo esquema de comparación y normalización, eliminando duplicados y asegurando que las miniaturas se carguen y dibujen de manera inmediata.
+
+

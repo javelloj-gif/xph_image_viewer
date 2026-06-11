@@ -47,6 +47,13 @@ public:
     bool show_metadata = true;
     int sort_mode = 0;
 
+    // ─── Diagnostics ──────────────────────────────────────────────────────────
+    bool enable_file_log = false;  // Enable kv_log.txt file logging (default: off)
+    bool enable_debug_ipc = false; // Enable debug_ipc.txt IPC logging (default: off)
+
+    /// Read settings.json early to set debug IPC flag before App initialize
+    static void PreInitDebugIpc();
+
     /// Load settings from user_data/settings.json. Returns false on failure (e.g. file missing).
     bool Load();
 

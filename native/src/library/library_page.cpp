@@ -361,16 +361,15 @@ void LibraryPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
 void LibraryPage::AddFolder(const std::wstring& path) {
     namespace fs = std::filesystem;
     try {
-        fs::path p(path);
-        auto normalizedPath = fs::canonical(p).wstring();
+        auto normalizedPath = NormalizeFolderPath(path);
 
         for (const auto& f : m_app->m_folders) {
-            if (f.folderPath == normalizedPath) return;
+            if (PathEquals(f.folderPath, normalizedPath)) return;
         }
 
         FolderInfo folder;
         folder.folderPath = normalizedPath;
-        folder.folderName = p.filename().wstring();
+        folder.folderName = fs::path(normalizedPath).filename().wstring();
         if (folder.folderName.empty()) {
             folder.folderName = normalizedPath;
         }
@@ -399,22 +398,9 @@ void LibraryPage::AddFolder(const std::wstring& path) {
 void LibraryPage::SetCurrentFolder(int index) {
     if (index < 0 || index >= static_cast<int>(m_app->m_folders.size())) return;
     
-    m_app->m_currentFolderIdx = index;
-    auto& folder = m_app->m_folders[index];
-
-    m_app->m_fileList = folder.filePaths;
-    m_app->m_currentIndex = folder.currentIndex;
-
-    if (!m_app->m_fileList.empty()) {
-        if (m_app->m_currentIndex < 0 || m_app->m_currentIndex >= static_cast<int>(m_app->m_fileList.size())) {
-            m_app->m_currentIndex = 0;
-            folder.currentIndex = 0;
-        }
-        m_app->LoadImage(m_app->m_fileList[m_app->m_currentIndex]);
-    }
+    m_app->m_libraryData.SetCurrentFolderIndex(index, true);
 
     CalculateLayout();
-    m_app->m_window.RequestRedraw();
 }
 
 void LibraryPage::SyncCurrentFolderWithApp() {
@@ -423,11 +409,11 @@ void LibraryPage::SyncCurrentFolderWithApp() {
     namespace fs = std::filesystem;
     try {
         fs::path activeFilePath(m_app->m_fileList[0]);
-        auto activeFolderPath = fs::canonical(activeFilePath.parent_path()).wstring();
+        auto activeFolderPath = NormalizeFolderPath(activeFilePath.parent_path().wstring());
 
         int foundIdx = -1;
         for (size_t i = 0; i < m_app->m_folders.size(); ++i) {
-            if (m_app->m_folders[i].folderPath == activeFolderPath) {
+            if (PathEquals(m_app->m_folders[i].folderPath, activeFolderPath)) {
                 foundIdx = static_cast<int>(i);
                 break;
             }

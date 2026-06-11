@@ -1,98 +1,42 @@
-# Plan de Implementación — Fase 4: Empaquetamiento e Instalador para Windows
+# Plan de Implementación — Corrección del Error de Arranque de la Sesión al Asociar Archivos
 
-Este plan detalla el proceso para estructurar el empaquetamiento y la distribución de **LenteUV Image Viewer** en dos formatos para sistemas Windows 10/11:
-1. **Instalador Interactivo (`.exe`):** Creado con **Inno Setup**, que permite la selección de directorio de destino, accesos directos y la integración nativa en el menú contextual de Windows.
-2. **Versión Portable Standalone (`.zip`):** Un archivo comprimido que incluye el ejecutable compilado junto con todos sus assets, traducciones y dependencias, operable directamente sin instalación previa.
+Este plan detalla la solución para el bug de arranque donde la aplicación falla al abrirse desde una asociación de archivos si existe un archivo `session.txt` poblado.
 
-Adicionalmente, se automatiza la generación de los recursos gráficos oficiales de la aplicación a partir de su logo vectorial base.
-
----
-
-## User Review Required
-
-> [!IMPORTANT]
-> - **Claves de Registro del Menú Contextual:** La integración clásica se realizará a través de claves en `HKEY_CLASSES_ROOT` (vía `SystemFileAssociations` para no romper otras aplicaciones de visualización predeterminadas) y claves de `Directory` / `Directory\Background` para poder abrir carpetas enteras con un clic derecho en el Explorador de Windows.
-> - **Generación de Icono Multibanda:** Se requiere un script de Python con soporte para `cairosvg` and `Pillow`. Si `cairosvg` requiere librerías nativas de C que no estén presentes, se proveerá un fallback automático que renderizará los PNGs necesarios si se provee una imagen PNG base de alta resolución, o bien utilizará comandos de CLI disponibles en el entorno.
-
----
+## Razón del error
+Durante `App::Initialize()`, el método `m_libraryData.LoadSession()` es llamado de forma prematura (antes de que la ventana y el renderizador Direct2D estén creados y configurados). Si `session.txt` contiene directorios con imágenes, `LoadSession()` intenta cargar automáticamente la primera imagen llamando a `m_app->LoadImage()`, que a su vez invoca `ImageLoader::UploadToGpu()` e intenta acceder al contexto Direct2D/Direct3D nulo de `m_renderer`, resultando en un fallo de violación de acceso de puntero (crash de segmentación).
 
 ## Proposed Changes
 
-### 1. Recursos Gráficos e Iconografía
+### 1. Modificación de la Firma de LoadSession
 
-#### [NEW] [generate_icons.py](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/generate_icons.py)
-* **Objetivo:** Convertir el archivo vectorial [lente_uv.svg](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/lente_uv.svg) en un archivo de ícono estándar de Windows `.ico` con soporte multibanda (`16x16`, `32x32`, `48x48`, `256x256`).
-* **Implementación:**
-  * Script en Python que utiliza `cairosvg` para exportar a PNG de alta resolución.
-  * Utiliza `Pillow` (`PIL.Image`) para reescalar a las resoluciones estándar y empaquetar todo como un único archivo `lenteuv.ico` en `native/src/resources/lenteuv.ico`.
+#### [MODIFY] [folder_data_manager.h](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.h)
+* Cambiar la firma de `bool LoadSession();` a `bool LoadSession(bool loadImage = true);`.
 
-#### [MODIFY] [app.rc](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/resources/app.rc)
-* **Objetivo:** Asociar el nuevo archivo `.ico` generado al identificador del ícono de aplicación principal del ejecutable.
-* **Cambios:**
-  * Reemplazar la referencia del ícono antiguo `image_viewer.ico` (eliminado) para que apunte al nuevo `lenteuv.ico`.
+#### [MODIFY] [folder_data_manager.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/library/folder_data_manager.cpp)
+* Modificar la definición de `FolderDataManager::LoadSession(bool loadImage)` para pasar `loadImage` a `SetCurrentFolderIndex(0, loadImage)`.
 
----
+### 2. Sincronización del Arranque en App
 
-### 2. Automatización del Empaquetamiento Portable
-
-#### [NEW] [create_portable_zip.ps1](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/create_portable_zip.ps1)
-* **Objetivo:** Recopilar el binario compilado y sus dependencias para la versión portable.
-* **Flujo del script:**
-  * Crear un directorio temporal `lenteuv_portable/`.
-  * Copiar el binario compilado `native/build/bin/Release/lenteuv.exe` a `lenteuv_portable/`.
-  * Copiar el directorio `locales/` (contiene traducciones de localización `.mo`).
-  * Copiar el directorio `resources/` (cursores y otros assets).
-  * Comprimir todo el lote en `lenteuv_portable.zip`.
-
----
-
-### 3. Instalador Interactivo (Inno Setup)
-
-#### [NEW] [lenteuv_setup.iss](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/lenteuv_setup.iss)
-* **Objetivo:** Definir el instalador oficial de Windows.
-* **Secciones del Script de Inno Setup:**
-  * `[Setup]`: Define nombres, versión, editor, e ícono del instalador.
-    * Nombre: `LenteUV Image Viewer`
-    * Carpeta por defecto: `{autopf}\LenteUV`
-    * Permite la personalización de la ruta mediante `DisableDirPage=no`.
-  * `[Files]`: Copia `lenteuv.exe`, `locales/*` y `resources/*` a los directorios de destino correspondientes.
-  * `[Icons]`: Crea accesos directos en el menú de Inicio y en el Escritorio.
-  * `[Registry]`: Integración nativa del menú contextual:
-    * **Para archivos de imágenes soportadas (ej. `.png`, `.jpg`, `.webp`, `.gif`):**
-      * Crear la clave `HKCR\SystemFileAssociations\<ext>\shell\LenteUV` con el valor de texto `Abrir con LenteUV`.
-      * Crear la subclave `command` apuntando a `"{app}\lenteuv.exe" "%1"`.
-    * **Para directorios y fondos de carpeta:**
-      * Crear la clave `HKCR\Directory\shell\LenteUV` con el valor `Abrir carpeta en LenteUV`.
-      * Crear la subclave `command` con `"{app}\lenteuv.exe" "%1"`.
-      * Crear la clave `HKCR\Directory\Background\shell\LenteUV` con el valor `Abrir aquí con LenteUV`.
-      * Crear la subclave `command` con `"{app}\lenteuv.exe" "%V"`.
-  * `[Run]`: Opción de iniciar la aplicación al finalizar la instalación.
+#### [MODIFY] [app.cpp](file:///e:/TEMPORAL/Proyectos/Sergkrumas/image_viewer/native/src/core/app.cpp)
+* Eliminar la llamada síncrona prematura `m_libraryData.LoadSession();` de las fases iniciales de `App::Initialize` (donde el renderer es nulo).
+* Insertar la llamada a `m_libraryData.LoadSession(loadSessionImage)` justo antes del bloque `// ── Load Initial Content ──────────────────────────────────────────────`.
+* Determinar si se debe cargar la imagen de la sesión basándose en si se ha suministrado una ruta inicial por línea de comandos (evitando doble lectura).
 
 ---
 
 ## Verification Plan
 
-### Automated Verification
-1. **Generación del ícono:**
-   * Ejecutar el script `python native/generate_icons.py`.
-   * Verificar que se crea el archivo `native/src/resources/lenteuv.ico`.
-2. **Compilación del ejecutable con el nuevo recurso:**
-   * Ejecutar la compilación en configuración **Release**.
-   * Validar que el compilador de recursos (`rc.exe`) integre de manera correcta el nuevo ícono y enlace sin errores.
-3. **Compilación del Instalador ISS:**
-   * Si el compilador de línea de comandos de Inno Setup (`ISCC.exe`) está disponible en el PATH:
-     ```powershell
-     ISCC.exe lenteuv_setup.iss
-     ```
-   * Comprobar que genere el binario `Output/lenteuv_setup.exe`.
+### Automated Tests
+* Compilar la aplicación en modo Release:
+  ```powershell
+  & "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --build native/build --config Release
+  ```
 
 ### Manual Verification
-1. **Prueba de la versión Portable:**
-   * Descomprimir `lenteuv_portable.zip` en una ruta limpia.
-   * Ejecutar `lenteuv.exe` y verificar que la interfaz cargue correctamente en el idioma detectado y localice sus recursos.
-2. **Prueba del Instalador:**
-   * Ejecutar el instalador `lenteuv_setup.exe`.
-   * Verificar la pantalla de selección de ruta y la creación de accesos directos.
-   * Hacer clic derecho sobre un archivo de imagen en el explorador y seleccionar la opción "Abrir con LenteUV".
-   * Hacer clic derecho sobre un directorio y verificar la opción "Abrir carpeta en LenteUV".
-   * Desinstalar la aplicación y corroborar que se eliminen todos los accesos directos, archivos instalados y claves del registro de manera limpia.
+1. Crear un archivo `session.txt` con un directorio que contenga imágenes.
+2. Iniciar la aplicación pasando un archivo de imagen como parámetro de línea de comandos (simulando la asociación de archivos):
+   ```powershell
+   & native/build/bin/Release/lenteuv.exe test/linux.png
+   ```
+3. Verificar que la aplicación inicia correctamente, muestra la imagen especificada, y no se congela ni crashea.
+4. Cerrar y abrir la aplicación sin argumentos. Confirmar que restaura correctamente la sesión anterior y carga la primera imagen de la sesión.

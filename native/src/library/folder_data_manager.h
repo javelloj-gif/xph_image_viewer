@@ -59,7 +59,7 @@ public:
     const std::vector<FolderInfo>& GetFolders() const { return m_folders; }
 
     // ─── Session Management ──────────────────────────────────────────────────
-    bool LoadSession();
+    bool LoadSession(bool loadImage = true);
     bool SaveSession();
 
     // ─── Favorites Management ────────────────────────────────────────────────

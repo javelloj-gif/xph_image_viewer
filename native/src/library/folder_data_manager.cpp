@@ -51,9 +51,9 @@ std::wstring FolderDataManager::GetFavoritesFilePath() const {
 void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLoading, bool loadImage) {
     namespace fs = std::filesystem;
     
-    auto normPath = fs::path(folderPath).lexically_normal().wstring();
+    auto normPath = NormalizeFolderPath(folderPath);
     for (size_t i = 0; i < m_folders.size(); ++i) {
-        if (fs::path(m_folders[i].folderPath).lexically_normal().wstring() == normPath) {
+        if (PathEquals(m_folders[i].folderPath, normPath)) {
             if (!libraryLoading) {
                 SetCurrentFolderIndex(static_cast<int>(i), loadImage);
             }
@@ -62,20 +62,25 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
     }
     
     FolderInfo folder;
-    folder.folderPath = folderPath;
-    folder.folderName = fs::path(folderPath).filename().wstring();
+    folder.folderPath = normPath;
+    folder.folderName = fs::path(normPath).filename().wstring();
     if (folder.folderName.empty()) {
-        folder.folderName = folderPath;
+        folder.folderName = normPath;
     }
 
     try {
-        for (const auto& entry : fs::directory_iterator(folderPath)) {
+        for (const auto& entry : fs::directory_iterator(normPath)) {
             if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
                 folder.filePaths.push_back(entry.path().wstring());
             }
         }
     } catch (...) {
-        LogError(std::format(L"Failed to scan library directory: {}", folderPath));
+        LogError(std::format(L"Failed to scan library directory: {}", normPath));
+    }
+
+    if (folder.filePaths.empty()) {
+        LogInfo(std::format(L"Library directory contains no supported images: {}", normPath));
+        return;
     }
 
     std::sort(folder.filePaths.begin(), folder.filePaths.end());
@@ -122,7 +127,13 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
     if (m_app && m_currentFolderIdx >= 0) {
         auto& folder = m_folders[m_currentFolderIdx];
         m_app->m_fileList = folder.filePaths;
+        
+        if (folder.currentIndex < 0 || folder.currentIndex >= static_cast<int>(folder.filePaths.size())) {
+            folder.currentIndex = 0;
+        }
         m_app->m_currentIndex = folder.currentIndex;
+        m_app->m_thumbnailStrip.SetFileList(folder.filePaths);
+        
         if (loadImage && !folder.filePaths.empty()) {
             m_app->LoadImage(folder.filePaths[folder.currentIndex]);
         }
@@ -133,7 +144,7 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
     }
 }
 
-bool FolderDataManager::LoadSession() {
+bool FolderDataManager::LoadSession(bool loadImage) {
     std::wstring path = GetSessionFilePath();
     if (!std::filesystem::exists(path)) return false;
 
@@ -167,16 +178,19 @@ bool FolderDataManager::LoadSession() {
         std::wstring fPath = toWString(lines[i]);
         if (fPath.empty()) continue;
         if (!std::filesystem::exists(fPath)) continue;
+        size_t prevSize = m_folders.size();
         try {
             AddFolder(fPath, true);
-            loadedAny = true;
+            if (m_folders.size() > prevSize) {
+                loadedAny = true;
+            }
         } catch (...) {
             LogError(std::format(L"Failed to add folder from session: {}", fPath));
         }
     }
 
     if (loadedAny && !m_folders.empty()) {
-        SetCurrentFolderIndex(0);
+        SetCurrentFolderIndex(0, loadImage);
     }
     return loadedAny;
 }
@@ -325,6 +339,9 @@ void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
     std::vector<FileEntry> entries;
     entries.reserve(folder.filePaths.size());
 
+    bool needDate = (mode == SortMode::DateAsc || mode == SortMode::DateDesc);
+    bool needSize = (mode == SortMode::SizeAsc || mode == SortMode::SizeDesc);
+
     for (size_t i = 0; i < folder.filePaths.size(); ++i) {
         const auto& path = folder.filePaths[i];
         FileEntry entry;
@@ -335,11 +352,23 @@ void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
         std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::towlower);
         entry.name = lowerName;
 
-        try {
-            entry.date = std::filesystem::last_write_time(path);
-            entry.size = std::filesystem::file_size(path);
-        } catch (...) {
+        if (needDate) {
+            try {
+                entry.date = std::filesystem::last_write_time(path);
+            } catch (...) {
+                entry.date = std::filesystem::file_time_type();
+            }
+        } else {
             entry.date = std::filesystem::file_time_type();
+        }
+
+        if (needSize) {
+            try {
+                entry.size = std::filesystem::file_size(path);
+            } catch (...) {
+                entry.size = 0;
+            }
+        } else {
             entry.size = 0;
         }
 

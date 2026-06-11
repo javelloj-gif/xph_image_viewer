@@ -93,11 +93,41 @@ std::wstring Settings::GetSettingsFilePath() const {
     return (exeDir / "settings.json").wstring();
 }
 
+void Settings::PreInitDebugIpc() {
+    wchar_t exePath[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+    std::filesystem::path p(exePath);
+    std::wstring path;
+    bool found = false;
+    for (int i = 0; i < 6; ++i) {
+        p = p.parent_path();
+        if (std::filesystem::exists(p / "user_data")) {
+            path = (p / "user_data" / "settings.json").wstring();
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+        path = (exeDir / "settings.json").wstring();
+    }
+
+    if (std::filesystem::exists(path)) {
+        std::string json = ReadFileToString(path);
+        std::string val = FindKeyValueRaw(json, "debug_ipc");
+        detail::g_enableDebugIpc = ParseBool(val, false);
+    } else {
+        detail::g_enableDebugIpc = false;
+    }
+}
+
 bool Settings::Load() {
     auto trace = [](std::string_view msg) {
-        std::ofstream dbg("debug_ipc.txt", std::ios::app);
-        dbg << "[SETTINGS] Load step: " << msg << std::endl;
-        dbg.close();
+        if (detail::g_enableDebugIpc) {
+            std::ofstream dbg("debug_ipc.txt", std::ios::app);
+            dbg << "[SETTINGS] Load step: " << msg << std::endl;
+            dbg.close();
+        }
     };
     trace("Start");
 
@@ -150,6 +180,12 @@ bool Settings::Load() {
     show_cyberpunk = ParseBool(FindKeyValueRaw(json, "show_cyberpunk"), show_cyberpunk);
     show_metadata = ParseBool(FindKeyValueRaw(json, "show_metadata"), show_metadata);
     sort_mode = ParseInt(FindKeyValueRaw(json, "sort_mode"), sort_mode);
+
+    enable_file_log = ParseBool(FindKeyValueRaw(json, "enable_file_log"), enable_file_log);
+    detail::g_enableFileLog = enable_file_log;
+
+    enable_debug_ipc = ParseBool(FindKeyValueRaw(json, "debug_ipc"), enable_debug_ipc);
+    detail::g_enableDebugIpc = enable_debug_ipc;
 
     LogInfo(L"Settings loaded successfully");
     return true;
@@ -211,7 +247,10 @@ bool Settings::Save() {
     file << "  \"show_thirds\": [\n   " << (show_thirds ? "true" : "false") << ",\n   \"Show thirds\"\n  ],\n";
     file << "  \"show_cyberpunk\": [\n   " << (show_cyberpunk ? "true" : "false") << ",\n   \"Cyberpunk frame\"\n  ],\n";
     file << "  \"show_metadata\": [\n   " << (show_metadata ? "true" : "false") << ",\n   \"Show metadata\"\n  ],\n";
-    file << "  \"sort_mode\": [\n   " << sort_mode << ",\n   \"Sort mode\"\n  ]\n";
+    file << "  \"sort_mode\": [\n   " << sort_mode << ",\n   \"Sort mode\"\n  ],\n";
+    file << "  \"---diagnostics\": \"Diagnostics\",\n";
+    file << "  \"enable_file_log\": [\n   " << (enable_file_log ? "true" : "false") << ",\n   \"Write log messages to kv_log.txt\"\n  ],\n";
+    file << "  \"debug_ipc\": [\n   " << (enable_debug_ipc ? "true" : "false") << ",\n   \"Write debug IPC logs to debug_ipc.txt\"\n  ]\n";
 
     file << " }\n}\n";
 
