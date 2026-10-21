@@ -22,7 +22,7 @@ Fecha de auditoría: 2026-10-21. No interpretar una entrada pendiente como una p
 | Paquete portable e imports PE | Pasó; EXE y DLLs app-local inspeccionados; ZIP sin datos personales |
 | Compilación del instalador | Pasó con Inno Setup 6.7.3 |
 | Instalación, reinstalación y desinstalación QA | Pasó con AppId independiente, CURRENTUSER, sin iconos/asociaciones; preservó sesión existente |
-| Checkout limpio y documentación | Pasó: clone local del commit `34e13c7`, Debug/Release y CTest desde cero; árbol limpio después de las pruebas |
+| Checkout limpio y documentación | Pasó: clone local del commit original `34e13c7` (árbol idéntico a `96e9648` tras limpiar historial), Debug/Release y CTest desde cero; árbol limpio después |
 | Prueba visual de modos/compacto/opciones | Pasó el recorrido descrito abajo, sobre el portable extraído fuera del repositorio |
 | IPC | Fallo previo reproducido también con el binario anterior; ver abajo |
 | Datos persistidos sobre copias | Sesión de cuatro líneas, settings y guardado/recarga KBRD comprobados; sin favoritos/tableros históricos disponibles |
@@ -62,12 +62,36 @@ Fecha de auditoría: 2026-10-21. No interpretar una entrada pendiente como una p
 
 ## Preservación
 
-El commit `e2abe3d` conserva los cambios locales anteriores sin incluir datos de
+El commit `ac6012f` (original `e2abe3d`) conserva los cambios locales anteriores sin incluir datos de
 ejecución. El respaldo recuperable local está en `build/backups/pre-foundation/`,
 ignorado por Git: HEAD anterior, árbol preservado, patch, datos y planes locales.
 La primera copia TEMP del sandbox no persistió; el respaldo de workspace se reconstruyó
 desde esos commits y los datos intactos, y se verificó la copia de datos por hash.
 No se borraron los worktrees ni el estado local de `.kilo`.
+
+## Publicación y limpieza del historial
+
+El primer push fue rechazado por GitHub: el historial contenía dos PCH bajo
+`native/build/`, de 194.69 y 190.44 MiB. El árbol actual ya estaba limpio.
+El propietario autorizó retirar artefactos del historial y conservar la historia de fuentes.
+
+- Se verificó un bundle completo del historial original en
+  `build/backups/pre-foundation/original-history.bundle` y se conservó la rama local
+  `codex/repository-foundation-original`. No publicar esa rama histórica sin filtrarla.
+- Se filtró exclusivamente `native/build/` desde su introducción: 24 commits afectados,
+  2 848 anteriores con sus hashes originales. Se mantuvieron los 2 872 commits existentes.
+- Se verificaron autor, correo, fechas, committer y mensaje de cada commit reescrito,
+  y la igualdad de cada árbol excluyendo únicamente el directorio generado.
+- El árbol final antes de añadir esta nota mantuvo el hash
+  `2c287309b2304f54240ee16a9291e8f71701d896`, idéntico al validado.
+- El historial de la rama publicable no contiene blobs mayores de 100 MiB.
+  El remoto no tenía referencias; se utiliza push normal, sin force-push.
+
+| Commit original | Equivalente limpio |
+| --- | --- |
+| `e2abe3d` preservación de cambios previos | `ac6012f` |
+| `34e13c7` reforma de estructura | `96e9648` |
+| `73a74a6` resultados de validación | `50ec7a6` |
 
 ## Límites
 

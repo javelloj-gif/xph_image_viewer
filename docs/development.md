@@ -112,6 +112,12 @@ locales de legado; sus caches CMake contienen rutas antiguas y no deben reutiliz
 No usar `git add -f` para incluir datos ignorados. Consultar `git diff --check` y revisar
 el diff antes de publicar.
 
+El historial publicable retiró `native/build/` para cumplir el límite de archivos de
+GitHub; los hashes de los últimos commits históricos cambiaron. La historia original
+se conserva localmente en un bundle y una rama de respaldo, según [validación](validation.md).
+Publicar ramas concretas; no usar `git push --all` sobre ese respaldo ni enviar referencias
+históricas sin comprobar sus artefactos.
+
 ## Preparación para Spec Kit
 
 Se reservan `.specify/` y `specs/`, sin carpetas simuladas ni instalación. El contexto
