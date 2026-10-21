@@ -22,7 +22,7 @@ Fecha de auditoría: 2026-10-21. No interpretar una entrada pendiente como una p
 | Paquete portable e imports PE | Pasó; EXE y DLLs app-local inspeccionados; ZIP sin datos personales |
 | Compilación del instalador | Pasó con Inno Setup 6.7.3 |
 | Instalación, reinstalación y desinstalación QA | Pasó con AppId independiente, CURRENTUSER, sin iconos/asociaciones; preservó sesión existente |
-| Checkout limpio y documentación | Pendiente |
+| Checkout limpio y documentación | Pasó: clone local del commit `34e13c7`, Debug/Release y CTest desde cero; árbol limpio después de las pruebas |
 | Prueba visual de modos/compacto/opciones | Pasó el recorrido descrito abajo, sobre el portable extraído fuera del repositorio |
 | IPC | Fallo previo reproducido también con el binario anterior; ver abajo |
 | Datos persistidos sobre copias | Sesión de cuatro líneas, settings y guardado/recarga KBRD comprobados; sin favoritos/tableros históricos disponibles |
@@ -52,6 +52,13 @@ Fecha de auditoría: 2026-10-21. No interpretar una entrada pendiente como una p
   sin BOM; ninguna sesión personal, caché, log, favorito, tablero o muestra incorporada.
 - Las fuentes trasladadas coinciden por hash Git con el commit de preservación,
   excepto el comentario de threading corregido en `image_loader.h`.
+- En el checkout limpio se ejecutaron ambos builds y ambos CTest sin datos locales,
+  sin runtime Python y sin el build anterior. No quedaron archivos versionados modificados.
+- Enlaces locales Markdown, parseo de scripts PowerShell y `git diff --check` pasaron.
+  Se comprobó que nombres de salida con traversal se rechazan y que pedir instalador
+  con una ruta ISCC inexistente falla, sin anunciar un instalador exitoso.
+- Los datos personales de la raíz siguen iguales por hash al respaldo de preservación;
+  Git no registra `user_data/`, `build/`, `dist/` ni estado `.kilo/` en la nueva base.
 
 ## Preservación
 

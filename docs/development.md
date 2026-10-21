@@ -92,6 +92,9 @@ ZIP e instalador usan el mismo staging. Los resultados van a:
 Inno Setup 6 mantiene AppId/tareas/asociaciones del instalador anterior. Compilar el
 instalador no lo instala. Probar instalación/desinstalación en una ubicación aislada
 y sin registrar asociaciones globales cuando solo se valida la distribución.
+Para QA se puede definir `MyAppId` al invocar ISCC directamente; usar una identidad
+distinta de producción, `/CURRENTUSER /NOICONS /TASKS=""` y un destino temporal.
+El instalador no sobrescribe datos existentes ni los elimina al desinstalar.
 La app sigue necesitando escritura junto al EXE; Program Files con usuario sin
 privilegios es una limitación previa, no una migración resuelta por esta reforma.
 
