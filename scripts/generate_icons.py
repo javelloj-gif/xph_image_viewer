@@ -5,12 +5,12 @@ Genera el archivo lenteuv.ico multibanda para Windows desde la imagen de referen
 de alta resolución o, en su defecto, desde el SVG vectorial (requiere cairosvg).
 
 Estrategia de renderizado (en orden de prioridad):
-  1. PNG de referencia de alta resolución (lenteuv PNG.png) — Fidelidad 1:1 garantizada
+  1. PNG de referencia de alta resolución (assets/branding/lenteuv.png) — Fidelidad 1:1 garantizada
   2. cairosvg — Renderizado vectorial perfecto desde el SVG
   3. Error explícito — Se informa al usuario que falta la fuente de imagen
 
 Uso:
-  python native/generate_icons.py
+  python scripts/generate_icons.py
 """
 
 import os
@@ -18,11 +18,11 @@ import sys
 from pathlib import Path
 
 # ─── Rutas ─────────────────────────────────────────────────────────────────────
-SCRIPT_DIR    = Path(__file__).parent
+SCRIPT_DIR    = Path(__file__).resolve().parent
 PROJECT_ROOT  = SCRIPT_DIR.parent
-SVG_PATH      = SCRIPT_DIR / "lente_uv.svg"
-PNG_REF_PATH  = PROJECT_ROOT / "lenteuv PNG.png"
-OUTPUT_ICO    = SCRIPT_DIR / "src" / "resources" / "lenteuv.ico"
+SVG_PATH      = PROJECT_ROOT / "assets" / "branding" / "lente_uv.svg"
+PNG_REF_PATH  = PROJECT_ROOT / "assets" / "branding" / "lenteuv.png"
+OUTPUT_ICO    = PROJECT_ROOT / "src" / "resources" / "lenteuv.ico"
 ICO_SIZES     = [16, 32, 48, 256]
 
 def banner(msg):
@@ -37,7 +37,7 @@ def load_source_image():
     """
     from PIL import Image
 
-    # ── Prioridad 1: PNG de referencia (lenteuv PNG.png) ─────────────────────
+    # ── Prioridad 1: PNG de referencia (assets/branding/lenteuv.png) ─────────────────────
     if PNG_REF_PATH.exists():
         print(f"\n[Source] Usando PNG de referencia de alta resolucion:")
         print(f"         {PNG_REF_PATH}")
@@ -68,7 +68,7 @@ def load_source_image():
     print(f"  Falta: cairosvg (instala con 'pip install cairosvg')")
     print()
     print("  Soluciones:")
-    print("    1. Coloca 'lenteuv PNG.png' en la raíz del proyecto (recomendado)")
+    print("    1. Coloca 'assets/branding/lenteuv.png' en la raíz del proyecto (recomendado)")
     print("    2. Instala cairosvg: pip install cairosvg")
     sys.exit(1)
 
@@ -159,8 +159,7 @@ def main():
     print(f"     Dimensión : {result.size[0]}x{result.size[1]} px (banda activa)")
     print()
     print("  Siguiente paso: recompilar lenteuv.exe")
-    print('  $cmake = "C:\\Program Files (x86)\\...\\cmake.exe"')
-    print("  & $cmake --build native/build --config Release")
+    print("  cmake --build --preset release")
     print()
 
 

@@ -81,7 +81,8 @@ public:
 
     // ── Asynchronous Loading ───────────────────────────────────────────────
     // Decoding runs on background threads. Callback fires when pixel data
-    // is ready (still on the background thread — no GPU ops here).
+    // is ready through ProcessPendingTextures() on the main/render thread,
+    // after GPU upload. Workers only decode and enqueue results.
 
     void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
     void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback);

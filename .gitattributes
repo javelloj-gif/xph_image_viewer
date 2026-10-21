@@ -1,0 +1,21 @@
+* text=auto
+*.cpp text eol=lf
+*.h text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+*.po text eol=lf
+*.pot text eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.tif binary
+*.tiff binary
+*.bmp binary
+*.apng binary
+*.tga binary

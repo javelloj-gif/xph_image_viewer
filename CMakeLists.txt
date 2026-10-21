@@ -1,10 +1,15 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 project(lenteuv
     VERSION 0.90.0
     DESCRIPTION "LenteUV Image Viewer — Native C++20"
     LANGUAGES CXX
 )
+
+if(NOT WIN32 OR NOT MSVC)
+    message(FATAL_ERROR "LenteUV requires Windows and MSVC (Visual Studio 2022 or newer).")
+endif()
+include(CTest)
 
 # ─── C++20 Standard ────────────────────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 20)
@@ -177,15 +182,19 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release"
 )
 
-# ─── Copy test images to build output (for easy testing) ─────────────────────
+# Runtime resources are local to the executable: never discover personal data
+# from a checkout ancestor, and never overwrite an existing user_data directory.
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/../test"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/test"
-    COMMENT "Copying test images..."
+        "${CMAKE_SOURCE_DIR}/locales"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/locales"
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/user_data"
+    COMMENT "Preparing executable-local translations and data directory..."
 )
 
 # ─── Tagging Tests Executable ────────────────────────────────────────────────
+if(BUILD_TESTING)
 add_executable(tagging_tests
     src/metadata/xmp_tag_manager.cpp
     src/metadata/metadata_cache.cpp
@@ -195,7 +204,7 @@ add_executable(tagging_tests
     src/metadata/async_directory_scanner.cpp
     src/loader/image_loader.cpp
     src/common/pch.cpp
-    src/tagging_tests.cpp
+    tests/tagging_tests.cpp
 )
 target_precompile_headers(tagging_tests PRIVATE src/common/pch.h)
 target_include_directories(tagging_tests PRIVATE src)
@@ -228,10 +237,13 @@ target_link_libraries(tagging_tests PRIVATE
     shlwapi.lib
     propsys.lib
 )
-# Copy test images to test output for tagging_tests
-add_custom_command(TARGET tagging_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/../test"
-        "$<TARGET_FILE_DIR:tagging_tests>/test"
-    COMMENT "Copying test images for tagging_tests..."
+find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell REQUIRED)
+add_test(NAME metadata.tagging
+    COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/scripts/run_tagging_tests.ps1"
+        -Executable "$<TARGET_FILE:tagging_tests>"
+        -Fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures"
+        -RunRoot "${CMAKE_BINARY_DIR}/test-runs"
 )
+set_tests_properties(metadata.tagging PROPERTIES TIMEOUT 90)
+endif()

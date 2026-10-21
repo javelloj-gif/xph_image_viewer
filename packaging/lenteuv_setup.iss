@@ -2,20 +2,29 @@
 ; lenteuv_setup.iss — Inno Setup Script para LenteUV Image Viewer
 ; ==============================================================================
 ; Autor: xPhang (fork de Sergkruma's image viewer por Sergei Krumas)
-; Licencia: GPL v2+
+; Licencia: ver LICENSE (GNU GPL v3)
 ;
-; Para compilar: ISCC.exe lenteuv_setup.iss
-; Resultado: Output\lenteuv_setup.exe
+; Compilar mediante scripts/build_release.ps1 -SkipIcons -Format Installer
+; Resultado: dist/lenteuv_setup_<version>.exe
 ; ==============================================================================
 
 #define MyAppName        "LenteUV Image Viewer"
-#define MyAppVersion     "0.90.0"
+#ifndef MyAppId
+  #define MyAppId "{{D4A9F3B2-8C17-4E5F-A3D6-2B7E9C1F0A84}"
+#endif
+#ifndef MyAppVersion
+  #error MyAppVersion must be passed by the packaging script
+#endif
 #define MyAppPublisher   "xPhang"
-#define MyAppURL         "https://github.com/sergkrumas/image_viewer"
+#define MyAppURL         "https://github.com/javelloj-gif/xph_image_viewer"
 #define MyAppExeName     "lenteuv.exe"
-#define MyAppExePath     "native\build\bin\Release\lenteuv.exe"
-#define MyAppIcon        "native\src\resources\lenteuv.ico"
-#define MyOutputDir      "Output"
+#ifndef StageDir
+  #error StageDir must be passed by the packaging script
+#endif
+#define MyAppIcon        StageDir + "\lenteuv.ico"
+#ifndef MyOutputDir
+  #error MyOutputDir must be passed by the packaging script
+#endif
 
 ; ─── Extensions soportadas por LenteUV ───────────────────────────────────────
 ; Se registran en SystemFileAssociations para no romper aplicaciones predeterminadas.
@@ -23,7 +32,7 @@
 
 [Setup]
 ; Información de la aplicación
-AppId                    = {{D4A9F3B2-8C17-4E5F-A3D6-2B7E9C1F0A84}
+AppId                    = {#MyAppId}
 AppName                  = {#MyAppName}
 AppVersion               = {#MyAppVersion}
 AppVerName               = {#MyAppName} v{#MyAppVersion}
@@ -43,7 +52,7 @@ SetupIconFile            = {#MyAppIcon}
 
 ; Archivos de salida
 OutputDir                = {#MyOutputDir}
-OutputBaseFilename       = lenteuv_setup
+OutputBaseFilename       = lenteuv_setup_{#MyAppVersion}
 
 ; Compresión
 Compression              = lzma2/ultra64
@@ -91,20 +100,16 @@ Name: "contextmenu";    Description: "Integrar en el &menú contextual del Explo
 Name: "contextfolder";  Description: "Opción ""Abrir carpeta en LenteUV"" en carpetas";  GroupDescription: "Integración del sistema:"; Flags: checkedonce; Check: WizardIsTaskSelected('contextmenu')
 
 [Files]
-; Ejecutable principal
-Source: "{#MyAppExePath}";          DestDir: "{app}";          Flags: ignoreversion
+; Fresh staging includes EXE, VC runtime, translations and portable defaults.
+Source: "{#StageDir}\*"; DestDir: "{app}"; Excludes: "user_data\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Existing preferences and sessions belong to the user, including on upgrade/uninstall.
+Source: "{#StageDir}\user_data\*"; DestDir: "{app}\user_data"; Flags: onlyifdoesntexist uninsneveruninstall recursesubdirs createallsubdirs
 
-; Traducciones (locales)
-Source: "locales\*";                DestDir: "{app}\locales";  Flags: ignoreversion recursesubdirs createallsubdirs
-
-; Assets gráficos (resources: switch icons, etc.)
-Source: "resources\*";             DestDir: "{app}\resources"; Flags: ignoreversion recursesubdirs createallsubdirs
-
-; Cursores personalizados
-Source: "cursors\*";               DestDir: "{app}\cursors";   Flags: ignoreversion recursesubdirs createallsubdirs; Check: DirExists(ExpandConstant('{src}\cursors'))
-
-; Ícono de la aplicación (para accesos directos y panel de control)
-Source: "{#MyAppIcon}";             DestDir: "{app}";          Flags: ignoreversion
+[Dirs]
+Name: "{app}\user_data"; Flags: uninsneveruninstall
+Name: "{app}\user_data\boards"; Flags: uninsneveruninstall
+Name: "{app}\user_data\cache"; Flags: uninsneveruninstall
+Name: "{app}\user_data\tags"; Flags: uninsneveruninstall
 
 [Icons]
 ; Acceso directo en el Menú de Inicio

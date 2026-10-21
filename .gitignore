@@ -1,31 +1,17 @@
+# Generated build trees, packages and diagnostics
+/build/
+/dist/
+/Output/
+/user_data/
+/.kilo/
+*.zip
 *.pyc
-/utility
-/user_data/default_paths.txt
-/user_data/comments.txt
-/user_data/fav.txt
-/user_data/deep_secrets.txt
-/user_data/session.txt
-/user_data/session_old.txt
-/user_data/settings.json
-/user_data/history.log
-/user_data/tags/*.*
-/user_data/boards/*.*
+__pycache__/
+.vs/
+CMakeUserPresets.json
+kv_log.txt
+debug_ipc.txt
+xmp_tag_cache.bin
+# Local shell registration exports
 register_image_viewer.reg
 default_register_image_viewer.reg
-thumbnails_row_debug/python/imgs/*
-user_data/watch_tower.data
-user_data/watch_tower.data.txt
-user_data/bookmarks_board.cbor2.board
-user_data/front_tracker.data.txt
-user_data/default_miltifolder_path.txt
-ips_utils_debug_input.data
-user_data/board_history.log
-native/build/
-
-# --- Packaging artifacts (generated — do not commit) -------------------------
-# Regenerar con: .\build_release.ps1
-/Output/
-/lenteuv_portable.zip
-/lenteuv_portable_*.zip
-# El .ico se genera desde el SVG — se incluye en repo para evitar requerir Pillow en CI
-# /native/src/resources/lenteuv.ico
