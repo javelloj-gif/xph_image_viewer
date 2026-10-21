@@ -147,14 +147,39 @@ InitResult App::Initialize(const AppConfig& config) {
         }
         return true;
     };
-    m_window.events.onIpcOpenPath = [this](const std::wstring& path) {
-        LoadImage(path);
-        if (m_window.IsFullscreen()) {
-            m_window.SetFullscreen(true);
+    m_window.events.onIpcOpenPath = [this](const std::wstring& rawPath) {
+        if (rawPath.empty()) return;
+
+        namespace fs = std::filesystem;
+        std::wstring path = fs::absolute(rawPath).lexically_normal().wstring();
+
+        std::error_code ec;
+        if (!fs::exists(path, ec)) return;
+
+        if (fs::is_directory(path, ec)) {
+            LoadFolder(path);
+            SetPage(Page::Library);
+        } else if (fs::is_regular_file(path, ec)) {
+            LoadImage(path);
+            SetPage(Page::Viewer);
+        } else {
+            return;
+        }
+
+        if (IsIconic(m_window.GetHwnd())) {
+            ShowWindow(m_window.GetHwnd(), SW_RESTORE);
         } else {
             m_window.Show();
         }
+
+        if (m_window.IsFullscreen()) {
+            m_window.SetFullscreen(true);
+        } else {
+            AdjustWindowToImage();
+        }
+
         SetForegroundWindow(m_window.GetHwnd());
+        m_window.RequestRedraw();
     };
     m_window.events.onTrayIconEvent = [this](LPARAM lp) {
         if (lp == WM_LBUTTONDBLCLK) {
@@ -1103,7 +1128,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 int result = MessageBoxW(m_window.GetHwnd(),
                     L"¿Estás seguro de que deseas enviar esta imagen a la Papelera de reciclaje?",
                     L"Eliminar Imagen",
-                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+                    MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON1);
                 
                 if (isFullscreen && !m_window.IsFullscreen()) {
                     m_window.SetFullscreen(true);

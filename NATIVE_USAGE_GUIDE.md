@@ -93,12 +93,13 @@ Estos controles funcionan en toda la aplicación de forma universal:
 Esta página sirve como el visor principal de imágenes a pantalla completa:
 
 ### Interacciones de Ratón
-*   **Arrastrar (Click Izquierdo)**: Panea la imagen por el visor.
+*   **Arrastrar (Click Izquierdo)**: En modo ventana, arrastra la ventana completa por la pantalla (delegado al gestor nativo de Windows vía `WM_NCLBUTTONDOWN/HTCAPTION`). En pantalla completa no tiene efecto.
+*   **Paneo de la imagen**: Teclas `W` / `A` / `S` / `D` (Shift acelera). El clic izquierdo ya no panea la imagen.
 *   **Rueda del Ratón (Defecto)**: Zoom suave centrado en la posición actual del cursor.
 *   **Ctrl + Rueda del Ratón (Defecto)**: Navegar por la lista de imágenes (anterior/siguiente).
 *   **Rueda sobre la tira de miniaturas**: Desplaza horizontalmente la fila de previsualizaciones inferior.
-*   **Doble Click**: Alterna el zoom entre escala 1:1 real y modo fit-to-screen adaptativo (las imágenes pequeñas caben al 100% sin estirarse, y las grandes se adaptan proporcionalmente).
-*   **Click Derecho**: Abre el menú de contexto (Settings, Fullscreen, Exit).
+*   **Doble Click Izquierdo**: Alterna el modo pantalla completa (sólo si el mouse no se movió entre clicks; en caso contrario se interpreta como inicio de arrastre de ventana).
+*   **Click Derecho**: Abre el menú de contexto (Settings, Fullscreen, Exit). Funciona igual en modo ventana y en pantalla completa.
 *   **Ctrl + Arrastre Izquierdo**: Herramienta de lupa de zoom rectangular; al soltar, la cámara encuadra y hace zoom en el recuadro seleccionado.
 *   **Ctrl + Click Izquierdo en Miniatura**: Selección múltiple para operaciones masivas.
 *   **Arrastrar y Soltar Miniaturas**: Permite reordenar el carrusel de miniaturas inferior de forma visual con un cursor rojo guía.

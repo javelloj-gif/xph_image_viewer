@@ -69,6 +69,9 @@ private:
     void CancelRegionZoom();
     float GetDefaultZoom() const;
 
+    // ── Context Menu (right-click in windowed mode) ────────────────────────
+    void ShowContextMenu();
+
     // ── Pointer to Parent Application ──────────────────────────────────────
     App* m_app = nullptr;
 
@@ -81,10 +84,16 @@ private:
     float  m_targetZoom = 1.0f;
     PointF m_zoomAnchor = {};   // screen space coordinate of zoom anchor
 
-    // ── Drag & Pan Interaction State ───────────────────────────────────────
-    bool   m_dragging = false;
-    PointF m_dragStart = {};
-    PointF m_panStart = {};
+    // ── Left-Click Drag State ──────────────────────────────────────────────
+    // En modo ventana: si el cursor se mueve más allá del umbral antes de soltar,
+    // el gesto se convierte en un drag de título nativo (WM_NCLBUTTONDOWN/HTCAPTION).
+    // En modo pantalla completa: el movimiento panea directamente m_pan.
+    bool   m_leftButtonDown = false;
+    PointF m_leftButtonStart = {};       // posición inicial del cursor (espacio cliente)
+    double m_leftButtonDownTime = 0.0;   // sello de tiempo para diagnóstico
+    float  m_leftButtonDownX = 0.0f;
+    float  m_leftButtonDownY = 0.0f;
+    PointF m_panAtDragStart = {};        // valor de m_pan al pulsar (para paneo fullscreen)
 
     // ── Region Zoom State ──────────────────────────────────────────────────
     bool   m_regionZoomActive = false;
