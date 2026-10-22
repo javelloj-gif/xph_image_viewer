@@ -134,7 +134,7 @@ Consultar [desarrollo y distribución](development.md), [problemas conocidos](kn
 
 Las herramientas viven en `scripts/`, el instalador en `packaging/`, las muestras en `tests/fixtures/` y el material de identidad en `assets/branding/`. Los scripts no copian datos personales; cada paquete usa staging nuevo y runtime VC++ x64 app-local. Inno Setup conserva identidad de aplicación, tareas y asociaciones de Explorer.
 
-Para futura adopción de GitHub Spec Kit se reservan `.specify/` y `specs/`, sin simular una instalación ni generar comandos. Mantener especificaciones futuras separadas del comportamiento observado. No hay rediseño de arquitectura ni cambio de formato de datos en esta reforma.
+El [flujo de trabajo](workflow.md) registra los cambios deseados en `docs/changes/` y su orden en la [hoja de ruta](roadmap.md). Mantener las especificaciones separadas del comportamiento observado. No hay rediseño de arquitectura ni cambio de formato de datos en esta reforma.
 
 ## Protocolo de mantenimiento
 

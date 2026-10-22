@@ -118,12 +118,11 @@ se conserva localmente en un bundle y una rama de respaldo, según [validación]
 Publicar ramas concretas; no usar `git push --all` sobre ese respaldo ni enviar referencias
 históricas sin comprobar sus artefactos.
 
-## Preparación para Spec Kit
+## Trabajo por cambios
 
-Se reservan `.specify/` y `specs/`, sin carpetas simuladas ni instalación. El contexto
-observado vive en `docs/`; futuras especificaciones describirán cambios deseados y
-criterios de aceptación sin sobrescribir la documentación del comportamiento actual.
-Cuando se decida instalar, consultar las instrucciones vigentes del
-[repositorio oficial de GitHub Spec Kit](https://github.com/github/spec-kit), elegir
-versión e integración y revisar los archivos generados antes de confirmar. Esta base
-no contiene constitución ni comandos de agente generados.
+El [flujo de trabajo](workflow.md) organiza especificación, plan y resultado en
+`docs/changes/`. La [hoja de ruta](roadmap.md) registra prioridades y dependencias.
+El contexto observado permanece en las guías existentes; las especificaciones
+describen cambios deseados sin sustituir la documentación del comportamiento actual.
+El procedimiento utiliza documentos versionados, las herramientas de Codex y los
+comandos de compilación y validación de este repositorio, sin instalación adicional.

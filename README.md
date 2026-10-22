@@ -31,10 +31,12 @@ Los resultados se escriben en `build/` y `dist/`, fuera del seguimiento de Git.
 - [Compilación y distribución](docs/development.md)
 - [Contexto para agentes](docs/project-context.md) y [entrada breve](AGENTS.md)
 - [Problemas conocidos](docs/known-issues.md) y [validación](docs/validation.md)
+- [Flujo de trabajo](docs/workflow.md), [hoja de ruta](docs/roadmap.md) y [plantillas de cambios](docs/changes/README.md)
 
 `src/` conserva los subsistemas nativos; `locales/` contiene traducciones;
 `tests/fixtures/` conserva las muestras. Los datos personales permanecen locales.
-La estructura está preparada para una adopción posterior de Spec Kit.
+Los cambios funcionales se organizan mediante especificaciones, planes y evidencia
+versionados en `docs/changes/`, siguiendo el flujo de trabajo del repositorio.
 
 Licencia: consultar [LICENSE](LICENSE), GNU GPL versión 3. Se preservan el historial
 y las atribuciones del proyecto de origen.

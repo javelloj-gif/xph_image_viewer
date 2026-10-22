@@ -8,7 +8,10 @@ del repositorio. No confundir carpetas/muestras heredadas con dependencias activ
 
 - [Contexto técnico](docs/project-context.md): arquitectura, flujos, hilos, formatos y mapa de intervención.
 - [Uso](docs/usage.md): controles actuales y diferencias entre teclas numéricas.
-- [Desarrollo](docs/development.md): compilación, tests, paquetes y futura adopción de Spec Kit.
+- [Desarrollo](docs/development.md): compilación, tests y paquetes.
+- [Flujo de trabajo](docs/workflow.md): especificaciones, planes y evidencia por cambio.
+- [Hoja de ruta](docs/roadmap.md): prioridades, dependencias y estado del trabajo.
+- [Revisión de arquitectura](.agents/skills/lenteuv-architecture-review/SKILL.md): habilidad para auditorías y revisión de diseños/diffs relevantes.
 - [Problemas conocidos](docs/known-issues.md): hallazgos, reportes e hipótesis.
 - [Validación de la base](docs/validation.md): evidencia y límites de esta reforma.
 
@@ -38,5 +41,10 @@ No se necesita Python si se conserva el ICO. El instalador requiere Inno Setup 6
   Los paquetes se crean desde staging nuevo, nunca desde datos personales.
 - Distingue evidencia de código, ejecución, reporte e hipótesis. Una compilación no demuestra
   UX ni rendimiento con carpetas grandes. Actualiza la guía afectada al cambiar un contrato.
-- `.specify/` y `specs/` están reservados para la futura instalación de Spec Kit;
-  no hay comandos o constitución generados todavía.
+- Para cambios funcionales usa `docs/changes/<id>-<nombre>/` según `docs/workflow.md`.
+  Mantén especificación, plan y resultado al día; al retomar, lee esos archivos y Git.
+  Los cambios triviales solo requieren descripción y comprobación proporcional.
+- Cada clase y método nuevo o modificado debe tener un comentario breve de su
+  responsabilidad; añade contratos de hilo, propiedad y efectos cuando correspondan.
+  Prefiere la declaración y evita duplicar el comentario en la implementación.
+  La documentación del código preexistente se revisa progresivamente por componente.

@@ -23,6 +23,15 @@ completo ni una lista de fallos reproducidos visualmente.
 | Versiones | **Código:** CMake/paquetes 0.90.0 y recurso RC 1.00.3.0 | Unificar política de versión en tarea posterior |
 | Ayuda/atajos | **Código:** varias etiquetas de ayuda heredadas difieren de handlers; 1 y NUM1 tienen funciones distintas | Mantener guía basada en handlers y revisar textos en una tarea funcional |
 
+## Auditoría de arquitectura
+
+La [auditoría inicial de arquitectura de 2026-10-22](changes/001-refactorizacion-base/review.md)
+añade siete hallazgos estáticos sobre servicios compartidos, callbacks, IPC, resolución
+de datos, cierre, caché binaria y comentarios. Su cobertura es parcial y no incluye
+reproducción nueva. El [plan de refactorización](changes/001-refactorizacion-base/plan.md)
+registra el destino de cada hallazgo; no se consideran corregidos ni se atribuyen
+automáticamente al arranque lento reportado.
+
 ## Información rescatada de los planes anteriores
 
 - Se conservó el trabajo local de IPC, confirmación de borrado y gesto de ventana/paneo
