@@ -2,8 +2,8 @@
 
 Fecha: 2026-10-23. Base: `b1681c0`, rama codex/repository-foundation.
 Especificación: [spec.md](spec.md). Plan: [plan.md](plan.md).
-Estado: implementación simplificada y verificación automatizada realizadas;
-aceptación visual final no completada. No se declara cierre funcional completo.
+Estado: completado; aceptación funcional confirmada por el propietario el 2026-10-23.
+La evidencia automatizada y sus límites se conservan abajo como registro previo al cierre.
 
 ## Cambios
 
@@ -37,15 +37,15 @@ esa prueba procedía de una copia marcada solo lectura, no de datos personales.
 
 | Criterio | Resultado y límite |
 | --- | --- |
-| AC-01 | Handler global sin selección por NUM2/2; OnChar sin cambios. Recorrido visual final no realizado |
-| AC-02 | Gris/inactivo y Waterfall conservados por código; observación visual final pendiente |
+| AC-01 | Handler global sin selección por NUM2/2; OnChar sin cambios; aceptación funcional global del propietario |
+| AC-02 | Gris/inactivo y Waterfall conservados por código; aceptación funcional global del propietario |
 | AC-03 | Ramas Library retiradas de arranque/eventos/opciones/drop/IPC; no alias |
 | AC-04 | Fuentes exclusivas retiradas, modelo core preservado, Release/CTest correctos |
-| AC-05 | Suites compartidas pasan; no se certifica UX nativa completa de los tres modos |
+| AC-05 | Suites compartidas pasan y el propietario confirma pruebas funcionales exitosas; sin matriz individual aportada |
 | AC-06 | Sin diálogos/opciones nuevas/migración/fallback; sin aceptación de preferencia antigua 4 |
 | AC-07 | Guías, comentarios, spec/plan/review/result y roadmap actualizados |
 
-## Límites y continuidad
+## Límites y continuidad al preparar la entrega (histórico)
 
 El propietario detuvo la campaña ampliada y pidió limitarse a retirar Library.
 No continuar UI/compatibilidad/empaquetado por iniciativa propia. La inspección
@@ -61,7 +61,7 @@ pruebas y paquetes son locales/ignorados, sin datos personales versionados.
 La comprobación adicional del portable fue rechazada por el permiso del entorno;
 no se ejecutó ni se eludió esa decisión.
 
-IPC-014-01 permanece diferido. El único cambio en OnIpcOpenPath es retirar la
+IPC-014-01 permanecía diferido. El único cambio en OnIpcOpenPath es retirar la
 selección de Library en la rama de carpetas; no se investigó/reprodujo/corrigió el
 reporte. CTest aislado no acredita aceptación funcional completa de IPC.
 
@@ -85,8 +85,46 @@ candidato, sin reabrir diseño de UI ni compatibilidad.
   CTest: sus 7/7 corresponden al mismo código simplificado; la reconstrucción
   posterior no introduce cambios funcionales.
 - [Recorrido funcional](functional-test.md) y [prompt de continuidad](resume.md)
-  preparados. Esperar reporte del propietario antes de cerrar criterios visuales.
+  preparados. El reporte posterior y el cierre se registran a continuación.
 - Inventario inicial local bajo `build/qa-continuity-002/`, excluyendo .git/.kilo y
   estado de agentes. No se eliminó ningún ejecutable ni paquete en esta preparación.
   Renovar el inventario y verificar ámbito/candidato aceptado antes de la limpieza
   condicional de versiones anteriores en la siguiente sesión.
+
+## Aceptación y cierre posterior, 2026-10-23
+
+El propietario confirma: «Se confirman pruebas funcionales exitosas» y comunica
+que IPC opera correctamente: al abrir una nueva imagen desde Windows el visor
+se actualiza correctamente. Se acepta 002 sobre el candidato indicado en esta
+continuidad. El reporte es global, sin resultados individuales, hash aportado,
+formatos, rutas o logs; no se inventa una matriz por escenario ni se certifica
+compatibilidad con el antiguo valor 4 o rendimiento con carpetas grandes.
+
+Los hashes locales del EXE y ZIP coinciden con los registrados antes y después
+de la limpieza. No se modificaron fuentes ni se generó otro candidato. Release
+y CTest 7/7 siguen siendo evidencia previa del mismo código; no se repitieron
+para este cierre documental. [IPC-014-01](../014-cancelacion-ar005/user-validation.md)
+queda cerrado por reporte de funcionamiento actual, sin causa ni corrección
+atribuida a 002 y sin nueva investigación.
+
+Cumplida la condición de éxito, se ejecutó la limpieza autorizada con PowerShell,
+rutas absolutas comprobadas y Remove-Item -LiteralPath sobre archivos concretos.
+Se retiraron **157 EXE y 8 ZIP**: 150 archivos bajo build y 15 bajo dist, incluidos
+instaladores antiguos, copias de diagnóstico, runs, staging y el paquete obsoleto
+con selector. Los ZIP retirados se inspeccionaron: contenían lenteuv.exe.
+El inventario y la lista concreta permanecen locales en build/qa-continuity-002.
+
+Excepciones conservadas: candidato aceptado completo y ZIP, Release actual y sus
+tres EXE de tests, cinco CompilerIdCXX de CMake (uno dentro de la copia independiente),
+la copia Git independiente build/clean-checkout completa y dos ZIP de respaldo
+sin ejecutables. No se tocaron .git, .kilo, worktrees, fixtures, fuentes ni datos,
+logs o cachés. No se cerró ningún proceso ni se eliminó un EXE detectado en uso.
+La consulta CIM no estaba disponible; se usaron Get-Process y apertura exclusiva
+de cada EXE antes de eliminarlo.
+
+Verificación final: los 165 archivos seleccionados ya no existen; bajo dist solo
+quedan el EXE aceptado y su ZIP como ejecutable/paquete. Los hashes EXE/ZIP permanecen
+idénticos. La comprobación genérica de archivos preservados se detuvo al detectar
+que el propio inventario local había sido actualizado; se verificaron después
+directamente los archivos retirados, las excepciones y los hashes del candidato.
+No se borraron carpetas completas ni se amplió la búsqueda a todo el disco.

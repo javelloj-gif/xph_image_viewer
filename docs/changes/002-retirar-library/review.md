@@ -110,4 +110,13 @@ Sin otros hallazgos accionables dentro de este diff por inspección. No se revis
 el repositorio completo ni se atribuye mejora de rendimiento. La eliminación de
 compatibilidad específica del 4 es una decisión de alcance del propietario, no
 una corrección demostrada de datos antiguos. Validación final en result.md;
-observación visual final pendiente tras detener la campaña ampliada.
+observación visual final pendiente en ese momento tras detener la campaña ampliada.
+
+## Cierre posterior, 2026-10-23
+
+El propietario confirma pruebas funcionales exitosas del candidato de 002 y que
+el visor muestra la nueva imagen al abrirla desde Windows. Se registra aceptación
+funcional global, sin matriz individual ni diagnóstico causal de IPC-014-01.
+No hay nuevo diff de código que revisar: esta sesión actualiza evidencia y ejecuta
+la limpieza condicional autorizada. Cantidades, excepciones y verificación en
+[result.md](result.md). No se reabre la auditoría base ni el diseño descartado.

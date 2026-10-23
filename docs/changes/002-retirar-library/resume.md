@@ -1,5 +1,13 @@
 # Prompt de continuidad para una nueva sesión
 
+**Estado actualizado, 2026-10-23:** 002 cerrado tras confirmación del propietario
+de pruebas funcionales exitosas. IPC-014-01 cerrado por reporte de funcionamiento
+actual: abrir una nueva imagen desde Windows actualiza el visor. Limpieza autorizada
+completada: 157 EXE y 8 ZIP retirados, con candidato aceptado y datos conservados;
+excepciones y evidencia en [result.md](result.md). No repetir la limpieza ni pedir
+el reporte ya recibido. No hay nueva tarea funcional autorizada. El texto siguiente
+se conserva como prompt histórico de preparación, sustituido por este estado.
+
 Copia el texto siguiente como petición en la nueva conversación:
 
 ```text

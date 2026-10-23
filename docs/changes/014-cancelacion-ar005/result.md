@@ -4,9 +4,9 @@ Fecha: 2026-10-23. **Completado.** Base 6f84dc5, implementación y pruebas en
 codex/repository-foundation. [Spec](spec.md), [plan](plan.md), [revisión](review.md).
 La entrega implementa los cuatro faltantes; no los sustituye por una nueva
 disposición documental. Lista para los siguientes cambios funcionales del usuario,
-con la excepción IPC reportada y diferida expresamente que se registra a continuación.
+con el reporte IPC histórico y su actualización de estado registrados a continuación.
 
-## Resultado manual posterior — 2026-10-23
+## Resultado manual histórico — 2026-10-23
 
 El propietario realizó pruebas del portable 014 y reportó fallo en el punto 6:
 abrir otra imagen mediante el mismo ejecutable mantiene la imagen anterior.
@@ -16,6 +16,13 @@ Sin reproducción adicional ni causa confirmada; no se modifica código ni paque
 No se declara aceptación funcional completa de IPC ni se infieren resultados de
 los demás puntos. El cierre de implementación AR-005 y las pruebas históricas
 inferiores conservan su alcance; no invalidan ni resuelven este reporte manual.
+
+**Actualización posterior del mismo día:** al aceptar el candidato de 002, el
+propietario confirma pruebas funcionales exitosas e IPC operativo: abrir una nueva
+imagen desde Windows actualiza correctamente el visor. IPC-014-01 se cierra por
+ese reporte actual, sin reproducción, diagnóstico causal ni corrección en esta
+sesión. No se atribuye el éxito al binario histórico de 014 ni se certifican todos
+los escenarios IPC. Detalle y límites en [user-validation.md](user-validation.md).
 
 ## Matriz de cierre
 

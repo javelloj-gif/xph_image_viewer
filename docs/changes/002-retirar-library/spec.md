@@ -1,6 +1,6 @@
 # 002: Retirada de Library
 
-Actualización: 2026-10-23. Estado: retirada implementada; verificación final en curso.
+Actualización: 2026-10-23. Estado: completado y aceptado funcionalmente por el propietario.
 
 ## Problema y evidencia inicial
 
@@ -71,6 +71,8 @@ Se admite únicamente el placeholder visual reservado requerido, sin presentar u
   El selector implementado provisionalmente y sus tests auxiliares fueron retirados
   tras la instrucción final del propietario; sus pruebas no acreditan la versión final.
 - Mantener lo acordado sobre teclas reservadas y posición gris `—` / `Unavailable`.
-- Mantener diferido IPC-014-01 y conservar documentos históricos/atribuciones.
+- Mantener fuera del alcance técnico IPC-014-01 y conservar documentos históricos/atribuciones.
+  En el cierre posterior, el propietario reporta funcionamiento actual correcto;
+  se actualiza el registro sin investigar ni atribuir una corrección a 002.
 
 Inventario y revisión del diff: [review.md](review.md).

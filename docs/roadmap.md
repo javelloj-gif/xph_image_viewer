@@ -6,16 +6,17 @@ Se registra como aceptación funcional del usuario; no aportó hash ni una matri
 por escenario. [013](changes/013-cierre-base/result.md) registra la revisión final,
 la lectura transaccional KTAG y el orden de cierre de productores.
 
-**Prueba manual posterior del portable 014:** el propietario reporta fallo en el
+**Prueba manual histórica del portable 014:** el propietario reportó fallo en el
 punto 6 (IPC): al abrir otra imagen mediante el mismo EXE, el visor conserva la
-anterior. [IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) queda
-**diferido por decisión expresa del propietario**, que lo identifica como error
-legado. No investigar ni corregir ahora. No hay aceptación funcional completa de IPC;
-no se infiere aprobación individual de los demás puntos del protocolo.
+anterior. **Reporte posterior del 2026-10-23:** confirma pruebas funcionales exitosas
+de 002 y que el visor se actualiza correctamente al abrir otra imagen desde Windows.
+[IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) queda cerrado por
+funcionamiento actual reportado, sin diagnóstico ni corrección atribuida a 002.
+No se infiere una matriz individual ni cobertura universal de IPC.
 
 014 implementa los cuatro faltantes de AR-005 y entrega un portable comprobado en
 sus escenarios automatizados. Se puede continuar con nuevos cambios funcionales
-según la decisión del propietario, conservando la limitación IPC conocida.
+según la decisión del propietario; el fallo IPC histórico conserva su evidencia.
 No continuar la refactorización por inercia. Las propuestas opcionales y los límites
 de cobertura quedan identificados abajo; no son tareas restantes del lote base ni
 defectos declarados corregidos. El próximo cambio de producto se elige por separado.
@@ -23,7 +24,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | ID | Cambio | Estado |
 | --- | --- | --- |
 | 001 | [Refactorización base y auditoría](changes/001-refactorizacion-base/spec.md) | Completado en alcance: R1/R2, inventario, disposición de AR-001..007 y aceptación funcional reportada |
-| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Retirada sin diálogos ni migración; Release/CTest 7/7. Candidato temporal sin_library listo, reporte funcional pendiente; limpieza de ejecutables previos solo tras éxito |
+| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Completado y aceptado por el propietario el 2026-10-23; Release/CTest 7/7 previos. Limpieza autorizada realizada: 157 EXE y 8 ZIP; candidato aceptado conservado |
 | 003 | [Diagnóstico de arranque, IPC y reposo](changes/003-diagnostico-rendimiento/spec.md) | Investigación independiente en curso; campañas restantes sin prioridad de ejecución asignada |
 | 004 | [Vigencia de miniaturas](changes/004-vigencia-miniaturas/result.md) | Completado: AR-002, regresión previa y 98 checks iniciales |
 | 005 | [Entrega IPC y fallo explícito](changes/005-entrega-ipc/result.md) | Completado en alcance: AR-003, transporte/error/propiedad; presentación real posterior en 003 |
@@ -35,7 +36,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | 011 | [Vigencia antes del upload](changes/011-vigencia-antes-upload/result.md) | Completado en alcance: 321 checks nuevos WARP; sin mejora global afirmada |
 | 012 | [Cierre de colas y servidor IPC](changes/012-cierre-colas-ipc/result.md) | Completado en alcance y aceptación funcional base reportada; ampliado el orden de productores en 013 |
 | 013 | [Cierre de la base](changes/013-cierre-base/spec.md) | Completado: AR-006 y join de productores; Release/CTest 6/6, documentación y continuidad |
-| 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Implementación completada y pruebas automatizadas conservadas. Prueba manual realizada: punto 6 IPC fallido (IPC-014-01), diferido por el propietario como legado reportado |
+| 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Implementación completada y pruebas automatizadas conservadas. Fallo IPC histórico cerrado por reporte posterior de funcionamiento actual al aceptar 002; sin diagnóstico causal |
 
 ## Disposición final de la base
 
@@ -43,7 +44,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | --- | --- |
 | AR-001 | Resuelto en R2: gestor/modelo compartido en core |
 | AR-002 | Resuelto en 004, ampliado en 011: identidad/vigencia; no equivale a cancelar CPU |
-| AR-003 | Corrección histórica 005 en transporte/error/propiedad; sin ACK/elección. IPC-014-01 reporta apertura visible fallida, diferida y sin diagnóstico; no se declara IPC globalmente resuelto |
+| AR-003 | Corrección histórica 005 en transporte/error/propiedad; sin ACK/elección. IPC-014-01 cerrado por reporte posterior: apertura desde Windows actualiza el visor. Sin diagnóstico causal ni certificación universal de IPC |
 | AR-004 | Resuelto en R1: resolución común de datos preservando algoritmo |
 | AR-005 | Completado en 014 sobre 012/013: cancelación por consumidor, stop cooperativo WIC y caracterización de llamada activa, escáneres y cliente IPC con presupuesto total. Sin faltantes de implementación diferidos; una llamada WIC/E/S activa debe retornar antes del join |
 | AR-006 | Resuelto en 013 para lectura KTAG: comprobación de longitudes/lecturas y publicación transaccional |
@@ -54,14 +55,6 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Trabajo futuro separado, sin ejecución automática
 
-- **IPC-014-01:** nueva imagen no visible mediante el mismo EXE; conserva la
-  anterior. Fallo manual del punto 6, identificado como legado por el propietario.
-  Diferido expresamente: sin investigación ni corrección hasta nueva instrucción.
-- **002:** [Retirada implementada](changes/002-retirar-library/result.md), sin
-  selector ni opciones nuevas. El propietario detuvo el trabajo ampliado y limitó
-  el alcance a eliminar Library; no continuar UI/empaquetado/compatibilidad de forma
-  automática. Release/CTest 7/7; observación visual final pendiente, sin declarar
-  aceptación funcional completa. Gestor core y AR-002/AR-005 conservados.
 - **003:** primera apertura real tras iniciar sesión y caso representativo de demora.
   [Explorer/reposo](changes/003-diagnostico-rendimiento/explorer-validation.md) y
   [presentación/errores](changes/003-diagnostico-rendimiento/real-validation.md)
@@ -79,25 +72,27 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Entrega y continuidad
 
-Candidato vigente para probar 002:
+Candidato aceptado de 002:
 **dist/lenteuv_qa_002_20261023_sin_library/lenteuv.exe** y ZIP homónimo.
 Fuentes `bff3d92`; identidad/evidencia en [resultado 002](changes/002-retirar-library/result.md).
-[Pruebas funcionales](changes/002-retirar-library/functional-test.md) pendientes del
-propietario. [Prompt de continuidad](changes/002-retirar-library/resume.md): recoger
-el reporte y, solo si es exitoso, limpiar ejecutables anteriores del proyecto
-conservando el aceptado y sus datos. Ninguna eliminación se realizó al prepararlo.
+[Pruebas funcionales](changes/002-retirar-library/functional-test.md) exitosas según
+confirmación global del propietario. Limpieza posterior realizada: 157 EXE y 8 ZIP
+anteriores retirados; candidato, runtime, datos y ZIP conservados. Excepciones y
+verificación en resultado 002. [Continuidad](changes/002-retirar-library/resume.md)
+actualizada al cierre; no queda trabajo funcional autorizado por esta entrega.
 
-Candidato histórico de 014: **dist/lenteuv_qa_014_20261023_final/lenteuv.exe** y ZIP homónimo.
+Candidato histórico de 014, retirado en la limpieza: **dist/lenteuv_qa_014_20261023_final/lenteuv.exe** y ZIP homónimo.
 Runtime, locales y defaults limpios; SHA256/evidencia en
 [resultado 014](changes/014-cancelacion-ar005/result.md). Release y CTest 7/7, diez
 escenarios nativos y EXE empaquetado con --multiple/--lite, cuatro modos y cierre 0.
 No quedan pendientes de implementación de AR-005; su límite de WIC/E/S activa está
 caracterizado y documentado. La [prueba funcional del usuario](changes/014-cancelacion-ar005/functional-test.md)
 ya se realizó, con fallo IPC registrado en [user-validation](changes/014-cancelacion-ar005/user-validation.md).
-La implementación de cancelación/cierre queda cerrada; la apertura IPC visible no
-se da por aceptada y permanece diferida por el propietario.
+La implementación de cancelación/cierre queda cerrada; el escenario de apertura
+IPC visible fue aceptado por reporte posterior de funcionamiento actual en 002,
+sin atribuir esa aceptación al binario histórico de 014.
 
-Los candidatos 010–014 se conservan hasta que se cumpla la condición de limpieza de 002.
+Los candidatos 010–014 se retiraron al cumplirse la condición de limpieza de 002.
 No se atribuye al candidato nuevo la aceptación funcional histórica de la base.
 [Continuidad histórica 014](changes/014-cancelacion-ar005/resume.md): la base y AR-005
 permanecen cerrados; no iniciar otra campaña general.

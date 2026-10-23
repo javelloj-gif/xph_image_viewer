@@ -27,21 +27,24 @@ nativas de la versión provisional con selector no validan la versión final.
 Los artefactos intermedios que contienen selector quedan obsoletos, sin entrega.
 No certificar arranque/drop con preferencia antigua 4: no tiene tratamiento nuevo.
 No investigar ni reproducir IPC-014-01; CTest aislado no certifica IPC completo.
-La observación visual final sigue sin realizarse; no cerrar 002 como aceptación
-funcional completa sin evidencia necesaria. Resultado/limitaciones en result.md.
+La observación visual estaba pendiente al preparar el candidato. El propietario
+confirmó después pruebas funcionales exitosas; cierre y límites en result.md.
 
 ## Autorización posterior y siguiente sesión
 
 El propietario pidió después un candidato temporal y un prompt de continuidad:
 [pruebas funcionales](functional-test.md), [prompt](resume.md).
 Candidato `dist/lenteuv_qa_002_20261023_sin_library/lenteuv.exe`, generado desde
-`bff3d92`; identidad y comprobaciones en result.md. Aún sin reporte funcional.
+`bff3d92`; identidad y comprobaciones en result.md. Reporte funcional exitoso recibido.
 
 - [x] Preparar portable limpio, extraer y comprobar identidad del EXE.
 - [x] Guardar protocolo/prompt y condición de limpieza.
-- [ ] Recoger resultados funcionales del propietario; no inferir aceptación.
-- [ ] Si son exitosos, actualizar evidencia/cierre y eliminar ejecutables previos
+- [x] Recoger resultados funcionales del propietario; aceptación global explícita.
+- [x] Si son exitosos, actualizar evidencia/cierre y eliminar ejecutables previos
   del proyecto según el ámbito y método de resume.md, conservando el aceptado.
 
-No borrar ejecutables todavía. Esta autorización no permite añadir diálogos,
-opciones ni migraciones, ni investigar IPC-014-01.
+002 cerrado el 2026-10-23. Limpieza realizada: 157 EXE y 8 ZIP; excepciones y
+verificación en result.md. IPC-014-01 cerrado por reporte posterior del propietario:
+el visor se actualiza al abrir otra imagen desde Windows. Sin investigación ni
+cambio de código; no añadir diálogos, opciones ni migraciones. No hay siguiente
+paso funcional autorizado ni campaña base que continuar.

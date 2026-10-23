@@ -1,6 +1,10 @@
 # Pruebas funcionales: retirada de Library (002)
 
-Preparado el 2026-10-23 por petición del propietario. Resultado pendiente.
+Preparado el 2026-10-23 por petición del propietario. Resultado: pruebas funcionales
+exitosas confirmadas por el propietario el mismo día; aceptación de 002 registrada.
+El reporte es global, sin matriz individual ni hash aportado por el usuario. Además,
+confirma que al abrir una nueva imagen desde Windows el visor se actualiza correctamente.
+La identidad local del candidato se volvió a comprobar; véase [resultado](result.md).
 Fuentes del candidato: `bff3d92`, rama `codex/repository-foundation`.
 
 ## Ejecutable temporal
