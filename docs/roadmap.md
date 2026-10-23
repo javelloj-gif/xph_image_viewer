@@ -23,7 +23,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | ID | Cambio | Estado |
 | --- | --- | --- |
 | 001 | [Refactorización base y auditoría](changes/001-refactorizacion-base/spec.md) | Completado en alcance: R1/R2, inventario, disposición de AR-001..007 y aceptación funcional reportada |
-| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Retirada implementada sin diálogos ni migración por instrucción final; Release/CTest 7/7. Aceptación visual final pendiente; campaña ampliada detenida |
+| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Retirada sin diálogos ni migración; Release/CTest 7/7. Candidato temporal sin_library listo, reporte funcional pendiente; limpieza de ejecutables previos solo tras éxito |
 | 003 | [Diagnóstico de arranque, IPC y reposo](changes/003-diagnostico-rendimiento/spec.md) | Investigación independiente en curso; campañas restantes sin prioridad de ejecución asignada |
 | 004 | [Vigencia de miniaturas](changes/004-vigencia-miniaturas/result.md) | Completado: AR-002, regresión previa y 98 checks iniciales |
 | 005 | [Entrega IPC y fallo explícito](changes/005-entrega-ipc/result.md) | Completado en alcance: AR-003, transporte/error/propiedad; presentación real posterior en 003 |
@@ -79,7 +79,15 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Entrega y continuidad
 
-Candidato vigente: **dist/lenteuv_qa_014_20261023_final/lenteuv.exe** y ZIP homónimo.
+Candidato vigente para probar 002:
+**dist/lenteuv_qa_002_20261023_sin_library/lenteuv.exe** y ZIP homónimo.
+Fuentes `bff3d92`; identidad/evidencia en [resultado 002](changes/002-retirar-library/result.md).
+[Pruebas funcionales](changes/002-retirar-library/functional-test.md) pendientes del
+propietario. [Prompt de continuidad](changes/002-retirar-library/resume.md): recoger
+el reporte y, solo si es exitoso, limpiar ejecutables anteriores del proyecto
+conservando el aceptado y sus datos. Ninguna eliminación se realizó al prepararlo.
+
+Candidato histórico de 014: **dist/lenteuv_qa_014_20261023_final/lenteuv.exe** y ZIP homónimo.
 Runtime, locales y defaults limpios; SHA256/evidencia en
 [resultado 014](changes/014-cancelacion-ar005/result.md). Release y CTest 7/7, diez
 escenarios nativos y EXE empaquetado con --multiple/--lite, cuatro modos y cierre 0.
@@ -89,8 +97,8 @@ ya se realizó, con fallo IPC registrado en [user-validation](changes/014-cancel
 La implementación de cancelación/cierre queda cerrada; la apertura IPC visible no
 se da por aceptada y permanece diferida por el propietario.
 
-Los candidatos 010–013 y el preliminar 014 se conservaron. Usar el sufijo **final**.
+Los candidatos 010–014 se conservan hasta que se cumpla la condición de limpieza de 002.
 No se atribuye al candidato nuevo la aceptación funcional histórica de la base.
-[Continuidad vigente](changes/014-cancelacion-ar005/resume.md): atender el siguiente
-objetivo funcional que indique el propietario, sin iniciar otra campaña general.
+[Continuidad histórica 014](changes/014-cancelacion-ar005/resume.md): la base y AR-005
+permanecen cerrados; no iniciar otra campaña general.
 No publicar datos, build, dist ni estado de herramientas.

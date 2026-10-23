@@ -29,3 +29,19 @@ No certificar arranque/drop con preferencia antigua 4: no tiene tratamiento nuev
 No investigar ni reproducir IPC-014-01; CTest aislado no certifica IPC completo.
 La observación visual final sigue sin realizarse; no cerrar 002 como aceptación
 funcional completa sin evidencia necesaria. Resultado/limitaciones en result.md.
+
+## Autorización posterior y siguiente sesión
+
+El propietario pidió después un candidato temporal y un prompt de continuidad:
+[pruebas funcionales](functional-test.md), [prompt](resume.md).
+Candidato `dist/lenteuv_qa_002_20261023_sin_library/lenteuv.exe`, generado desde
+`bff3d92`; identidad y comprobaciones en result.md. Aún sin reporte funcional.
+
+- [x] Preparar portable limpio, extraer y comprobar identidad del EXE.
+- [x] Guardar protocolo/prompt y condición de limpieza.
+- [ ] Recoger resultados funcionales del propietario; no inferir aceptación.
+- [ ] Si son exitosos, actualizar evidencia/cierre y eliminar ejecutables previos
+  del proyecto según el ámbito y método de resume.md, conservando el aceptado.
+
+No borrar ejecutables todavía. Esta autorización no permite añadir diálogos,
+opciones ni migraciones, ni investigar IPC-014-01.

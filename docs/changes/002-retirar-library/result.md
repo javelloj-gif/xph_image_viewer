@@ -55,7 +55,7 @@ posteriormente retirado. No se atribuyen sus resultados al código final.
 
 El portable provisional contiene el selector descartado y se renombró
 `dist/lenteuv_qa_002_20261023_OBSOLETO_con_dialogos.zip`; no es una entrega válida.
-No se generó paquete final. El EXE final compilado está en
+En ese cierre de implementación no se generó paquete final. El EXE compilado está en
 `build/windows-x64/bin/Release/lenteuv.exe`, sin selector. Los artefactos de build,
 pruebas y paquetes son locales/ignorados, sin datos personales versionados.
 La comprobación adicional del portable fue rechazada por el permiso del entorno;
@@ -64,3 +64,29 @@ no se ejecutó ni se eludió esa decisión.
 IPC-014-01 permanece diferido. El único cambio en OnIpcOpenPath es retirar la
 selección de Library en la rama de carpetas; no se investigó/reprodujo/corrigió el
 reporte. CTest aislado no acredita aceptación funcional completa de IPC.
+
+## Candidato temporal solicitado posteriormente
+
+El propietario solicitó explícitamente un ejecutable temporal y un prompt para
+continuar en otra sesión; autorizó eliminar los ejecutables previos solo después
+de que las pruebas sean exitosas. Esta petición autoriza la preparación del
+candidato, sin reabrir diseño de UI ni compatibilidad.
+
+- Fuentes: `bff3d92`. Release reconstruido correctamente el 2026-10-23.
+- Comando: `./scripts/create_portable_zip.ps1 -SkipBuild -OutputName lenteuv_qa_002_20261023_sin_library`.
+- Candidato: `dist/lenteuv_qa_002_20261023_sin_library/lenteuv.exe`, carpeta extraída
+  nueva con runtime, locales, licencia, defaults sin Library y sesión vacía.
+- ZIP: `dist/lenteuv_qa_002_20261023_sin_library.zip`.
+- SHA256 EXE: `42432671B4BE7602C4F2B4060586CFE5B6EB36AE0D382B84312038CBE60BF23A`.
+- SHA256 ZIP: `4F3387DE83D7331C1D044FF7FA677392B3FF6BCA33DAF3E218012FB42956931A`.
+- El hash del EXE extraído coincide con el Release. El script comprobó imports
+  del EXE/runtime y preparó staging nuevo, sin copiar datos personales.
+- No se ejecutó el candidato ni se afirma aceptación funcional. No se repitió
+  CTest: sus 7/7 corresponden al mismo código simplificado; la reconstrucción
+  posterior no introduce cambios funcionales.
+- [Recorrido funcional](functional-test.md) y [prompt de continuidad](resume.md)
+  preparados. Esperar reporte del propietario antes de cerrar criterios visuales.
+- Inventario inicial local bajo `build/qa-continuity-002/`, excluyendo .git/.kilo y
+  estado de agentes. No se eliminó ningún ejecutable ni paquete en esta preparación.
+  Renovar el inventario y verificar ámbito/candidato aceptado antes de la limpieza
+  condicional de versiones anteriores en la siguiente sesión.
