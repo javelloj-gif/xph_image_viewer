@@ -15,6 +15,7 @@ namespace kv {
 class App; // Forward declaration
 
 class ViewerPage {
+    friend class AsyncPreviewTests; // Checks overlay pixels without a visible window or timing changes.
 public:
     friend class App;
     ViewerPage() = default;
@@ -58,6 +59,7 @@ private:
     void DrawCheckerboard(Renderer& renderer, const RectF& rect);
     void DrawCyberpunkCorners(Renderer& renderer, const RectF& rect);
     void DrawThirds(Renderer& renderer, const RectF& rect);
+    // UI thread: prepares/draws metadata only at positive fade opacity; does not advance animation state.
     void DrawOverlayInfo(Renderer& renderer);
     void DrawProgressBar(Renderer& renderer, const RectF& rect);
     void DrawRegionZoom(Renderer& renderer);

@@ -46,6 +46,7 @@ bool ImageLoader::IsAnimatedFormat(const std::wstring& path) {
 // ─── Initialize / Shutdown ───────────────────────────────────────────────────
 
 bool ImageLoader::Initialize(uint32_t threadCount) {
+    if (!m_shutdown.load()) return false;
     HRESULT hr = CoCreateInstance(
         CLSID_WICImagingFactory2, nullptr, CLSCTX_INPROC_SERVER,
         IID_PPV_ARGS(&m_wicFactory)
@@ -67,9 +68,11 @@ ImageLoader::~ImageLoader() {
 }
 
 void ImageLoader::Shutdown() {
+    std::queue<std::function<void()>> discarded;
     {
         std::lock_guard lock(m_queueMutex);
         m_shutdown = true;
+        discarded.swap(m_taskQueue);
     }
     m_queueCV.notify_all();
 
@@ -77,6 +80,15 @@ void ImageLoader::Shutdown() {
         if (w.joinable()) w.join();
     }
     m_workers.clear();
+    std::vector<PendingTexture> pending;
+    std::vector<PendingAnimatedTexture> animated;
+    {
+        std::lock_guard lock(m_pendingMutex);
+        pending.swap(m_pendingTextures);
+        animated.swap(m_pendingAnimatedTextures);
+    }
+    // Captured owners and GPU resources are released on the calling thread, outside queue locks.
+    m_wicFactory.Reset();
 }
 
 // ─── Thread Pool ─────────────────────────────────────────────────────────────
@@ -90,7 +102,7 @@ void ImageLoader::WorkerLoop() {
             std::unique_lock lock(m_queueMutex);
             m_queueCV.wait(lock, [this] { return m_shutdown || !m_taskQueue.empty(); });
 
-            if (m_shutdown && m_taskQueue.empty()) return;
+            if (m_shutdown) return;
 
             task = std::move(m_taskQueue.front());
             m_taskQueue.pop();
@@ -102,6 +114,7 @@ void ImageLoader::WorkerLoop() {
 void ImageLoader::EnqueueTask(std::function<void()> task) {
     {
         std::lock_guard lock(m_queueMutex);
+        if (m_shutdown) return;
         m_taskQueue.push(std::move(task));
     }
     m_queueCV.notify_one();
@@ -192,6 +205,11 @@ std::shared_ptr<ImageData> ImageLoader::LoadSync(const std::wstring& path, uint3
 std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
     auto decoder = CreateDecoder(path);
     if (!decoder) return nullptr;
+    return DecodeImage(decoder.Get(), path, targetWidth, targetHeight);
+}
+
+std::shared_ptr<ImageData> ImageLoader::DecodeImage(
+    IWICBitmapDecoder* decoder, const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
 
     ComPtr<IWICBitmapFrameDecode> frame;
     HRESULT hr = decoder->GetFrame(0, &frame);
@@ -229,6 +247,32 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
     if (FAILED(hr) || frameCount <= 1) {
         return nullptr;
     }
+    return DecodeAnimatedFrames(decoder.Get(), path, frameCount);
+}
+
+ViewerLoadResult ImageLoader::LoadForViewerSync(const std::wstring& path) {
+    if (!IsAnimatedFormat(path)) return {LoadSync(path), nullptr};
+    {
+        auto decoder = CreateDecoder(path);
+        if (decoder) {
+            UINT frameCount = 0;
+            if (SUCCEEDED(decoder->GetFrameCount(&frameCount))) {
+                if (frameCount > 1) {
+                    auto animation = DecodeAnimatedFrames(decoder.Get(), path, frameCount);
+                    if (animation && animation->IsValid()) return {nullptr, std::move(animation)};
+                } else {
+                    auto image = DecodeImage(decoder.Get(), path, 0, 0);
+                    if (image && image->IsValid()) return {std::move(image), nullptr};
+                }
+            }
+        }
+    } // Release failed attempt (including file handle) before preserving the legacy fresh static fallback.
+    return {LoadSync(path), nullptr};
+}
+
+std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
+    IWICBitmapDecoder* decoder, const std::wstring& path, UINT frameCount) {
+    HRESULT hr = S_OK;
 
     auto anim = std::make_shared<AnimatedImageData>();
     anim->filePath = path;
@@ -407,16 +451,16 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
 
 // ─── Asynchronous Loading ────────────────────────────────────────────────────
 
-void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth, uint32_t targetHeight) {
-    EnqueueTask([this, path, callback, targetWidth, targetHeight]() {
+void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth, uint32_t targetHeight, ImageUploadPredicate isCurrent) {
+    EnqueueTask([this, path, callback, targetWidth, targetHeight, isCurrent]() {
         auto image = DecodeImage(path, targetWidth, targetHeight);
 
         if (image) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingTextures.push_back({ image, callback });
+            m_pendingTextures.push_back({ image, callback, isCurrent });
         } else if (callback) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingTextures.push_back({ nullptr, callback });
+            m_pendingTextures.push_back({ nullptr, callback, isCurrent });
         }
     });
 }
@@ -445,7 +489,8 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     }
 
     for (auto& pt : pending) {
-        if (pt.image && pt.image->IsValid() && !pt.image->HasGpuBitmap()) {
+        const bool isCurrent = !pt.isCurrent || pt.isCurrent();
+        if (isCurrent && pt.image && pt.image->IsValid() && !pt.image->HasGpuBitmap()) {
             UploadToGpu(*pt.image, renderer);
         }
         if (pt.callback) {

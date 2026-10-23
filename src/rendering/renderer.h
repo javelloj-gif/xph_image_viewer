@@ -25,6 +25,8 @@ enum class BitmapInterpolation {
 // ─── Renderer Class ──────────────────────────────────────────────────────────
 
 class Renderer {
+    friend class IpcDiagnosticTests; // Supplies a software D2D context, never a visible swapchain.
+    friend class AsyncPreviewTests; // Compares production drawing on an offscreen WARP target.
 public:
     Renderer() = default;
     ~Renderer() = default;
@@ -82,6 +84,7 @@ public:
 
     // ── Text Rendering ─────────────────────────────────────────────────────
 
+    // UI/render thread: draws with an immutable private cached format; text, color and layout remain per-call.
     void DrawText(
         std::wstring_view text,
         const RectF& layoutRect,
@@ -92,7 +95,7 @@ public:
         const wchar_t* fontFamily = L"Segoe UI"
     );
 
-    /// Measure text dimensions.
+    /// UI/render thread: measures through a fresh layout and a private cached format, preserving NBSP handling.
     PointF MeasureText(
         std::wstring_view text,
         float fontSize = 14.0f,
@@ -136,7 +139,7 @@ public:
         const uint8_t* data, uint32_t width, uint32_t height, uint32_t stride = 0
     );
 
-    /// Create a text format for custom text rendering.
+    /// UI/render thread: creates a new independently mutable format on every call; never exposes internal cache entries.
     [[nodiscard]]
     ComPtr<IDWriteTextFormat> CreateTextFormat(
         const wchar_t* fontFamily, float fontSize,
@@ -155,11 +158,30 @@ public:
     ID2D1SolidColorBrush* GetBrush(const Color& color);
 
 private:
+    // One immutable internal format and its complete variable key. Collection=null, regular/normal/stretch-normal
+    // and en-us are fixed by this private contract; factory identity is shared by the cache, not per entry.
+    struct TextFormatEntry {
+        std::wstring family;
+        float size = 0.0f;
+        DWRITE_TEXT_ALIGNMENT horizontal = DWRITE_TEXT_ALIGNMENT_LEADING;
+        DWRITE_PARAGRAPH_ALIGNMENT vertical = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+        ComPtr<IDWriteTextFormat> format;
+    };
+    static constexpr size_t TEXT_FORMAT_CACHE_CAPACITY = 32;
+    static constexpr size_t TEXT_FORMAT_FAMILY_LIMIT = 128;
+    // UI/render thread: shares only private regular formats; oversized/invalid keys bypass caching without truncation.
+    ComPtr<IDWriteTextFormat> GetInternalTextFormat(const wchar_t* family, float size,
+        TextAlign horizontal = TextAlign::Left, TextVAlign vertical = TextVAlign::Top);
+    // UI/render thread: releases cached formats and factory identity, resetting FIFO state.
+    void ClearTextFormatCache();
+
     // ── Internal Setup ─────────────────────────────────────────────────────
+    // Recreates device/factory resources on UI/render thread, clearing private formats before any replacement.
     bool CreateDeviceResources(HWND hwnd, bool translucent);
     bool CreateSwapChain(HWND hwnd, bool translucent);
     bool CreateRenderTarget();
     bool SetupDirectComposition(HWND hwnd);
+    // Releases device resources and private text formats on UI/render thread.
     void DiscardDeviceResources();
 
     /// Handle device lost: recreate all device-dependent resources.
@@ -174,6 +196,10 @@ private:
     ComPtr<ID2D1DeviceContext2>     m_d2dContext;
     ComPtr<ID2D1Bitmap1>            m_renderTarget;
     ComPtr<IDWriteFactory3>         m_dwriteFactory;
+    // Bounded CPU-only format cache; no text/layout/measurement strings retained per frame.
+    std::vector<TextFormatEntry>   m_textFormats;
+    size_t                        m_nextTextFormat = 0;
+    ComPtr<IDWriteFactory3>        m_textFormatFactory; // Keeps identity alive until cache invalidation.
 
     // DirectComposition (per-pixel alpha transparency)
     ComPtr<IDCompositionDevice>     m_dcompDevice;

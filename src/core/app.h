@@ -16,7 +16,7 @@
 
 #include "common/types.h"
 #include "core/settings.h"
-#include "library/folder_data_manager.h"
+#include "core/folder_data_manager.h"
 #include "core/window.h"
 #include "rendering/renderer.h"
 #include "loader/image_loader.h"
@@ -54,18 +54,24 @@ struct AppConfig {
     bool         multiple = false;
 };
 
+// Startup outcome: transport failure is distinct from normal forwarding and subsystem failure.
 enum class InitResult {
     Success,
     AlreadyRunning,
-    Failed
+    Failed,
+    ForwardFailed
 };
 
 // ─── Application Class ──────────────────────────────────────────────────────
 
 class App {
+    friend class AsyncPreviewTests; // Deterministic callback delivery tests; no public test API.
+    friend class IpcDiagnosticTests; // Observes applied image state through the real IPC handler.
 public:
+    // Binds folder/selection aliases to this App's owned shared folder service.
     App();
-    ~App() = default;
+    // UI: stops IPC, joins Board/tag searches, then stops loader before destroying their dependencies.
+    ~App();
 
     // Non-copyable
     App(const App&) = delete;
@@ -74,13 +80,20 @@ public:
     /// Parse command-line arguments into an AppConfig
     static AppConfig ParseCommandLine(int argc, wchar_t* argv[]);
 
-    /// Initialize all subsystems: window, renderer, image loader, animations
+    // UI thread: resolve IPC with a hidden HWND before heavy services; retain reentrant paths until ready.
+    // Forwarding exits skip services; partial failure releases retained paths with the callback/App.
+    // Installs terminal close handling that stops IPC before Window destroys its HWND; hiding keeps services alive.
     InitResult Initialize(const AppConfig& config);
 
-    /// Run the main application loop. Returns exit code.
+    // Reports the last forwarding open/write error for the startup failure dialog; no application ACK.
+    DWORD GetIpcSendError() const { return m_ipc.GetDiagnostics().sendError; }
+
+    // Runs UI/render; on quit stops IPC and joins scanners before loader and dependency teardown.
     int Run();
 
 private:
+    // UI thread: validates and applies an IPC path, then restores the window as in normal external opening.
+    void OnIpcOpenPath(const std::wstring& rawPath);
     // ── Event Handlers ────────────────────────────────────────────────────
     void OnPaint();
     void OnResize(uint32_t width, uint32_t height);
@@ -103,10 +116,14 @@ private:
     void DrawCloseButton();
 
     // ── Image Management ──────────────────────────────────────────────────
+    // UI thread: consumes the shared-decoder CPU result, uploads and preserves animated/static state/selection effects.
     void LoadImage(const std::wstring& path);
+    // Adds/selects a shared folder and synchronizes page/strip state; optionally loads its image.
     void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
+    // Persists the sort mode, reorders shared folders and restores the active image's selection.
     void ApplySortMode(int mode);
+    // Removes a path from shared lists, invalidates affected preview layouts and updates the active image/selection.
     void DeleteImage(const std::wstring& path);
     void AdjustWindowToImage();
 
@@ -135,7 +152,7 @@ private:
     AnimationController m_animations;
     Timer               m_frameTimer;
     Settings            m_settings;
-    FolderDataManager   m_libraryData;
+    FolderDataManager   m_folderData;
     ViewerPage          m_viewerPage;
     ThumbnailStrip      m_thumbnailStrip;
     LibraryPage         m_libraryPage;
@@ -148,6 +165,7 @@ private:
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;
+    // Aliases into m_folderData; the service is declared first and owns this state.
     std::vector<FolderInfo>&          m_folders;
     int&                              m_currentFolderIdx;
 

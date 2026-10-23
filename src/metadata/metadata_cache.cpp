@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "metadata_cache.h"
 #include "common/types.h"
+#include "common/user_data_paths.h"
 #include <filesystem>
 #include <fstream>
 #include <chrono>
@@ -34,86 +35,71 @@ int64_t MetadataCache::GetLastWriteTime(const std::wstring& filePath) const {
 }
 
 std::wstring MetadataCache::GetCacheFilePath() const {
-    wchar_t exePath[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path p(exePath);
-    for (int i = 0; i < 6; ++i) {
-        p = p.parent_path();
-        if (std::filesystem::exists(p / "user_data")) {
-            return (p / "user_data" / "xmp_tag_cache.bin").wstring();
-        }
-    }
-    std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-    return (exeDir / "xmp_tag_cache.bin").wstring();
+    return (GetExecutableUserDataRoot() / "xmp_tag_cache.bin").wstring();
 }
 
 bool MetadataCache::LoadCache() {
-    std::wstring path = GetCacheFilePath();
-    if (!std::filesystem::exists(path)) {
-        return false;
-    }
+    try {
+        std::ifstream file(GetCacheFilePath(), std::ios::binary | std::ios::ate);
+        if (!file) return false;
+        const auto end = file.tellg();
+        if (end < std::streampos{0}) return false;
+        auto remaining = static_cast<uint64_t>(static_cast<std::streamoff>(end));
+        file.seekg(0);
+        if (!file) return false;
 
-    std::ifstream file(path, std::ios::in | std::ios::binary);
-    if (!file.is_open()) {
-        LogError(L"MetadataCache: Failed to open cache file for reading");
-        return false;
-    }
-
-    char magic[4] = {};
-    file.read(magic, 4);
-    if (magic[0] != 'K' || magic[1] != 'T' || magic[2] != 'A' || magic[3] != 'G') {
-        LogError(L"MetadataCache: Cache file invalid magic signature");
-        return false;
-    }
-
-    uint32_t version = 0;
-    file.read(reinterpret_cast<char*>(&version), sizeof(version));
-    if (version != 1) {
-        LogError(L"MetadataCache: Cache file unsupported version");
-        return false;
-    }
-
-    uint32_t count = 0;
-    file.read(reinterpret_cast<char*>(&count), sizeof(count));
-
-    std::lock_guard<std::mutex> lock(m_cacheMutex);
-    m_cache.clear();
-
-    for (uint32_t i = 0; i < count; ++i) {
-        int64_t lastWriteTime = 0;
-        file.read(reinterpret_cast<char*>(&lastWriteTime), sizeof(lastWriteTime));
-
-        uint32_t filePathLength = 0;
-        file.read(reinterpret_cast<char*>(&filePathLength), sizeof(filePathLength));
-
-        std::wstring filePath(filePathLength, L'\0');
-        if (filePathLength > 0) {
-            file.read(reinterpret_cast<char*>(&filePath[0]), filePathLength * sizeof(wchar_t));
-        }
-
-        uint32_t tagsCount = 0;
-        file.read(reinterpret_cast<char*>(&tagsCount), sizeof(tagsCount));
-
-        std::vector<std::wstring> tags;
-        tags.reserve(tagsCount);
-
-        for (uint32_t j = 0; j < tagsCount; ++j) {
-            uint32_t tagLength = 0;
-            file.read(reinterpret_cast<char*>(&tagLength), sizeof(tagLength));
-
-            std::wstring tag(tagLength, L'\0');
-            if (tagLength > 0) {
-                file.read(reinterpret_cast<char*>(&tag[0]), tagLength * sizeof(wchar_t));
+        // Bounds every read by actual file bytes; never allocate from unchecked counts.
+        const auto read = [&](void* data, size_t bytes) {
+            if (bytes > remaining) return false;
+            if (bytes && !file.read(static_cast<char*>(data), static_cast<std::streamsize>(bytes))) {
+                return false;
             }
-            tags.push_back(tag);
+            remaining -= bytes;
+            return true;
+        };
+        // Division before multiplication also prevents overflow for corrupt UTF-16 lengths.
+        const auto readString = [&](std::wstring& value) {
+            uint32_t length = 0;
+            if (!read(&length, sizeof(length)) || length > remaining / sizeof(wchar_t)) return false;
+            value.resize(length);
+            return read(value.data(), static_cast<size_t>(length) * sizeof(wchar_t));
+        };
+
+        char magic[4] = {};
+        uint32_t version = 0;
+        uint32_t count = 0;
+        if (!read(magic, sizeof(magic)) || std::string_view(magic, 4) != "KTAG" ||
+            !read(&version, sizeof(version)) || version != 1 ||
+            !read(&count, sizeof(count))) return false;
+        constexpr size_t minimumEntryBytes = sizeof(int64_t) + 2 * sizeof(uint32_t);
+        if (count > remaining / minimumEntryBytes) return false;
+
+        // Preserve serialization with cache writers while publishing only a complete parse.
+        std::lock_guard<std::mutex> lock(m_cacheMutex);
+        std::unordered_map<std::wstring, CacheEntry> loaded;
+        for (uint32_t i = 0; i < count; ++i) {
+            int64_t lastWriteTime = 0;
+            std::wstring filePath;
+            uint32_t tagsCount = 0;
+            if (!read(&lastWriteTime, sizeof(lastWriteTime)) || !readString(filePath) ||
+                !read(&tagsCount, sizeof(tagsCount)) || tagsCount > remaining / sizeof(uint32_t)) {
+                return false;
+            }
+            std::vector<std::wstring> tags;
+            for (uint32_t j = 0; j < tagsCount; ++j) {
+                std::wstring tag;
+                if (!readString(tag)) return false;
+                tags.push_back(std::move(tag));
+            }
+            loaded[NormalizePath(filePath)] = CacheEntry{lastWriteTime, std::move(tags)};
         }
-
-        m_cache[NormalizePath(filePath)] = CacheEntry{ lastWriteTime, tags };
+        m_cache.swap(loaded);
+        m_cacheDirty = false;
+        return true;
+    } catch (const std::exception&) {
+        LogError(L"MetadataCache: Failed to read complete cache; live entries retained");
+        return false;
     }
-
-    m_cacheDirty = false;
-    LogInfo(std::format(L"MetadataCache: Loaded {} entries from tags cache", count));
-    return true;
 }
 
 bool MetadataCache::SaveCache() {

@@ -1,8 +1,11 @@
+> Disposición final 2026-10-23: [cierre](closure.md) y [revisión 013](../013-cierre-base/review.md). Este informe conserva evidencia histórica; AR-005 global sigue diferido, AR-006 resuelto y AR-007 progresivo.
+
 # Auditoría inicial de arquitectura y mantenibilidad
 
 Fecha: 2026-10-22. Habilidad aplicada: [lenteuv-architecture-review](../../../.agents/skills/lenteuv-architecture-review/SKILL.md).
 Base: `632bcdae0a8385ce123db6502421c04a2a1643db`, con documentación y habilidad locales sin commit.
-`git diff --stat -- src` no mostró cambios de fuentes al revisar. Este informe no modifica código ni constituye aprobación de las propuestas.
+`git diff --stat -- src` no mostró cambios de fuentes en la auditoría inicial. Las secciones
+iniciales conservan esa evidencia histórica; las revisiones de los diffs R1/R2 se añaden al final.
 
 ## Objetivo y método
 
@@ -17,6 +20,10 @@ medido ni reproducción del fallo. La evidencia histórica de IPC se cita como a
 sin presentarla como una reproducción realizada por esta auditoría.
 
 ## Inventario y cobertura
+
+El siguiente inventario es histórico. La [cobertura acumulada 004–011](coverage-004-011.md)
+actualiza las porciones revisadas y pendientes sin borrar sus límites. Primera
+implementación posterior de AR-005 en [012](../012-cierre-colas-ipc/result.md).
 
 **Completa** significa lectura del archivo indicado, no certificación funcional. **Parcial** indica lectura
 de secciones concretas y búsquedas de consumidores. **Inventariado** significa localizado en `src/`
@@ -244,3 +251,128 @@ logs y datos fuera de Git; versionar procedimiento y resumen. La base previa a r
 - Una entrega de auditoría puede cerrarse con esta cobertura explícita; las refactorizaciones siguen sin implementar y
   sus criterios funcionales no están validados. Enlazar este informe desde plan/result y promover solo hallazgos aceptados
   a entregas verificables en la hoja de ruta.
+
+## Revisión del diff R1 — 2026-10-22
+
+Base de implementación: `ac4a5da`, Git inicialmente limpio en `codex/repository-foundation`.
+Revisión en la misma sesión con la habilidad y sus criterios; sin agente adicional.
+Alcance autorizado: únicamente AR-004. Las ubicaciones de esta sección corresponden
+al árbol de trabajo R1, no a las líneas de la auditoría histórica.
+
+### Cobertura y contraste
+
+- Lectura completa del helper `common/user_data_paths.h/.cpp`, del nuevo test
+  `tests/user_data_path_tests.cpp` y de CMake; lectura de `scripts/run_tagging_tests.ps1`
+  para confirmar aislamiento. Se revisaron las declaraciones de los tres consumidores.
+- Revisión de los cinco resolutores cambiados: `Settings::GetSettingsFilePath` (`settings.cpp:83`),
+  `PreInitDebugIpc` (`:87`), `FolderDataManager::GetSessionFilePath` (`folder_data_manager.cpp:24`),
+  `GetFavoritesFilePath` (`:28`) y `MetadataCache::GetCacheFilePath` (`metadata_cache.cpp:37`).
+  Se siguieron sus usos Load/Save, entrada temprana `main.cpp:108` e inicialización
+  de caché en `XmpTagManager::Initialize`; esos consumidores no se modificaron.
+- `ResolveUserDataRoot` (`user_data_paths.cpp:6`) conserva seis consultas `exists`,
+  orden desde EXE hasta quinto padre y fallback EXE. No exige tipo de entrada ni
+  presencia del archivo final. `GetExecutableUserDataRoot` (`:17`) conserva adquisición
+  Win32/MAX_PATH; sin estado compartido, migración, escrituras ni normalización añadida.
+- Los nombres finales siguen siendo settings.json, session.txt, fav.txt y xmp_tag_cache.bin.
+  CMake incluye el helper en aplicación y tagging_tests y registra el nuevo test sin PCH.
+  Hay comentarios de responsabilidad para las funciones modificadas, helper, clase y
+  métodos del harness. Las clases consumidoras conservan sus comentarios de responsabilidad.
+- Fuera de esta revisión: i18n, UI/GPU, invalidación async, IPC, cierre, otros formatos,
+  endurecimiento de caché y cobertura documental preexistente ajena al diff.
+
+### Resultado y evidencia
+
+Sin hallazgos nuevos accionables ni bloqueantes en el diff R1. AR-004 queda resuelto
+en su alcance de duplicación; AR-001/002/003/005/006 permanecen pendientes, y AR-007
+se cumple solo para los símbolos de esta porción. No se atribuyen fallos reproducidos
+ni mejoras de rendimiento a la deduplicación.
+
+Ejecución previa a producción: 90 checks sobre las cinco copias extraídas (18 cada una).
+Ejecución posterior: mismos 18 casos del helper más adaptador Win32, 19 checks.
+`cmake --preset windows-x64`, `cmake --build --preset release` y
+`ctest --preset release --verbose` pasaron (2/2 tests). `metadata.tagging` pasó todos
+sus casos sobre copias, incluido caché. Evidencia y reproducción: [result.md](result.md).
+
+Límites: no se forzaron errores de permisos/Win32 ni rutas largas; se preserva su
+tratamiento en código. No se ejecutó UX ni se midió rendimiento. La raíz del volumen
+solo se consultó, sin crear candidatos allí. La revisión no certifica toda la aplicación.
+Se recomienda concretar R2 como siguiente refactorización neutral; AR-002 conserva
+su prioridad de riesgo y requiere su especificación correctiva propia.
+
+## Revisión del diff R2 — 2026-10-22
+
+Base: `ac4a5da` más el diff R1 sin commit. Git coincidía con el cierre de R1;
+se guardó snapshot previo en `build/r2-baseline/`. Revisión en la misma sesión con
+la habilidad y ambas referencias, sin delegación. Alcance: AR-001, traslado neutral.
+La evidencia histórica anterior conserva sus ubicaciones originales.
+
+### Cobertura
+
+- Lectura completa del gestor/modelo antes y después: ahora en
+  `src/core/folder_data_manager.h/.cpp`. Contratos comprobados contra implementación
+  y consumidores: escaneo síncrono, selección, sesión/favoritos, historial, previews
+  y ordenación. Los métodos de su API y modelos tienen comentarios de responsabilidad,
+  hilo UI, propiedad y efectos. También se documentó FileEntry y las declaraciones
+  consumidoras modificadas por el renombre.
+- App conserva clase y propiedad del servicio (`app.h:142`, `m_folderData`) y referencias
+  al mismo estado (`:156` y `:157`, constructor `app.cpp:16`). Sus rutas de inicialización,
+  favoritos/sesión, historial, LoadFolder y ApplySortMode solo cambian el nombre del miembro.
+- Library conserva su propio AddFolder y su comportamiento diferente. Solo cambian
+  include y acceso al miembro en SetCurrentFolder (`library_page.cpp:398`) y OnMouseDown
+  (`:610`). No se retira Library ni se unifica su escaneo con el gestor.
+- Board conserva la resolución de directorio (`board_page.cpp:789`): lista actual,
+  carpeta compartida seleccionada y current_path. Viewer y Waterfall no se modifican;
+  se siguen sus accesos al modelo a través de App y se compilan ambos consumidores.
+- CMake: solo se sustituyen las rutas del header/source del gestor respecto a R1.
+  El helper de rutas R1 permanece y sus consumidores no cambian de política.
+- No revisado de nuevo: UI completa de páginas, rendering/GPU, scanner/loader completos,
+  IPC, formatos binarios ni cobertura documental preexistente ajena a los símbolos afectados.
+
+### Comprobaciones y dictamen
+
+Ocho comparaciones de tokens C++ pasaron frente al snapshot: gestor .h/.cpp,
+App .h/.cpp, LibraryPage .h/.cpp y BoardPage .h/.cpp. Se ignoran comentarios/espacios
+fuera de literales y se normalizan solo nombre del miembro y rutas de include conocidas;
+se conservan strings, firmas, enums, expresiones, orden de inicialización y cuerpos.
+Los archivos R1 ajenos al traslado conservan hashes; CMake coincide con R1 salvo dos
+sustituciones de ruta. No quedan referencias activas al miembro/ruta anterior.
+
+Release completo y CTest 2/2 pasaron. Un probe local enlazado con objetos reales de
+producción, sin stubs ni App/ventana inicializada, pasó 36 checks de contratos y
+roundtrips UTF-8 sobre copias. El intento visual mediante la habilidad Computer Use
+falló con `computer-use request budget exhausted` antes de obtener ventana; no se
+observó UX ni se prueban los efectos UI de App no nulo con el probe. No es un fallo
+reproducido de LenteUV. Procedimiento y límites: [result.md](result.md#r2--separación-neutral-del-gestor-compartido).
+
+Sin nuevos hallazgos accionables ni bloqueantes en el diff mecánico. AR-001 resuelto
+en su alcance de ubicación/nombre/responsabilidad documentada; no se separan navegación
+y persistencia ni se corrigen los riesgos de callbacks. AR-004 sigue resuelto por R1;
+AR-007 se cumple en la porción, no globalmente. AR-002/003/005/006 permanecen pendientes.
+No se midió rendimiento ni se declara mejora. El smoke visual queda pendiente como
+comprobación complementaria; no se usa compilación/CTest como evidencia visual.
+
+Siguiente entrega recomendada: especificación acotada de AR-002 con generación/identidad,
+entrega diferida y cambios de lista/orden/borrado antes de modificar consumidores.
+Las decisiones de compatibilidad de 002 siguen abiertas; R2 no autoriza retirar Library.
+
+## Seguimiento de AR-002 — 2026-10-22
+
+El propietario autorizó su corrección después de R2. [004](../004-vigencia-miniaturas/spec.md)
+registra contrato, implementación y validación independientes: tokens por solicitud/ruta
+en tira y previews compartidos. Una prueba previa reprodujo asociación errónea A/B sin
+crash; tras corregir pasaron 98 checks diferidos y CTest 3/3. Véanse
+[resultado](../004-vigencia-miniaturas/result.md) y [revisión](../004-vigencia-miniaturas/review.md).
+AR-002 resuelto en ese alcance; las secciones anteriores conservan evidencia histórica.
+
+## Seguimiento de AR-003 — 2026-10-22
+
+La porción [IPC de 003](../003-diagnostico-rendimiento/result.md) añade una reproducción
+controlada con procesos y handler Window/App reales: cinco detecciones seguidas de
+error 2 al enviar, mientras controles directos aplican imagen con bitmap. El contrato
+booleano y protocolo se conservaron; no se declara AR-003 corregido. Revisión y límites
+en [003/review.md](../003-diagnostico-rendimiento/review.md). Arranque/reposo siguen pendientes.
+
+Seguimiento posterior: [005](../005-entrega-ipc/review.md) corrige AR-003 en el alcance
+de reintento al abrir, resultado explícito y payload de post fallido. La matriz exige
+5/5 aplicaciones, dos concurrentes, errores inducidos y conteos exactos; Release/CTest
+4/4 pasaron. Presentación real y elección/cierre/ACK no se consideran certificados.

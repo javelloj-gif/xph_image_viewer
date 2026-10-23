@@ -12,6 +12,7 @@ class BoardPage;
 class Renderer;
 
 class BoardTagScanner {
+    friend class AsyncPreviewTests; // Installs controlled work to verify App destruction joins producers first.
 public:
     explicit BoardTagScanner(BoardPage* page);
     ~BoardTagScanner();
@@ -25,7 +26,7 @@ public:
     /// Dibuja la barra de progreso en la parte superior si el escaneo está activo
     void DrawProgressBar(Renderer& renderer);
 
-    /// Cancela de forma segura el escaneo activo y sincroniza el hilo
+    /// Espera el escaneo activo completo; no interrumpe enumeración, WIC ni escritura.
     void CancelScan();
 
     /// Retorna si hay un escaneo de tags activo en este momento

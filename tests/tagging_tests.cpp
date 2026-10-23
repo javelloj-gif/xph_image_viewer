@@ -20,6 +20,9 @@
 
 using namespace kv;
 
+// Checks malformed KTAG input against isolated executable-local cache data.
+void TestMalformedMetadataCache();
+
 // Simple assertions for tests
 #define ASSERT_TRUE(x) \
     do { \
@@ -388,6 +391,7 @@ int wmain() {
     std::filesystem::copy_file(srcPng,  destPng,  std::filesystem::copy_options::overwrite_existing);
 
     try {
+        TestMalformedMetadataCache();
         XmpTagManager manager;
         manager.Initialize(factory.Get());
 

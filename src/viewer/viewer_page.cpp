@@ -379,7 +379,7 @@ void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
     auto size = renderer.GetTargetSize().ToFloat();
 
     bool isWaterfallModal = (m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal);
-    if (m_app->m_settings.show_metadata || isWaterfallModal) {
+    if ((m_app->m_settings.show_metadata || isWaterfallModal) && m_metadataOpacity > 0.0f) {
         auto currentImage = m_app->m_currentImage;
         auto animatedImage = m_app->m_animatedImage;
 

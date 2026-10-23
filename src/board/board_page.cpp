@@ -790,8 +790,8 @@ std::filesystem::path BoardPage::GetActiveDirectory() const {
     if (!m_app->m_fileList.empty()) {
         return std::filesystem::path(m_app->m_fileList[0]).parent_path();
     }
-    int folderIdx = m_app->m_libraryData.GetCurrentFolderIndex();
-    const auto& folders = m_app->m_libraryData.GetFolders();
+    int folderIdx = m_app->m_folderData.GetCurrentFolderIndex();
+    const auto& folders = m_app->m_folderData.GetFolders();
     if (folderIdx >= 0 && folderIdx < static_cast<int>(folders.size())) {
         return folders[folderIdx].folderPath;
     }

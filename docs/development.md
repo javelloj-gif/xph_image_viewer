@@ -43,6 +43,86 @@ SVG si falta el PNG. Revisa el diff del ICO antes de confirmarlo.
 
 ## Tests aislados
 
+`ipc.delivery_diagnostics` usa `run_ipc_diagnostics.ps1`: copia el harness de 004,
+fixtures y user_data a un run nuevo. El mismo EXE ejecuta roles sender en procesos
+propios; el receptor usa pipe exclusiva, Window/App/WIC reales y D2D software WARP,
+sin ventana visible ni swapchain. Comprueba imagen/bitmap aplicado, no presentación.
+Se ejecuta con `ctest --preset release -R ipc.delivery_diagnostics --verbose`.
+Conserva el nombre histórico de CTest/script/CLI de 003; desde 005 es una regresión
+que exige cinco aperturas y dos concurrentes aplicadas exactamente una vez, conteos
+finales sin duplicados y errores explícitos. Añade pipe temporalmente ausente, plazo
+agotado por ausencia/saturación (también App::Initialize) y PostMessage con HWND destruido.
+Véanse los resultados de 003 (histórico) y [005](changes/005-entrega-ipc/result.md).
+El harness no automatiza el diálogo/salida 2 de main; esa parte se revisó en código.
+La [validación real posterior de 003](changes/003-diagnostico-rendimiento/real-validation.md)
+sí observó ese diálogo y salida 2 en una copia del producto, además de presentación
+PNG y ventanas de ambos flags. Es evidencia separada del harness, con límites de
+captura inicial --lite; no convierte CTest en certificación visual ni de rendimiento.
+No contacta con la pipe global ni arranca App completo con --multiple/--lite; esos flags
+solo se verifican en parser/bypass. El timeout CTest es 60 s, cada hijo tiene plazo de 5 s.
+
+`ui.async_previews` enlaza las implementaciones productivas de App/páginas/loader sin
+ejecutar App::Initialize. Usa WIC con cero workers, colas reales y entrega diferida
+mediante ProcessPendingTextures; una ventana solo de mensajes recibe redraws y un
+bitmap D2D 1x1 con WARP software comprueba asociación exitosa en la tira. No hay
+ventana visible, swapchain ni datos personales. Cubre reemplazo/lista vacía/menor,
+reordenación, borrado en memoria, recreación de rutas, éxito/fallo y entrega repetida.
+Los checks permanecen activos en Release. Ejecutar por separado con
+`ctest --preset release -R ui.async_previews --output-on-failure`.
+Necesita WIC y backend WARP/Direct2D del sistema; no certifica UX ni rendimiento.
+
+[011](changes/011-vigencia-antes-upload/result.md) añade 321 checks de vigencia antes
+del upload: tarea CPU real en hilo COM con entrega controlada, píxeles sintéticos y
+renderer WARP para observar bitmap omitido/creado. Comprueba callback/hilo/resultado,
+reencolado, reemplazo, recreación, duplicados y revisión 007. Total async: 162022 checks;
+no es un benchmark ni certifica presentación nativa. CTest sigue teniendo cinco suites.
+
+Desde [006](changes/006-optimizaciones-locales/result.md), el mismo test conserva los
+98 checks originales y añade reconstrucción diferencial frente al algoritmo previo y
+visibilidad frente al recorrido completo (duplicados, tokens y límites float).
+Dos modos optativos de `build/windows-x64/Release/async_preview_tests.exe`:
+`--optimization-snapshot <archivo.bgra>` escribe 12 frames de tira/overlay reales en
+un target WARP sin ventana/swapchain; `--optimization-benchmark` compara medianas de
+reconstrucción con listas sintéticas. Crear previamente la carpeta de salida bajo
+build. No escribe fixtures ni abre datos personales. Snapshot es BGRA crudo y requiere
+baseline previo con el mismo harness/entorno para comparar; no certifica compositor
+ni toda la UX. Benchmark no tiene umbrales en CTest ni demuestra arranque global.
+
+[007](changes/007-layouts-por-cambios/result.md) añade al mismo harness comparación
+bit a bit de layouts, hits/invalidation y callbacks compartidos. Modos optativos:
+`--layout-snapshot <archivo.bgra>` escribe 24 frames WARP de grids productivos para
+comparación con baseline previo; `--layout-benchmark` compara recálculo productivo
+forzado con hits estables y reconstrucción por revisión. Datos sintéticos, sin sesión
+ni imágenes personales. Conserva modos/regresiones 006; en 007 había cuatro tests.
+Los tiempos describen CalculateLayout, no Draw/Present, GPU o arranque completo.
+
+[008](changes/008-formatos-texto/result.md) añade propiedades/medidas de texto,
+aislamiento público/privado, expulsión, límites y reemplazo/descarte de factory al
+mismo harness. `--text-snapshot <archivo.bgra>` y `--text-reference-snapshot <archivo.bgra>`
+comparan 12 frames WARP cacheados frente a formatos frescos. `--text-benchmark` separa
+obtención/configuración y MeasureText completo; datos sintéticos y sin umbral temporal.
+La evidencia incluye una captura inicial distinta, controles frescos/original y cero
+bytes distintos en el contraste controlado. No descartar una diferencia visual sin
+esos controles ni cambiar tipografía/antialiasing para hacer pasar la prueba.
+En 008 se mantuvieron cuatro tests; la recuperación real de dispositivo y toda UX nativa
+no quedan certificadas por esos casos. Artefactos siempre bajo build ignorado.
+
+[009](changes/009-decoder-compartido/result.md) añade el quinto CTest,
+`loader.viewer_decode`. Ejecutar `ctest --preset release -R loader.viewer_decode`.
+El wrapper scripts/run_decode_tests.ps1 prepara copia del EXE/user_data/fixtures;
+el modo `--decode-tests` solo debe ejecutarse en ese staging aislado. Usa WIC real y
+proxies de test para contar aperturas/inyectar fallos; compara bytes/metadata y crea
+PNG/GIF/WebP diminutos propios sin dependencia Python. El WebP grande se omite antes
+de decode completo por presupuesto de frames estimados; codec ausente o APNG de un
+frame no certifican animación de esos formatos. El benchmark CPU es informativo,
+no un umbral de CTest ni medida de App/primera ejecución/GPU.
+
+CTest también registra `common.user_data_paths`: prueba la selección de raíz de datos
+en árboles temporales propios, con checks activos en Release. Cubre los seis candidatos,
+prioridad, exclusión del séptimo, fallback, entradas de tipo archivo y resolución sin caché;
+no abre la aplicación ni modifica datos personales. Para ejecutarlo por separado:
+`ctest --preset release -R common.user_data_paths --output-on-failure`.
+
 CTest registra `metadata.tagging`, que llama a `run_tagging_tests.ps1`. Cada ejecución
 copia el EXE del harness y dos fixtures a `build/windows-x64/test-runs/<id>/`, crea
 `user_data/` local y ejecuta allí. Los artefactos se conservan para diagnóstico.
@@ -55,6 +135,16 @@ es 90 segundos. Una restricción del sandbox puede impedir escritura/Property St
 registrar el error y repetir con permiso del entorno, sin desactivar assertions.
 
 ## Paquetes
+
+Desde [012](changes/012-cierre-colas-ipc/result.md), CTest incluye una sexta suite,
+`lifecycle.shutdown`. El harness lanza nueve hijos propios con watchdog de 5 s por
+proceso y pipes exclusivas. Comprueba cierre con cola ocupada/cliente silencioso,
+payload pendiente, WM_QUIT y reinicio; no accede al endpoint global ni datos personales.
+Solo el watchdog de tests termina sus hijos si fallan; producto no fuerza hilos/procesos.
+Ejecutar `ctest --preset release -R lifecycle.shutdown --output-on-failure`.
+El smoke nativo opcional de 010 añade desde 012 hide-to-tray y WM_CLOSE real tras
+post pendiente. El script conserva `-Startup`; usar RunRoot build/shutdown-012 para
+aislar evidencia nueva. No sustituye aceptación visual/interactiva del usuario.
 
 ```powershell
 # Usa el ICO versionado; compila, prueba y genera ambos formatos.
@@ -126,3 +216,32 @@ El contexto observado permanece en las guías existentes; las especificaciones
 describen cambios deseados sin sustituir la documentación del comportamiento actual.
 El procedimiento utiliza documentos versionados, las herramientas de Codex y los
 comandos de compilación y validación de este repositorio, sin instalación adicional.
+
+## Arranque secundario: validación 010
+
+El harness IPC incluye secundarios por App reales y comprueba factories omitidas,
+bitmap aplicado y errores 005. CTest conserva cinco suites y WARP/ventana oculta.
+El smoke opcional requiere dispositivo gráfico nativo y puede mostrar brevemente
+ventanas; usa EXE/user_data/fixtures copiados y endpoint privado:
+
+```powershell
+./scripts/run_ipc_diagnostics.ps1 -Executable build/windows-x64/Release/async_preview_tests.exe -Fixtures tests/fixtures -RunRoot build/optimization-010 -Startup
+```
+
+Cubre diez escenarios: reentrada inducida antes de WIC, flags, bypass, archivo,
+carpeta, sesión/directorio actual y fallos HWND/WIC/renderer. Imports temporales solo
+en el EXE de tests; no hooks productivos. Siete arranques dibujan los cuatro modos;
+no se comprueban visualmente sus píxeles ni gestos. `-ReferenceExecutable` permite
+comparar con un harness previo que admita `--ipc-app-reference`; no pasar el EXE de
+producto. [Resultado 010](changes/010-inicializacion-secundaria/result.md) conserva
+medición, hashes y candidato portable; revisión visual de usuario pendiente.
+
+## Cierre base 013
+
+La base está cerrada; el [resultado 013](changes/013-cierre-base/result.md) registra
+aceptación funcional reportada y correcciones finales. CTest conserva seis suites.
+metadata.tagging añade 164 prefijos KTAG truncados con ambos estados dirty, firma,
+versión, cantidades imposibles y compatibilidad; solo sobre user_data del EXE copiado.
+ui.async_previews añade trabajo de Board/búsqueda retenido durante destrucción de
+App para comprobar join antes del cierre del loader. 162025 checks async finales.
+No sustituye UX, agotamiento de memoria ni un plazo universal de cierre.

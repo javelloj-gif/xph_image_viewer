@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "settings.h"
 #include "common/types.h"
+#include "common/user_data_paths.h"
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -80,37 +81,11 @@ static std::wstring ParseWString(const std::string& valStr, const std::wstring& 
 }
 
 std::wstring Settings::GetSettingsFilePath() const {
-    wchar_t exePath[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path p(exePath);
-    for (int i = 0; i < 6; ++i) {
-        p = p.parent_path();
-        if (std::filesystem::exists(p / "user_data")) {
-            return (p / "user_data" / "settings.json").wstring();
-        }
-    }
-    std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-    return (exeDir / "settings.json").wstring();
+    return (GetExecutableUserDataRoot() / "settings.json").wstring();
 }
 
 void Settings::PreInitDebugIpc() {
-    wchar_t exePath[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path p(exePath);
-    std::wstring path;
-    bool found = false;
-    for (int i = 0; i < 6; ++i) {
-        p = p.parent_path();
-        if (std::filesystem::exists(p / "user_data")) {
-            path = (p / "user_data" / "settings.json").wstring();
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-        path = (exeDir / "settings.json").wstring();
-    }
+    const std::wstring path = (GetExecutableUserDataRoot() / "settings.json").wstring();
 
     if (std::filesystem::exists(path)) {
         std::string json = ReadFileToString(path);

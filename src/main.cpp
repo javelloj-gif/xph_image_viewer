@@ -76,7 +76,14 @@ int wWinMainImpl(
     kv::InitResult initResult = app.Initialize(config);
     TraceIpc(std::format("[MAIN] app.Initialize returned: {}", (int)initResult));
     if (initResult == kv::InitResult::AlreadyRunning) {
-        return 0; // Exit silently since existing instance handled the request
+        return 0; // Transport completed; UI application is not acknowledged.
+    }
+    if (initResult == kv::InitResult::ForwardFailed) {
+        const auto message = std::format(
+            L"No se pudo enviar la solicitud a la instancia existente de LenteUV.\n\n"
+            L"Error de transporte Win32: {}. Vuelva a intentar la apertura.", app.GetIpcSendError());
+        MessageBoxW(nullptr, message.c_str(), L"LenteUV — Error de envío", MB_OK | MB_ICONERROR);
+        return 2;
     }
     if (initResult == kv::InitResult::Failed) {
         MessageBoxW(nullptr,

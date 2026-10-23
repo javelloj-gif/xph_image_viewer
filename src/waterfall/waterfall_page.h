@@ -19,6 +19,7 @@ namespace kv {
 class App; // Forward declaration
 
 class WaterfallPage {
+    friend class AsyncPreviewTests; // Exercises shared preview completion after list mutations.
 public:
     friend class App;
     friend class ViewerPage;
@@ -47,10 +48,12 @@ public:
     bool OnKeyDown(uint32_t vk, KeyModifiers mods);
 
 private:
+    // UI thread: reuses base rects until model/selection/width/count or column/spacing parameters change.
     void CalculateLayout();
     void DrawPreviewsGrid(Renderer& renderer, const RectF& rect);
     void DrawScrollbars(Renderer& renderer, const RectF& rect);
     void DrawScrollbar(Renderer& renderer, const RectF& trackRect, float contentHeight, float viewHeight, float scrollOffset, float opacity);
+    // Requests shared previews; UI checks token/path before upload and again at completion, never captured indices.
     void LoadPreviewTexture(int folderIdx, int previewIdx);
     void DrawCheckerboard(Renderer& renderer, const RectF& rect);
     
@@ -70,6 +73,14 @@ private:
 
     // Bounding boxes computed in CalculateLayout
     std::vector<RectF> m_previewRects;
+    // Fixed-size cache key only; the existing rect vector remains the sole geometry storage.
+    bool m_layoutValid = false;
+    uint64_t m_layoutRevision = 0;
+    int m_layoutFolder = -1;
+    float m_layoutWidth = 0.0f;
+    size_t m_layoutCount = 0;
+    int m_layoutColumns = 0;
+    float m_layoutSpacing = 0.0f;
 
     // Hover state
     int m_hoveredPreviewIdx = -1;

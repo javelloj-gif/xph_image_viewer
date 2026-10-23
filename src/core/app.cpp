@@ -9,14 +9,24 @@
 #include <ranges>
 #include "shell/shell_integrator.h"
 #include "i18n/i18n_engine.h"
+#include "board/board_tag_scanner.h"
 #include <fstream>
 
 namespace kv {
 
 App::App()
-    : m_folders(m_libraryData.m_folders),
-      m_currentFolderIdx(m_libraryData.m_currentFolderIdx)
+    : m_folders(m_folderData.m_folders),
+      m_currentFolderIdx(m_folderData.m_currentFolderIdx)
 {
+}
+
+App::~App() {
+    m_window.events.onIpcOpenPath = {};
+    m_ipc.Shutdown();
+    // Join producers while their page, metadata cache, WIC factory and window still exist.
+    m_boardPage.m_tagScanner->CancelScan();
+    m_tagManager.CancelSearch();
+    m_imageLoader.Shutdown();
 }
 
 // ─── Sorted natural image extensions for binary_search ──────────────────────
@@ -78,24 +88,6 @@ InitResult App::Initialize(const AppConfig& config) {
     I18nEngine::Initialize(m_settings.ui_lang);
     trace("I18n initialized");
 
-    m_libraryData.Initialize(this);
-    trace("FolderDataManager initialized");
-    m_libraryData.LoadFavorites();
-    // Initialize Image Loader early to provide WIC Factory to TagManager
-    if (!m_imageLoader.Initialize(4)) {
-        LogError(L"Failed to initialize image loader");
-        trace("Failed to initialize image loader");
-        return InitResult::Failed;
-    }
-    trace("ImageLoader initialized");
-
-    m_tagManager.Initialize(m_imageLoader.GetWicFactory());
-    trace("Tags loaded");
-    m_optionsMenu.Initialize(this);
-    trace("OptionsMenu initialized");
-    m_taggingModal.Initialize(this);
-    trace("TaggingModal initialized");
-
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
     wndConfig.title       = L"LenteUV";
@@ -112,14 +104,41 @@ InitResult App::Initialize(const AppConfig& config) {
     }
     trace("Window created");
 
+    // Win32/COM may dispatch during startup. Own early paths until every consumer is ready.
+    auto startupPaths = std::make_shared<std::vector<std::wstring>>();
+    m_window.events.onIpcOpenPath = [startupPaths](const std::wstring& path) {
+        startupPaths->push_back(path);
+    };
+
     // Enforce Single Instance
     if (m_settings.single_instance && !config.multiple) {
         std::wstring initialPath = config.initialFilePath.empty() ? config.initialFolderPath : config.initialFilePath;
-        if (!m_ipc.Initialize(m_window.GetHwnd(), initialPath)) {
-            // Exit process immediately since it has been handled by existing instance
+        const auto ipcResult = m_ipc.Initialize(m_window.GetHwnd(), initialPath);
+        if (ipcResult == IpcInitResult::ForwardFailed) {
+            return InitResult::ForwardFailed;
+        }
+        if (ipcResult == IpcInitResult::Forwarded) {
             return InitResult::AlreadyRunning;
         }
     }
+
+    m_folderData.Initialize(this);
+    trace("FolderDataManager initialized");
+    m_folderData.LoadFavorites();
+    // Initialize Image Loader early to provide WIC Factory to TagManager
+    if (!m_imageLoader.Initialize(4)) {
+        LogError(L"Failed to initialize image loader");
+        trace("Failed to initialize image loader");
+        return InitResult::Failed;
+    }
+    trace("ImageLoader initialized");
+
+    m_tagManager.Initialize(m_imageLoader.GetWicFactory());
+    trace("Tags loaded");
+    m_optionsMenu.Initialize(this);
+    trace("OptionsMenu initialized");
+    m_taggingModal.Initialize(this);
+    trace("TaggingModal initialized");
 
     // Register system tray icon
     ShellIntegrator::RegisterTrayIcon(
@@ -145,41 +164,10 @@ InitResult App::Initialize(const AppConfig& config) {
             m_window.Show(SW_HIDE);
             return false;
         }
+        // WM_CLOSE destroys the HWND before WM_QUIT; stop posts and release its payloads while it is alive.
+        m_window.events.onIpcOpenPath = {};
+        m_ipc.Shutdown();
         return true;
-    };
-    m_window.events.onIpcOpenPath = [this](const std::wstring& rawPath) {
-        if (rawPath.empty()) return;
-
-        namespace fs = std::filesystem;
-        std::wstring path = fs::absolute(rawPath).lexically_normal().wstring();
-
-        std::error_code ec;
-        if (!fs::exists(path, ec)) return;
-
-        if (fs::is_directory(path, ec)) {
-            LoadFolder(path);
-            SetPage(Page::Library);
-        } else if (fs::is_regular_file(path, ec)) {
-            LoadImage(path);
-            SetPage(Page::Viewer);
-        } else {
-            return;
-        }
-
-        if (IsIconic(m_window.GetHwnd())) {
-            ShowWindow(m_window.GetHwnd(), SW_RESTORE);
-        } else {
-            m_window.Show();
-        }
-
-        if (m_window.IsFullscreen()) {
-            m_window.SetFullscreen(true);
-        } else {
-            AdjustWindowToImage();
-        }
-
-        SetForegroundWindow(m_window.GetHwnd());
-        m_window.RequestRedraw();
     };
     m_window.events.onTrayIconEvent = [this](LPARAM lp) {
         if (lp == WM_LBUTTONDBLCLK) {
@@ -225,7 +213,7 @@ InitResult App::Initialize(const AppConfig& config) {
 
     // ── Load Initial Content ──────────────────────────────────────────────
     bool loadSessionImage = config.initialFilePath.empty() && config.initialFolderPath.empty();
-    m_libraryData.LoadSession(loadSessionImage);
+    m_folderData.LoadSession(loadSessionImage);
 
     if (!config.initialFilePath.empty()) {
         LoadImage(config.initialFilePath);
@@ -237,8 +225,45 @@ InitResult App::Initialize(const AppConfig& config) {
     }
 
     m_frameTimer.Reset();
+    m_window.events.onIpcOpenPath = [this](const std::wstring& rawPath) { OnIpcOpenPath(rawPath); };
+    for (const auto& path : *startupPaths) OnIpcOpenPath(path);
     LogInfo(L"Application initialized successfully");
     return InitResult::Success;
+}
+
+void App::OnIpcOpenPath(const std::wstring& rawPath) {
+    if (rawPath.empty()) return;
+
+    namespace fs = std::filesystem;
+    std::wstring path = fs::absolute(rawPath).lexically_normal().wstring();
+
+    std::error_code ec;
+    if (!fs::exists(path, ec)) return;
+
+    if (fs::is_directory(path, ec)) {
+        LoadFolder(path);
+        SetPage(Page::Library);
+    } else if (fs::is_regular_file(path, ec)) {
+        LoadImage(path);
+        SetPage(Page::Viewer);
+    } else {
+        return;
+    }
+
+    if (IsIconic(m_window.GetHwnd())) {
+        ShowWindow(m_window.GetHwnd(), SW_RESTORE);
+    } else {
+        m_window.Show();
+    }
+
+    if (m_window.IsFullscreen()) {
+        m_window.SetFullscreen(true);
+    } else {
+        AdjustWindowToImage();
+    }
+
+    SetForegroundWindow(m_window.GetHwnd());
+    m_window.RequestRedraw();
 }
 
 // ─── Main Loop ───────────────────────────────────────────────────────────────
@@ -253,9 +278,12 @@ int App::Run() {
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) {
                 // ── Clean shutdown of background threads before returning ──
-                // Shutdown IPC server first (poison pill, guaranteed no deadlock).
+                // Stop new IPC deliveries before consumers are destroyed; discard undelivered payloads.
+                m_window.events.onIpcOpenPath = {};
                 m_ipc.Shutdown();
-                // Shutdown image loader thread pool.
+                m_boardPage.m_tagScanner->CancelScan();
+                m_tagManager.CancelSearch();
+                // Cancel queued decodes and wait for tasks already active; WIC itself is not interrupted.
                 m_imageLoader.Shutdown();
                 // Unregister tray icon.
                 ShellIntegrator::UnregisterTrayIcon(m_window.GetHwnd());
@@ -568,9 +596,9 @@ void App::LoadImage(const std::wstring& path) {
 
     LogInfo(std::format(L"Loading image: {}", path));
 
-    // Check if animated
-    if (ImageLoader::IsAnimatedFormat(path)) {
-        auto anim = m_imageLoader.LoadAnimatedSync(path);
+    const auto loaded = m_imageLoader.LoadForViewerSync(path);
+    {
+        auto anim = loaded.animation;
         if (anim && anim->IsValid()) {
             // Upload all frames to GPU
             ImageLoader::UploadAnimationToGpu(*anim, m_renderer);
@@ -588,14 +616,14 @@ void App::LoadImage(const std::wstring& path) {
             m_window.SetTitle(std::format(L"LenteUV — {} ({} frames)",
                 fs::path(path).filename().wstring(), anim->FrameCount()));
             
-            m_libraryData.AddToHistory(path);
+            m_folderData.AddToHistory(path);
             m_window.RequestRedraw();
             return;
         }
     }
 
     // Load as static image
-    auto image = m_imageLoader.LoadSync(path);
+    auto image = loaded.image;
     if (image && image->IsValid()) {
         ImageLoader::UploadToGpu(*image, m_renderer);
         m_currentImage = image;
@@ -605,7 +633,7 @@ void App::LoadImage(const std::wstring& path) {
         m_window.SetTitle(std::format(L"LenteUV — {} ({}×{})",
             fs::path(path).filename().wstring(), image->width, image->height));
 
-        m_libraryData.AddToHistory(path);
+        m_folderData.AddToHistory(path);
     } else {
         LogError(std::format(L"Failed to load: {}", path));
     }
@@ -637,7 +665,7 @@ void App::LoadImage(const std::wstring& path) {
 }
 
 void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
-    m_libraryData.AddFolder(folderPath, false, loadImage);
+    m_folderData.AddFolder(folderPath, false, loadImage);
 
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
@@ -649,7 +677,7 @@ void App::ApplySortMode(int mode) {
     m_settings.Save();
 
     for (size_t i = 0; i < m_folders.size(); ++i) {
-        m_libraryData.SortFolder(static_cast<int>(i), static_cast<FolderDataManager::SortMode>(mode));
+        m_folderData.SortFolder(static_cast<int>(i), static_cast<FolderDataManager::SortMode>(mode));
     }
 
     if (m_currentFolderIdx >= 0 && m_currentFolderIdx < static_cast<int>(m_folders.size())) {
@@ -689,6 +717,7 @@ void App::DeleteImage(const std::wstring& path) {
             folder.filePaths.erase(itPath);
             if (idx < folder.previews.size()) {
                 folder.previews.erase(folder.previews.begin() + idx);
+                m_folderData.NotifyPreviewLayoutChanged();
             }
             if (folder.currentIndex >= static_cast<int>(folder.filePaths.size())) {
                 folder.currentIndex = std::max(0, static_cast<int>(folder.filePaths.size()) - 1);

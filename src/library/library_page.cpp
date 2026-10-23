@@ -13,6 +13,7 @@ namespace kv {
 
 void LibraryPage::Initialize(App* app) {
     m_app = app;
+    m_layoutValid = false;
     m_foldersScrollY = 0.0f;
     m_targetFoldersScrollY = 0.0f;
     m_hoveredFolderIdx = -1;
@@ -339,23 +340,16 @@ void LibraryPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
 
     if (item.texture || item.isLoading || item.loadFailed) return;
 
+    const auto request = std::make_shared<const std::wstring>(item.filePath);
+    item.pendingRequest = request;
     item.isLoading = true;
-    m_app->m_imageLoader.LoadAsync(item.filePath, [this, folderIdx, previewIdx](std::shared_ptr<ImageData> img) {
-        if (folderIdx < static_cast<int>(m_app->m_folders.size())) {
-            auto& f = m_app->m_folders[folderIdx];
-            if (previewIdx < static_cast<int>(f.previews.size())) {
-                auto& item = f.previews[previewIdx];
-                item.isLoading = false;
-                if (img) {
-                    item.texture = img;
-                    CalculateLayout();
-                } else {
-                    item.loadFailed = true;
-                }
-                m_app->m_window.RequestRedraw();
-            }
+    m_app->m_imageLoader.LoadAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
+        const bool hasImage = img != nullptr;
+        if (m_app->m_folderData.CompletePreview(request, std::move(img))) {
+            if (hasImage) CalculateLayout();
+            m_app->m_window.RequestRedraw();
         }
-    }, 180, 180);
+    }, 180, 180, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); });
 }
 
 void LibraryPage::AddFolder(const std::wstring& path) {
@@ -391,6 +385,7 @@ void LibraryPage::AddFolder(const std::wstring& path) {
         folder.previewsInitialized = false;
 
         m_app->m_folders.push_back(std::move(folder));
+        m_app->m_folderData.NotifyPreviewLayoutChanged();
         CalculateLayout();
     } catch (...) {}
 }
@@ -398,7 +393,7 @@ void LibraryPage::AddFolder(const std::wstring& path) {
 void LibraryPage::SetCurrentFolder(int index) {
     if (index < 0 || index >= static_cast<int>(m_app->m_folders.size())) return;
     
-    m_app->m_libraryData.SetCurrentFolderIndex(index, true);
+    m_app->m_folderData.SetCurrentFolderIndex(index, true);
 
     CalculateLayout();
 }
@@ -432,11 +427,15 @@ void LibraryPage::SyncCurrentFolderWithApp() {
 
 void LibraryPage::CalculateLayout() {
     if (m_app->m_currentFolderIdx < 0 || m_app->m_currentFolderIdx >= static_cast<int>(m_app->m_folders.size())) {
+        m_layoutValid = false;
         return;
     }
 
     auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
     auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+    const auto revision = m_app->m_folderData.GetPreviewLayoutRevision();
+    if (m_layoutValid && m_layoutRevision == revision && m_layoutFolder == m_app->m_currentFolderIdx &&
+        m_layoutWidth == size.width && m_layoutCount == folder.previews.size()) return;
     float cxp = size.width / 2.0f;
     float rightPanelLeft = cxp + CENTER_OFFSET;
     float rightPanelWidth = size.width - rightPanelLeft;
@@ -474,6 +473,11 @@ void LibraryPage::CalculateLayout() {
 
         colHeights[minCol] += itemH + PREVIEW_GAP;
     }
+    m_layoutRevision = revision;
+    m_layoutFolder = m_app->m_currentFolderIdx;
+    m_layoutWidth = size.width;
+    m_layoutCount = folder.previews.size();
+    m_layoutValid = true;
 }
 
 bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
@@ -668,7 +672,7 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
             } else if (selected == 11) {
                 if (m_hoveredFolderIdx >= 0 && m_hoveredFolderIdx < static_cast<int>(m_app->m_folders.size())) {
                     bool wasActive = (m_hoveredFolderIdx == m_app->m_currentFolderIdx);
-                    m_app->m_libraryData.RemoveFolder(m_hoveredFolderIdx);
+                    m_app->m_folderData.RemoveFolder(m_hoveredFolderIdx);
                     if (wasActive) {
                         if (m_app->m_currentFolderIdx >= 0) {
                             SetCurrentFolder(m_app->m_currentFolderIdx);
@@ -748,7 +752,7 @@ bool LibraryPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
     if (x < cxp - CENTER_OFFSET && m_hoveredFolderIdx != -1) {
         if (m_hoveredCloseBtn) {
             bool wasActive = (m_hoveredFolderIdx == m_app->m_currentFolderIdx);
-            m_app->m_libraryData.RemoveFolder(m_hoveredFolderIdx);
+            m_app->m_folderData.RemoveFolder(m_hoveredFolderIdx);
             if (wasActive) {
                 if (m_app->m_currentFolderIdx >= 0) {
                     SetCurrentFolder(m_app->m_currentFolderIdx);

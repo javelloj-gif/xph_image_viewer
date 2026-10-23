@@ -51,7 +51,7 @@ public:
     bool enable_file_log = false;  // Enable kv_log.txt file logging (default: off)
     bool enable_debug_ipc = false; // Enable debug_ipc.txt IPC logging (default: off)
 
-    /// Read settings.json early to set debug IPC flag before App initialize
+    /// Reads the shared resolved settings.json before App initialization and sets the debug IPC flag.
     static void PreInitDebugIpc();
 
     /// Load settings from user_data/settings.json. Returns false on failure (e.g. file missing).
@@ -61,6 +61,7 @@ public:
     bool Save();
 
 private:
+    // Resolves settings.json on each call using the shared user_data search and EXE fallback.
     std::wstring GetSettingsFilePath() const;
 };
 

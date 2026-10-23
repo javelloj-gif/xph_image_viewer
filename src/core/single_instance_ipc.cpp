@@ -1,7 +1,7 @@
 // ============================================================================
 // Class: SingleInstanceIpc
-// Description: SingleInstanceIpc implements named pipe communication to ensure a single instance of [IMAGE_VIEWER_APP_NAME] runs and handles file opening requests.
-// Responsibility: Handle named-pipe client/server IPC to prevent multiple instances and handle external path requests using a poison-pill shutdown handler.
+// Description: Named-pipe discovery and path forwarding for LenteUV.
+// Responsibility: Own the server thread and expose delivery stages without acknowledging image application.
 // ============================================================================
 #include "common/pch.h"
 #include "single_instance_ipc.h"
@@ -10,8 +10,6 @@
 #include <vector>
 
 namespace kv {
-
-static const wchar_t* kPipeName = L"\\\\.\\pipe\\lenteuv";
 
 /*static*/ std::string SingleInstanceIpc::WideToUtf8(const std::wstring& w) {
     if (w.empty()) return {};
@@ -35,13 +33,13 @@ SingleInstanceIpc::~SingleInstanceIpc() {
     Shutdown();
 }
 
-bool SingleInstanceIpc::Initialize(HWND hwnd, const std::wstring& pathArg) {
+IpcInitResult SingleInstanceIpc::Initialize(HWND hwnd, const std::wstring& pathArg) {
     m_hwnd = hwnd;
 
     LogInfo(std::format(L"[IPC] Initialize called. pathArg.length={}", pathArg.length()));
 
     HANDLE hProbe = CreateFileW(
-        kPipeName,
+        m_pipeName.c_str(),
         GENERIC_WRITE,
         0,
         nullptr,
@@ -50,83 +48,80 @@ bool SingleInstanceIpc::Initialize(HWND hwnd, const std::wstring& pathArg) {
         nullptr
     );
 
-    bool anotherInstanceExists = false;
+    const DWORD probeError = hProbe == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+    const bool anotherInstanceExists = hProbe != INVALID_HANDLE_VALUE || probeError == ERROR_PIPE_BUSY;
+
+    if (!anotherInstanceExists && probeError != ERROR_FILE_NOT_FOUND) {
+        m_sendError = probeError;
+        return IpcInitResult::ForwardFailed;
+    }
 
     if (hProbe != INVALID_HANDLE_VALUE) {
         CloseHandle(hProbe);
-        anotherInstanceExists = true;
-    } else {
-        DWORD err = GetLastError();
-        if (err == ERROR_PIPE_BUSY) {
-            if (WaitNamedPipeW(kPipeName, 1000)) {
-                hProbe = CreateFileW(kPipeName, GENERIC_WRITE, 0, nullptr,
-                                     OPEN_EXISTING, 0, nullptr);
-                if (hProbe != INVALID_HANDLE_VALUE) {
-                    CloseHandle(hProbe);
-                    anotherInstanceExists = true;
-                }
-            } else {
-                hProbe = CreateFileW(kPipeName, GENERIC_WRITE, 0, nullptr,
-                                     OPEN_EXISTING, 0, nullptr);
-                if (hProbe != INVALID_HANDLE_VALUE) {
-                    CloseHandle(hProbe);
-                    anotherInstanceExists = true;
-                }
-            }
-        }
     }
 
     if (anotherInstanceExists) {
+        m_detected = true;
+        m_sendAttempted = true;
         LogInfo(L"[IPC] Another instance found. Sending file path.");
         std::string utf8Path = WideToUtf8(pathArg);
-        SendMessage(std::wstring(kPipeName), utf8Path, 2000);
-        return false;
+        DWORD writeError = ERROR_SUCCESS;
+        m_writeSucceeded = SendMessage(m_pipeName, utf8Path, 2000, &writeError);
+        m_sendError = writeError;
+        return m_writeSucceeded.load() ? IpcInitResult::Forwarded : IpcInitResult::ForwardFailed;
     }
 
+    m_stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!m_stopEvent) {
+        m_sendError = GetLastError();
+        return IpcInitResult::ForwardFailed;
+    }
+    m_ioEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!m_ioEvent) {
+        m_sendError = GetLastError();
+        CloseHandle(m_stopEvent);
+        m_stopEvent = nullptr;
+        return IpcInitResult::ForwardFailed;
+    }
     m_running = true;
     m_serverThread = std::thread(&SingleInstanceIpc::ServerThreadProc, this);
 
     LogInfo(L"[IPC] Server started. This is the primary instance.");
-    return true;
+    return IpcInitResult::Primary;
 }
 
 void SingleInstanceIpc::Shutdown() {
-    if (!m_running.exchange(false)) {
-        return;
-    }
-
-    LogInfo(L"[IPC] Shutdown: sending poison pill.");
-
-    constexpr int kMaxRetries = 10;
-    constexpr int kRetryDelayMs = 50;
-
-    bool sent = false;
-    for (int i = 0; i < kMaxRetries; ++i) {
-        if (SendMessage(std::wstring(kPipeName), kShutdownSentinel, 200)) {
-            sent = true;
-            break;
-        }
-        if (m_serverThread.joinable() &&
-            WaitForSingleObject(m_serverThread.native_handle(), kRetryDelayMs) == WAIT_OBJECT_0) {
-            break;
-        }
-    }
-
-    if (!sent) {
-        LogError(L"[IPC] Poison pill could not be delivered after retries. Forcing thread stop.");
-    }
-
+    m_running = false;
+    if (m_stopEvent) SetEvent(m_stopEvent);
     if (m_serverThread.joinable()) {
         m_serverThread.join();
     }
-
-    LogInfo(L"[IPC] Server thread joined cleanly.");
+    if (m_ioEvent) { CloseHandle(m_ioEvent); m_ioEvent = nullptr; }
+    if (m_stopEvent) { CloseHandle(m_stopEvent); m_stopEvent = nullptr; }
+    m_listening = false;
+    const HWND hwnd = std::exchange(m_hwnd, nullptr);
+    if (hwnd && IsWindow(hwnd)) {
+        MSG message = {};
+        bool sawQuit = false;
+        int quitCode = 0;
+        while (PeekMessageW(&message, hwnd, WM_IPC_OPEN_PATH, WM_IPC_OPEN_PATH, PM_REMOVE)) {
+            // WM_QUIT bypasses PeekMessage filters; preserve it and never interpret its code as a pointer.
+            if (message.message == WM_QUIT) {
+                sawQuit = true;
+                quitCode = static_cast<int>(message.wParam);
+            } else {
+                delete reinterpret_cast<std::wstring*>(message.wParam);
+            }
+        }
+        if (sawQuit) PostQuitMessage(quitCode);
+    }
 }
 
 /*static*/ bool SingleInstanceIpc::SendMessage(const std::wstring& pipeName,
                                                const std::string& utf8Message,
-                                               DWORD timeoutMs)
+                                               DWORD timeoutMs, DWORD* writeError)
 {
+    if (writeError) *writeError = ERROR_SUCCESS;
     HANDLE hPipe = INVALID_HANDLE_VALUE;
     DWORD startMs = GetTickCount();
 
@@ -146,12 +141,15 @@ void SingleInstanceIpc::Shutdown() {
         DWORD err = GetLastError();
         DWORD elapsed = GetTickCount() - startMs;
 
-        if (err == ERROR_PIPE_BUSY && elapsed < timeoutMs) {
-            DWORD remaining = timeoutMs - elapsed;
-            WaitNamedPipeW(pipeName.c_str(), remaining);
+        if ((err == ERROR_PIPE_BUSY || err == ERROR_FILE_NOT_FOUND) && elapsed < timeoutMs) {
+            const DWORD slice = (std::min)(timeoutMs - elapsed, DWORD{10});
+            // WaitNamedPipe returns immediately when no instance exists: avoid spinning in the recreation gap.
+            if (err == ERROR_PIPE_BUSY) WaitNamedPipeW(pipeName.c_str(), slice);
+            else Sleep(slice);
             continue;
         }
 
+        if (writeError) *writeError = err;
         return false;
     }
 
@@ -159,10 +157,31 @@ void SingleInstanceIpc::Shutdown() {
     BOOL ok = WriteFile(hPipe, utf8Message.c_str(),
                         static_cast<DWORD>(utf8Message.size()),
                         &written, nullptr);
+    const DWORD error = ok ? ERROR_SUCCESS : GetLastError();
     FlushFileBuffers(hPipe);
     CloseHandle(hPipe);
 
-    return ok && written == static_cast<DWORD>(utf8Message.size());
+    const bool success = ok && written == static_cast<DWORD>(utf8Message.size());
+    if (writeError) *writeError = success ? ERROR_SUCCESS : (ok ? ERROR_WRITE_FAULT : error);
+    return success;
+}
+
+IpcDiagnosticSnapshot SingleInstanceIpc::GetDiagnostics() const {
+    return {m_detected.load(), m_sendAttempted.load(), m_writeSucceeded.load(),
+        m_sendError.load(), m_received.load(), m_posted.load(), m_postFailures.load(), m_listening.load()};
+}
+
+bool SingleInstanceIpc::CompleteServerIo(HANDLE pipe, OVERLAPPED& operation, DWORD& transferred) {
+    const HANDLE events[] = {m_stopEvent, operation.hEvent};
+    const DWORD wait = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+    if (wait == WAIT_OBJECT_0 + 1 && m_running.load()) {
+        return GetOverlappedResult(pipe, &operation, &transferred, FALSE) != FALSE;
+    }
+    // CancelIoEx may race a successful completion; either way, wait before releasing its storage.
+    CancelIoEx(pipe, &operation);
+    GetOverlappedResult(pipe, &operation, &transferred, TRUE);
+    SetLastError(ERROR_OPERATION_ABORTED);
+    return false;
 }
 
 void SingleInstanceIpc::ServerThreadProc() {
@@ -170,8 +189,8 @@ void SingleInstanceIpc::ServerThreadProc() {
 
     while (m_running.load()) {
         HANDLE hPipe = CreateNamedPipeW(
-            kPipeName,
-            PIPE_ACCESS_INBOUND,
+            m_pipeName.c_str(),
+            PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
             1,
             0,
@@ -184,18 +203,26 @@ void SingleInstanceIpc::ServerThreadProc() {
             DWORD err = GetLastError();
             LogError(std::format(L"[IPC] CreateNamedPipeW failed: {}", err));
             if (m_running.load()) {
-                Sleep(200);
+                WaitForSingleObject(m_stopEvent, 200);
             }
             continue;
         }
 
-        BOOL connected = ConnectNamedPipe(hPipe, nullptr);
-        DWORD connErr = GetLastError();
-
-        bool clientArrived = connected || (connErr == ERROR_PIPE_CONNECTED);
-
-        if (!clientArrived) {
-            LogError(std::format(L"[IPC] ConnectNamedPipe failed unexpectedly: {}", connErr));
+        OVERLAPPED operation = {};
+        operation.hEvent = m_ioEvent;
+        ResetEvent(m_ioEvent);
+        m_listening = true;
+        const BOOL connected = ConnectNamedPipe(hPipe, &operation);
+        DWORD connErr = connected ? ERROR_SUCCESS : GetLastError();
+        bool clientArrived = connected || connErr == ERROR_PIPE_CONNECTED;
+        if (!connected && connErr == ERROR_IO_PENDING) {
+            DWORD ignored = 0;
+            clientArrived = CompleteServerIo(hPipe, operation, ignored);
+            connErr = clientArrived ? ERROR_SUCCESS : GetLastError();
+        }
+        m_listening = false;
+        if (!clientArrived || !m_running.load()) {
+            if (m_running.load()) LogError(std::format(L"[IPC] ConnectNamedPipe failed: {}", connErr));
             CloseHandle(hPipe);
             continue;
         }
@@ -203,7 +230,13 @@ void SingleInstanceIpc::ServerThreadProc() {
         char buffer[4096] = {};
         DWORD bytesRead = 0;
 
-        BOOL readOk = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, nullptr);
+        operation = {};
+        operation.hEvent = m_ioEvent;
+        ResetEvent(m_ioEvent);
+        BOOL readOk = ReadFile(hPipe, buffer, sizeof(buffer) - 1, &bytesRead, &operation);
+        if (!readOk && GetLastError() == ERROR_IO_PENDING) {
+            readOk = CompleteServerIo(hPipe, operation, bytesRead);
+        }
 
         DisconnectNamedPipe(hPipe);
         CloseHandle(hPipe);
@@ -226,10 +259,18 @@ void SingleInstanceIpc::ServerThreadProc() {
         }
 
         std::wstring path = Utf8ToWide(message);
+        ++m_received;
         LogInfo(std::format(L"[IPC] Received open request for: {}", path));
 
-        std::wstring* pPath = new std::wstring(std::move(path));
-        PostMessageW(m_hwnd, WM_IPC_OPEN_PATH, reinterpret_cast<WPARAM>(pPath), 0);
+        auto pPath = std::make_unique<std::wstring>(std::move(path));
+        if (PostMessageW(m_hwnd, WM_IPC_OPEN_PATH, reinterpret_cast<WPARAM>(pPath.get()), 0)) {
+            (void)pPath.release(); // Window now owns the posted payload.
+            ++m_posted;
+        } else {
+            const DWORD error = GetLastError();
+            ++m_postFailures;
+            LogError(std::format(L"[IPC] PostMessageW failed: {}", error));
+        }
 
     }
 

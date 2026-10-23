@@ -1,6 +1,8 @@
+> Actualización 2026-10-23: base cerrada según [013](changes/013-cierre-base/result.md). LoadCache valida KTAG v1 antes de publicar y conserva estado ante fallo. App une BoardTagScanner y búsqueda de tags antes de apagar loader/destruir dependencias, tanto en Run como destructor; WIC/E/S activa y cliente síncrono conservan sus límites. Aceptación funcional base reportada por el propietario.
+
 # Contexto técnico de LenteUV
 
-Última revisión: 2026-10-21. Audiencia: agentes y desarrolladores que mantengan este repositorio.
+Última revisión: 2026-10-22 (servicios R1/R2, contratos de carga y optimizaciones 006..009). Audiencia: agentes y desarrolladores que mantengan este repositorio.
 
 Estructura vigente: `src/` contiene el código, la raíz contiene CMake y `tests/fixtures/` conserva las muestras. Los builds y paquetes se generan en `build/` y `dist/`.
 
@@ -29,13 +31,14 @@ No hay dependencia de Qt ni de un runtime Python para ejecutar o compilar el vis
 | --- | --- |
 | `main.cpp`, `common/` | `wWinMain`, captura SEH, COM RAII, tipos geométricos, temporizadores y logs |
 | `core/app.*` | Arranque, enrutamiento, modo activo, apertura, navegación, lista actual, borrado y ajuste de ventana |
+| `core/folder_data_manager.*` | Modelo compartido de carpetas/previews, selección, escaneo síncrono, sesión/favoritos e historial; App lo posee como `m_folderData` |
 | `core/window.*` | HWND, estilos/transparencia, DPI, fullscreen, captura de ratón y traducción de mensajes a callbacks |
 | `core/single_instance_ipc.*` | Cliente/servidor named pipe, envío de rutas y cierre del hilo servidor |
 | `core/settings.*` | Preferencias y parser/escritor JSON propio |
 | `rendering/` | Dispositivo D3D11, DXGI, Direct2D, DirectWrite, DirectComposition, curvas y animaciones por nombre |
 | `loader/` | `ImageLoader`, decodificación WIC, trabajadores, colas de texturas y `FrameSequencer` |
 | `viewer/`, `ui/thumbnail_strip.*` | Imagen principal, transformaciones, zoom de región y tira inferior |
-| `library/` | Historial de carpetas, sesión/favoritos, miniaturas y vista previa al hover |
+| `library/` | Página Library: paneles, miniaturas y vista previa al hover; consume el modelo compartido de core |
 | `waterfall/` | Distribución en columnas, desplazamiento y visor modal dentro de la misma aplicación |
 | `board/` | Tablero, selección, edición, conexiones, serialización, búsqueda, escaneo y distribución |
 | `metadata/` | Fachada XMP, caché, escaneo asíncrono y lectores/escritores por formato |
@@ -45,11 +48,18 @@ No hay dependencia de Qt ni de un runtime Python para ejecutar o compilar el vis
 
 Patrones observados: composición de componentes, callbacks `std::function`, RAII con `ComPtr`, propiedad compartida de imágenes con `shared_ptr`, productores/consumidor para cargas y fachada `XmpTagManager`. `BoardPage` delega a `BoardCanvas`, `BoardSelectionManager`, `BoardTextEditor`, `BoardSerializer`, `BoardSearchManager`, `BoardTagScanner` y `BoardLayoutHelper`. No añadir una nueva jerarquía abstracta para una simple reorganización.
 
+`FolderDataManager` reside en core y se usa en el hilo UI. App mantiene referencias
+`m_folders`/`m_currentFolderIdx` a ese estado; mover el servicio no las convierte en
+copias. La API sigue combinando navegación y persistencia: AddFolder escanea y ordena
+sincrónicamente, y normalmente selecciona/carga/guarda; `libraryLoading=true` suprime
+selección y guardado para restaurar sesión. Library conserva su propio AddFolder con
+efectos distintos. No eliminar el gestor/modelo al retirar la página de Library.
+
 ## Arranque, entrada, renderizado y cierre
 
 **Código:** `wWinMain` consulta el flag de diagnóstico temprano; `wWinMainImpl` establece DPI Per-Monitor V2, inicializa COM, convierte argumentos y crea `App`. `ParseCommandLine` admite archivo/carpeta y `--frameless`, `--windowed`, `--opaque`, `--maximized`, `--fullscreen`, `--multiple`/`--lite` (también con un guion). Las dos últimas alternativas desactivan el control de instancia para ese proceso; no confundir `--lite` con una implementación independiente de visor.
 
-`App::Initialize` carga settings, traducciones y favoritos; crea el loader de cuatro trabajadores y la fachada XMP; prepara los overlays, la ventana y el IPC; registra bandeja/callbacks; crea el renderer; muestra la ventana según preferencias; inicializa las páginas y restaura sesión antes de cargar el argumento explícito. El orden importa: una carga prematura antes del renderer/páginas produjo problemas históricos de arranque. Sin argumentos ni carpetas restauradas se intenta el directorio de trabajo.
+`App::Initialize` carga settings/traducciones y crea HWND oculto; instala un callback temporal propietario de rutas tempranas y resuelve IPC. Solo si continúa inicializa gestor/favoritos, loader de cuatro trabajadores, fachada XMP y overlays; registra bandeja/callbacks restantes y crea el renderer; muestra la ventana según preferencias; inicializa las páginas y restaura sesión antes de cargar el argumento explícito. El orden importa: una carga prematura antes del renderer/páginas produjo problemas históricos de arranque. Sin argumentos ni carpetas restauradas se intenta el directorio de trabajo. Tras contenido inicial y timer instala el callback IPC definitivo y aplica rutas retenidas; los secundarios evitan los servicios pesados y conservan errores 005.
 
 `Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Library=4, Waterfall=5. Los atajos de cambio de modo NO corresponden directamente a esos valores. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las cuatro páginas funcionales.
 
@@ -57,7 +67,43 @@ Patrones observados: composición de componentes, callbacks `std::function`, RAI
 
 `SingleInstanceIpc` usa `\\.\pipe\lenteuv`, rutas UTF-8 y un hilo servidor que entrega la apertura mediante mensaje a la ventana (`WM_USER + 4501`). La comprobación inicial hace un sondeo de la pipe; no hay un mutex de elección de propietario. No asumir ausencia de carreras entre arranques simultáneos. El receptor normaliza la ruta, distingue carpeta/archivo, cambia de página, restaura y solicita primer plano. Una ruta vacía se ignora.
 
-La opción de cerrar a bandeja puede ocultar la ventana; Escape global solicita salir. En `WM_QUIT`, `App::Run` cierra IPC, espera los trabajadores del loader y retira bandeja. El IPC despierta su servidor con un mensaje centinela. El loader drena tareas encoladas antes de terminar: una cola extensa puede retrasar el cierre. Otros escáneres tienen sus propios hilos y destructores; revisar propiedad, cancelación y callbacks si se altera el ciclo de vida.
+La instrumentación de 003 permite consultar GetDiagnostics por objeto: detección,
+escritura/error, recepción/post y escucha (snapshot atómico por campo, no transaccional).
+El handler validación/apertura reside en App::OnIpcOpenPath, extraído sin cambiar su cuerpo.
+El diagnóstico 003 reprodujo error 2 tras el sondeo en cinco aperturas. La corrección
+[005](changes/005-entrega-ipc/result.md) reintenta apertura busy/missing durante 2000 ms
+y distingue Primary, Forwarded y ForwardFailed; busy ya cuenta como receptor detectado.
+Otros errores del sondeo también retornan fallo, sin iniciar servidor. App retorna
+ForwardFailed y main muestra error Win32 con salida 2; Forwarded lleva a AlreadyRunning
+y salida 0, sin ACK de aplicación. La ruta vacía sigue sin provocar apertura. El timeout
+limita conexión, no WriteFile/FlushFileBuffers ni cierre. PostMessage transfiere propiedad
+solo al tener éxito; ante fallo el payload se destruye por RAII y se registra error.
+La pipe privada de tests no se expone como opción de producto.
+
+**Ejecución posterior:** [validación real de 003](changes/003-diagnostico-rendimiento/real-validation.md)
+observó PNG presentado tras IPC, ventanas completas de --multiple/--lite y diálogo
+Win32 231 con salida 2 de wWinMain. --lite mostró capturas negras iniciales hasta F11:
+indicio AR-008 pendiente de separar captura/oclusión de dibujo real. Existe una muestra
+CPU/memoria con logging activo, sin GPU/VRAM ni comparación. No primera ejecución real.
+
+Seguimiento [AR-008](changes/003-diagnostico-rendimiento/ar008-reproduction.md): seis
+arranques secuenciales sin/con flags mostraron JPEG en capturas sin F11/resize.
+Capturas negras no exclusivas de --lite y una captura ocluida; el usuario informó
+paisaje estable en el último contraste. Limitación de captura constatada, sin fallo
+persistente de producto reproducido. No se cambió renderer ni se certifica todo frame.
+
+La opción de cerrar a bandeja puede ocultar la ventana; Escape global solicita salir.
+Desde [012](changes/012-cierre-colas-ipc/result.md), el cierre terminal para IPC antes
+de DestroyWindow; ocultar mantiene servicios. En WM_QUIT, App::Run para IPC/loader y
+retira bandeja. El destructor para ambos antes de destruir consumidores, también ante
+fallo parcial. IPC usa evento stop y ConnectNamedPipe/ReadFile overlapped: cancela y
+observa completion antes de liberar almacenamiento, sin enviar centinela local.
+Conserva aceptación del centinela histórico. Une hilo y libera payloads ya posteados
+al HWND vivo sin aplicar rutas, conservando WM_QUIT. Lifecycle en hilo dueño, serializado.
+El loader deja de admitir tareas, descarta la cola aún no tomada y espera solo activas;
+libera pendientes/WIC sin callbacks ni uploads. No interrumpe WIC en curso y no ofrece
+plazo universal. Otros escáneres conservan hilos/destructores propios. Cancelación por
+consumidor durante navegación y escritura/flush síncronos del cliente siguen pendientes.
 
 ## Modos y controles
 
@@ -74,17 +120,50 @@ La opción de cerrar a bandeja puede ocultar la ventana; Escape global solicita 
 
 **Código:** WIC decodifica en CPU a BGRA premultiplicado de 32 bits; D2D/GPU dibuja, escala y compone. `ImageData` mantiene bytes CPU y `ID2D1Bitmap1`; subir a GPU no libera automáticamente los píxeles. `AnimatedImageData` conserva todos los frames decodificados; `UploadAnimationToGpu` crea sus bitmaps y `FrameSequencer` administra retrasos, bucles, pausa y velocidad.
 
-`LoadSync` y `LoadAnimatedSync` bloquean; los usa `App::LoadImage`. Las cargas asíncronas encolan tareas, los trabajadores decodifican y guardan resultados bajo mutex. `ProcessPendingTextures` intercambia las colas, sube las texturas y ejecuta los callbacks EN EL HILO PRINCIPAL. Los callbacks de `AsyncDirectoryScanner` son otro contrato: proceden de sus hilos de búsqueda. No extrapolar el contrato del loader al escáner.
+`App::LoadImage` usa `LoadForViewerSync`, bloqueante y solo CPU. Mantiene selección
+por extensión, comparte decoder entre count y decode normal y devuelve estático o
+animación válida. Ante apertura/count/animación inválidos o reuse estático fallido
+libera el intento y reabre para fallback estático. No garantizar una sola apertura
+en errores. `LoadSync`/`LoadAnimatedSync` siguen bloqueantes y conservan contrato para
+otros consumidores. Las cargas asíncronas encolan tareas, los trabajadores decodifican
+y guardan resultados bajo mutex. `ProcessPendingTextures` intercambia colas, comprueba
+el predicado opcional de vigencia fuera del mutex, sube texturas si procede y ejecuta
+callbacks EN EL HILO PRINCIPAL. Un predicado false solo omite upload: entrega el mismo
+resultado CPU, incluso nullptr por fallo. Excepción terminal desde 012: Shutdown
+cancela entregas pendientes sin callbacks; no se reutilizan sus modelos en App.
+Predicado de solo lectura, sin excepciones
+ni bombeo; consumidor/modelo deben vivir durante la entrega. Los callbacks de
+`AsyncDirectoryScanner` proceden de sus hilos; no extrapolar el contrato del loader.
 
 La lista de extensiones incluye JPEG/JFIF, PNG/APNG, GIF, BMP, TIFF, TGA, ICO, SVG/SVGZ, WebP, AVIF/AVF, HEIF/HEIC y JXR/WDP/HDP. La decodificación real depende de WIC/códecs instalados; las muestras por extensión no certifican soporte. PNG se considera candidato animado. Consultar `DecodeAnimatedImage` antes de atribuir soporte completo a una animación/códec concreto.
 
-Miniaturas de biblioteca/cascada se solicitan al necesitarse y se guardan en previews. Callbacks capturan índices o rutas; revisar invalidez al cambiar de carpeta, ordenar o borrar. La tira tiene su propio cache. No hay un presupuesto global de RAM/VRAM ni límite general de tareas pendientes. El tablero solicita texturas de hasta 400x400 y expulsa las más lejanas cuando supera `MAX_BOARD_TEXTURES=150`; ese límite cuenta objetos con textura, no bytes ni toda la memoria del proceso.
+Miniaturas de biblioteca/cascada se solicitan al necesitarse y se guardan en previews.
+Desde 004, sus callbacks y los de la tira llevan un token único por solicitud y ruta;
+se aplica el resultado una sola vez al elemento actual, localizado sin índices capturados.
+Ordenar/desplazar conserva el token; borrar o reemplazar lo descarta, incluso al volver
+a añadir la misma ruta. Las entradas retenidas de la tira conservan caché y solicitudes;
+ocurrencias duplicadas no comparten solicitudes pendientes. Los callbacks de hover
+mantienen sus comprobaciones de ruta y no fueron rediseñados. Esto descarta resultados,
+no cancela trabajo del loader. Desde [011](changes/011-vigencia-antes-upload/result.md),
+tira/previews añaden el mismo contraste token/ruta antes del upload, sin consumir token
+ni invalidar layout. Comprobación final de 004 y revisión 007 permanecen. Otros
+consumidores y cargas animadas conservan su camino sin predicado. No hay presupuesto global de RAM/VRAM ni límite general
+de tareas pendientes. El tablero solicita texturas de hasta 400x400 y expulsa las más
+lejanas cuando supera `MAX_BOARD_TEXTURES=150`; ese límite cuenta objetos con textura,
+no bytes ni toda la memoria del proceso.
 
 **Pendiente:** medir carpetas de 10 000–50 000 imágenes, picos al cargar animaciones, latencia de cancelación, memoria CPU/GPU, trabajo en idle y pérdida de dispositivo. No describir aceleración de dibujo como garantía de decodificación GPU o responsividad.
 
 ## Persistencia y compatibilidad
 
-**Código:** `Settings`, `FolderDataManager`, `MetadataCache` e i18n repiten búsqueda de hasta seis directorios ascendentes desde el ejecutable. El primer `user_data` existente determina settings/sesión/favoritos/caché; si no existe, los archivos correspondientes pueden acabar junto al EXE. i18n busca `locales/<idioma>/LC_MESSAGES/base.po` en ascendentes. La compilación prepara carpetas propias junto a cada EXE para no tomar datos personales del checkout. Los logs usan rutas relativas al directorio de trabajo.
+**Código:** `Settings` (incluido diagnóstico temprano), `FolderDataManager` y `MetadataCache`
+comparten `common/user_data_paths.*`: consultan `exists` para `user_data` junto al EXE
+y en cinco padres, aceptando también una entrada de tipo archivo. Gana el primer candidato;
+si no existe, cada archivo usa directamente el directorio del EXE. Se resuelve en cada
+llamada sin caché ni migración. i18n conserva su búsqueda independiente de
+`locales/<idioma>/LC_MESSAGES/base.po` en ascendentes. La compilación prepara carpetas
+propias junto a cada EXE para no tomar datos personales del checkout. Los logs usan
+rutas relativas al directorio de trabajo.
 
 | Dato | Contrato existente |
 | --- | --- |
@@ -130,6 +209,47 @@ Para cambiar esta tabla, buscar el identificador en todas las fuentes: carga/gua
 
 ## Compilación, distribución y trabajo futuro
 
+La [revisión de oportunidades de 003](changes/003-diagnostico-rendimiento/source-optimization-review.md)
+traza arranque, carga, tira, grids y presentación. Documenta trabajo repetido en
+reconstrucción/layout/texto, apertura de decoder e inicialización secundaria, además
+de uploads caducados y dibujo continuo. La auditoría por sí sola no demuestra ahorro;
+el seguimiento de implementación se indica debajo. La ruta local precede a cualquier
+cambio transversal de presentación; preservar
+calidad, animaciones y latencia exige validar equivalencia e invalidación completa.
+
+[006](changes/006-optimizaciones-locales/result.md) implementa la primera porción:
+SetFileList conserva ocurrencias mediante índice temporal, Update/Draw de tira buscan
+el intervalo visible por bisección de la geometría existente y el overlay no prepara
+metadatos a opacidad no positiva. Texturas/tokens, orden y filtros de borde se conservan.
+Equivalencia diferencial y 12 frames WARP idénticos; ahorro de tiempo medido solo para
+reconstrucción sintética, sin prueba de menor RAM o mejor arranque global. Los demás
+candidatos del informe siguen siendo propuestas.
+
+[007](changes/007-layouts-por-cambios/result.md) reutiliza los rectángulos de
+Library/Waterfall mediante clave de revisión transitoria de FolderDataManager,
+selección, ancho/cantidad y parámetros de Waterfall. El greedy y el dibujo no cambian.
+Mutadores del gestor notifican automáticamente; las rutas directas App::DeleteImage
+y Library::AddFolder también. Todo acceso mutable futuro a carpetas/previews que
+cambie estructura/orden/dimensiones o rects debe llamar NotifyPreviewLayoutChanged
+en UI. No notificar scroll/hover. No se duplica geometría ni se persiste la revisión.
+24 frames offscreen idénticos; métricas de cálculo aislado, sin ahorro global demostrado.
+
+[008](changes/008-formatos-texto/result.md) reutiliza formatos privados de Renderer
+en UI/render, máximo 32/FIFO y clave de familia hasta 128 wchar_t, sin truncar inputs
+que pasan sin caché. Familia/tamaño/alineaciones y factory definen identidad efectiva;
+colección/peso/estilo/stretch/locale son constantes del contrato interno. No compartir
+estos objetos por API pública ni mutarlos después de publicar; CreateTextFormat sigue
+creando formatos independientes. Limpiar por CreateDeviceResources/Discard y reemplazo
+de factory. Layouts/textos/medidas siguen por llamada; retención CPU acotada, sin prueba
+de menor RAM o mejora global. Resultado registra equivalencia y variación inicial del
+baseline, también observada con camino sin reutilización, sin causa confirmada.
+
+[009](changes/009-decoder-compartido/result.md) extrae helpers de decoder prestado
+sin modificar cuerpos de frame 0/composición. El resultado CPU no contiene objetos WIC;
+App conserva upload, secuenciador, rama animada con retorno temprano y sincronización
+estática. No hay nuevos workers/cachés persistentes. Equivalencia CPU y conteos WIC
+validados; capacidades APNG/WebP y coste de fallback adicionales quedan explícitos.
+
 Consultar [desarrollo y distribución](development.md), [problemas conocidos](known-issues.md) y [validación](validation.md). CMake compila contra bibliotecas del Windows SDK sin gestor de dependencias C++ externo. MSVC usa `/W4 /WX` para la app, PCH y compilación paralela; el harness de tags permite warnings. `tagging_tests` enlaza un stub de creación de bitmap: no prueba GPU.
 
 Las herramientas viven en `scripts/`, el instalador en `packaging/`, las muestras en `tests/fixtures/` y el material de identidad en `assets/branding/`. Los scripts no copian datos personales; cada paquete usa staging nuevo y runtime VC++ x64 app-local. Inno Setup conserva identidad de aplicación, tareas y asociaciones de Explorer.
@@ -143,3 +263,9 @@ El [flujo de trabajo](workflow.md) registra los cambios deseados en `docs/change
 3. Ejecutar validación proporcional al cambio; no usar el paso de una compilación como evidencia de UX ni de rendimiento.
 4. Actualizar esta documentación, guía de uso o formatos si cambia su contrato. Registrar limitaciones reproducibles en problemas conocidos, con evidencia y sin confundir hipótesis con defectos confirmados.
 5. Mantener comandos reproducibles desde checkout limpio, sin rutas de una máquina ni historial narrativo de sesiones.
+
+[010](changes/010-inicializacion-secundaria/result.md) implementa derivación secundaria
+antes de favoritos/WIC/XMP/overlays, con HWND oculto y callback temporal de rutas.
+Release/CTest 5/5 y diez escenarios nativos automatizados pasados; revisión visual
+de usuario pendiente. Se omite trabajo, pero la muestra temporal no demuestra
+aceleración. Errores 005/RAII/endpoint conservados; sin ACK ni rediseño de cierre.

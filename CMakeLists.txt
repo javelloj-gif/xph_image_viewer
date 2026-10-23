@@ -46,7 +46,7 @@ set(SOURCES
     src/metadata/jpeg_segment_injector.cpp
     src/metadata/wic_metadata_reader_writer.cpp
     src/metadata/async_directory_scanner.cpp
-    src/library/folder_data_manager.cpp
+    src/core/folder_data_manager.cpp
     src/library/library_page.cpp
     src/board/board_page.cpp
     src/board/board_canvas.cpp
@@ -65,11 +65,14 @@ set(SOURCES
     src/shell/shell_integrator.cpp
     src/i18n/i18n_engine.cpp
     src/common/pch.cpp
+    src/common/user_data_paths.cpp
 )
 
 set(HEADERS
     src/common/pch.h
     src/common/types.h
+    src/common/user_data_paths.h
+    src/common/image_request.h
     src/core/app.h
     src/core/window.h
     src/core/settings.h
@@ -85,7 +88,7 @@ set(HEADERS
     src/metadata/jpeg_segment_injector.h
     src/metadata/wic_metadata_reader_writer.h
     src/metadata/async_directory_scanner.h
-    src/library/folder_data_manager.h
+    src/core/folder_data_manager.h
     src/library/library_page.h
     src/board/board_page.h
     src/board/board_canvas.h
@@ -196,6 +199,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
 # ─── Tagging Tests Executable ────────────────────────────────────────────────
 if(BUILD_TESTING)
 add_executable(tagging_tests
+    src/common/user_data_paths.cpp
     src/metadata/xmp_tag_manager.cpp
     src/metadata/metadata_cache.cpp
     src/metadata/png_chunk_injector.cpp
@@ -205,6 +209,7 @@ add_executable(tagging_tests
     src/loader/image_loader.cpp
     src/common/pch.cpp
     tests/tagging_tests.cpp
+    tests/metadata_cache_tests.cpp
 )
 target_precompile_headers(tagging_tests PRIVATE src/common/pch.h)
 target_include_directories(tagging_tests PRIVATE src)
@@ -246,4 +251,44 @@ add_test(NAME metadata.tagging
         -RunRoot "${CMAKE_BINARY_DIR}/test-runs"
 )
 set_tests_properties(metadata.tagging PROPERTIES TIMEOUT 90)
+
+# Filesystem selection tests own temporary trees and do not launch the application.
+add_executable(user_data_path_tests
+    tests/user_data_path_tests.cpp
+    src/common/user_data_paths.cpp
+)
+target_include_directories(user_data_path_tests PRIVATE src)
+target_compile_options(user_data_path_tests PRIVATE /W4 /WX /permissive- /utf-8 /EHsc)
+add_test(NAME common.user_data_paths COMMAND user_data_path_tests)
+set_tests_properties(common.user_data_paths PROPERTIES TIMEOUT 30)
+
+# Link actual consumers and loader; delivery is controlled without workers or app renderer initialization.
+set(ASYNC_PREVIEW_TEST_SOURCES ${SOURCES})
+list(REMOVE_ITEM ASYNC_PREVIEW_TEST_SOURCES src/main.cpp)
+add_executable(async_preview_tests tests/async_preview_tests.cpp tests/ipc_diagnostic_tests.cpp tests/image_decode_tests.cpp tests/shutdown_tests.cpp ${ASYNC_PREVIEW_TEST_SOURCES})
+target_precompile_headers(async_preview_tests PRIVATE src/common/pch.h)
+target_include_directories(async_preview_tests PRIVATE src)
+target_compile_options(async_preview_tests PRIVATE /W4 /WX /permissive- /utf-8 /MP /EHsc /wd4100)
+get_target_property(LENTEUV_TEST_LINK_LIBRARIES ${PROJECT_NAME} LINK_LIBRARIES)
+target_link_libraries(async_preview_tests PRIVATE ${LENTEUV_TEST_LINK_LIBRARIES})
+add_test(NAME ui.async_previews COMMAND async_preview_tests)
+set_tests_properties(ui.async_previews PROPERTIES TIMEOUT 60)
+add_test(NAME lifecycle.shutdown COMMAND async_preview_tests --shutdown-tests)
+set_tests_properties(lifecycle.shutdown PROPERTIES TIMEOUT 60)
+add_test(NAME ipc.delivery_diagnostics
+    COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/scripts/run_ipc_diagnostics.ps1"
+        -Executable "$<TARGET_FILE:async_preview_tests>"
+        -Fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures"
+        -RunRoot "${CMAKE_BINARY_DIR}/test-runs"
+)
+set_tests_properties(ipc.delivery_diagnostics PROPERTIES TIMEOUT 60)
+add_test(NAME loader.viewer_decode
+    COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/scripts/run_decode_tests.ps1"
+        -Executable "$<TARGET_FILE:async_preview_tests>"
+        -Fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures"
+        -RunRoot "${CMAKE_BINARY_DIR}/test-runs"
+)
+set_tests_properties(loader.viewer_decode PROPERTIES TIMEOUT 90)
 endif()

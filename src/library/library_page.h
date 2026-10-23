@@ -9,7 +9,7 @@
 #include "rendering/renderer.h"
 #include "loader/image_loader.h"
 #include "rendering/animation_controller.h"
-#include "folder_data_manager.h"
+#include "core/folder_data_manager.h"
 #include "loader/frame_sequencer.h"
 
 namespace kv {
@@ -17,6 +17,7 @@ namespace kv {
 class App; // Forward declaration
 
 class LibraryPage {
+    friend class AsyncPreviewTests; // Exercises shared preview completion after list mutations.
 public:
     friend class App;
     LibraryPage() = default;
@@ -36,6 +37,7 @@ public:
 
     // ── Input Event Routing ────────────────────────────────────────────────
     bool OnMouseMove(float x, float y, KeyModifiers mods);
+    // Handles folder/preview selection and context actions, including removal from the shared service.
     bool OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
@@ -43,19 +45,30 @@ public:
     bool OnKeyDown(uint32_t vk, KeyModifiers mods);
 
     // ── Public Helpers ──────────────────────────────────────────────────────
+    // UI thread: scans a new folder, appends previews and invalidates both layouts; ignores duplicates/empty scans.
     void AddFolder(const std::wstring& path);
+    // Selects through App's shared folder service, loads the image and updates Library layout.
     void SetCurrentFolder(int index);
     void SyncCurrentFolderWithApp();
 
 private:
+    // UI thread: reuses existing preview rects until model revision, selection, count or target width changes.
     void CalculateLayout();
     void DrawFoldersList(Renderer& renderer, const RectF& rect);
     void DrawPreviewsGrid(Renderer& renderer, const RectF& rect);
     void DrawScrollbar(Renderer& renderer, const RectF& trackRect, float contentHeight, float viewHeight, float scrollOffset, float opacity);
+    // Requests shared previews; UI checks token/path before upload and again at completion, never captured indices.
     void LoadPreviewTexture(int folderIdx, int previewIdx);
     void DrawCheckerboard(Renderer& renderer, const RectF& rect);
 
     App* m_app = nullptr;
+
+    // Fixed-size last-layout key; rects remain in the shared previews, with no additional per-item cache.
+    bool m_layoutValid = false;
+    uint64_t m_layoutRevision = 0;
+    int m_layoutFolder = -1;
+    float m_layoutWidth = 0.0f;
+    size_t m_layoutCount = 0;
 
     // Scroll offsets (in pixels)
     float m_foldersScrollY = 0.0f;

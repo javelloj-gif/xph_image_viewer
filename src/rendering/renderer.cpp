@@ -34,6 +34,7 @@ bool Renderer::Initialize(HWND hwnd, bool translucent) {
 }
 
 bool Renderer::CreateDeviceResources(HWND hwnd, bool translucent) {
+    ClearTextFormatCache();
     UINT d3dFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
     d3dFlags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -350,19 +351,8 @@ void Renderer::DrawText(
     std::wstring_view text, const RectF& layoutRect, const Color& color,
     float fontSize, TextAlign hAlign, TextVAlign vAlign, const wchar_t* fontFamily)
 {
-    auto textFormat = CreateTextFormat(fontFamily, fontSize);
+    auto textFormat = GetInternalTextFormat(fontFamily, fontSize, hAlign, vAlign);
     if (!textFormat) return;
-
-    switch (hAlign) {
-        case TextAlign::Left:   textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING); break;
-        case TextAlign::Center: textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER); break;
-        case TextAlign::Right:  textFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING); break;
-    }
-    switch (vAlign) {
-        case TextVAlign::Top:    textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR); break;
-        case TextVAlign::Center: textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER); break;
-        case TextVAlign::Bottom: textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_FAR); break;
-    }
 
     m_d2dContext->DrawText(
         text.data(),
@@ -377,7 +367,7 @@ PointF Renderer::MeasureText(
     std::wstring_view text, float fontSize,
     const wchar_t* fontFamily)
 {
-    auto textFormat = CreateTextFormat(fontFamily, fontSize);
+    auto textFormat = GetInternalTextFormat(fontFamily, fontSize);
     if (!textFormat) return { 0.0f, 0.0f };
 
     std::wstring measureText(text);
@@ -510,6 +500,56 @@ ComPtr<ID2D1Bitmap1> Renderer::CreateBitmapFromMemory(
     return bitmap;
 }
 
+ComPtr<IDWriteTextFormat> Renderer::GetInternalTextFormat(
+    const wchar_t* family, float size, TextAlign horizontal, TextVAlign vertical)
+{
+    if (m_textFormatFactory.Get() != m_dwriteFactory.Get()) {
+        ClearTextFormatCache();
+        m_textFormatFactory = m_dwriteFactory;
+    }
+    DWRITE_TEXT_ALIGNMENT h = DWRITE_TEXT_ALIGNMENT_LEADING;
+    DWRITE_PARAGRAPH_ALIGNMENT v = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+    switch (horizontal) {
+        case TextAlign::Left: break;
+        case TextAlign::Center: h = DWRITE_TEXT_ALIGNMENT_CENTER; break;
+        case TextAlign::Right: h = DWRITE_TEXT_ALIGNMENT_TRAILING; break;
+    }
+    switch (vertical) {
+        case TextVAlign::Top: break;
+        case TextVAlign::Center: v = DWRITE_PARAGRAPH_ALIGNMENT_CENTER; break;
+        case TextVAlign::Bottom: v = DWRITE_PARAGRAPH_ALIGNMENT_FAR; break;
+    }
+    const std::wstring_view name = family ? std::wstring_view(family) : std::wstring_view{};
+    const bool cacheable = family && name.size() <= TEXT_FORMAT_FAMILY_LIMIT && std::isfinite(size) && size > 0.0f;
+    if (cacheable) {
+        for (const auto& entry : m_textFormats) {
+            if (entry.size == size && entry.horizontal == h && entry.vertical == v && entry.family == name)
+                return entry.format;
+        }
+    }
+    auto format = CreateTextFormat(family, size);
+    if (!format) return nullptr;
+    const HRESULT setH = format->SetTextAlignment(h);
+    const HRESULT setV = format->SetParagraphAlignment(v);
+    if (cacheable && SUCCEEDED(setH) && SUCCEEDED(setV)) {
+        TextFormatEntry entry{std::wstring(name), size, h, v, format};
+        if (m_textFormats.size() < TEXT_FORMAT_CACHE_CAPACITY) {
+            if (m_textFormats.capacity() == 0) m_textFormats.reserve(TEXT_FORMAT_CACHE_CAPACITY);
+            m_textFormats.push_back(std::move(entry));
+        } else {
+            m_textFormats[m_nextTextFormat] = std::move(entry);
+            m_nextTextFormat = (m_nextTextFormat + 1) % TEXT_FORMAT_CACHE_CAPACITY;
+        }
+    }
+    return format;
+}
+
+void Renderer::ClearTextFormatCache() {
+    m_textFormats.clear();
+    m_nextTextFormat = 0;
+    m_textFormatFactory.Reset();
+}
+
 ComPtr<IDWriteTextFormat> Renderer::CreateTextFormat(
     const wchar_t* fontFamily, float fontSize,
     DWRITE_FONT_WEIGHT weight, DWRITE_FONT_STYLE style)
@@ -540,6 +580,7 @@ SizeU Renderer::GetTargetSize() const {
 }
 
 void Renderer::DiscardDeviceResources() {
+    ClearTextFormatCache();
     m_renderTarget.Reset();
     m_brush.Reset();
     m_d2dContext.Reset();

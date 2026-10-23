@@ -1,7 +1,8 @@
 # 003: Diagnóstico de arranque, IPC y consumo en reposo
 
-Fecha: 2026-10-22. Estado: en definición del protocolo operativo.
-Alcance inicial acordado; no se han realizado mediciones nuevas.
+Fecha: 2026-10-22. Estado: porción diagnóstica IPC implementada y ejecutada;
+primera ejecución real pendiente; base acotada CPU/memoria/GPU sin logging obtenida.
+Sin optimizaciones aplicadas. [Validación real posterior a 005](real-validation.md).
 
 ## Problema y evidencia inicial
 
@@ -63,7 +64,16 @@ necesario no medido queda pendiente, aunque las otras partes produzcan resultado
 
 ## Preguntas y decisiones pendientes
 
-- Ruta habitual de apertura y archivo/carpeta donde se observa la lentitud.
+La porción IPC se ejecutó con fixtures copiados, procesos reales, pipe exclusiva,
+handler Window/App y bitmap software; evidencia y límites en [result.md](result.md).
+Esa porción conservó el protocolo; AR-003 se corrigió posteriormente en el alcance de
+[005](../005-entrega-ipc/result.md). 003 conserva sus pendientes de arranque/reposo
+y presentación real; la matriz actual es regresión de éxito/error exactos de 005.
+
+- Entrada habitual confirmada: doble clic por asociación; formatos/tamaños múltiples,
+  carpetas <100 y >1000 elementos. Falta caso representativo y fase de demora.
+- Elegir instalación/hash para medir: el portable asociado difiere del build 005;
+  [Explorer/Abrir con](explorer-validation.md) preservó el predeterminado.
 - Método/herramientas disponibles, ventanas de observación y repeticiones. Propuesta
   inicial: cinco ejecuciones posteriores y primeras ejecuciones en sesiones distintas
   cuando estén disponibles, informando tamaño de muestra y sin inferir de una sola observación.

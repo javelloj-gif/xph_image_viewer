@@ -1,11 +1,12 @@
 // ============================================================================
 // Class: FolderDataManager
-// Description: FolderDataManager maintains the persistence of recent paths, favorites, and session folders browsed in [IMAGE_VIEWER_APP_NAME].
-// Responsibility: Read/write `session.txt` and `fav.txt` tracking browsed directories.
+// Description: Shared folder navigation and persistence for LenteUV's pages.
+// Responsibility: Own folder/preview state, selection, session, favorites and history.
 // ============================================================================
 #include "common/pch.h"
 #include "folder_data_manager.h"
 #include "core/app.h"
+#include "common/user_data_paths.h"
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -15,37 +16,18 @@ namespace kv {
 void FolderDataManager::Initialize(App* app) {
     m_app = app;
     m_folders.clear();
+    NotifyPreviewLayoutChanged();
     m_currentFolderIdx = -1;
     m_favorites.clear();
     m_history.clear();
 }
 
 std::wstring FolderDataManager::GetSessionFilePath() const {
-    wchar_t exePath[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path p(exePath);
-    for (int i = 0; i < 6; ++i) {
-        p = p.parent_path();
-        if (std::filesystem::exists(p / "user_data")) {
-            return (p / "user_data" / "session.txt").wstring();
-        }
-    }
-    std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-    return (exeDir / "session.txt").wstring();
+    return (GetExecutableUserDataRoot() / "session.txt").wstring();
 }
 
 std::wstring FolderDataManager::GetFavoritesFilePath() const {
-    wchar_t exePath[MAX_PATH] = {};
-    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-    std::filesystem::path p(exePath);
-    for (int i = 0; i < 6; ++i) {
-        p = p.parent_path();
-        if (std::filesystem::exists(p / "user_data")) {
-            return (p / "user_data" / "fav.txt").wstring();
-        }
-    }
-    std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
-    return (exeDir / "fav.txt").wstring();
+    return (GetExecutableUserDataRoot() / "fav.txt").wstring();
 }
 
 void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLoading, bool loadImage) {
@@ -92,6 +74,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
     folder.previewsInitialized = true;
 
     m_folders.push_back(std::move(folder));
+    NotifyPreviewLayoutChanged();
 
     int currentSortMode = m_app ? m_app->m_settings.sort_mode : 0;
     SortFolder(static_cast<int>(m_folders.size() - 1), static_cast<SortMode>(currentSortMode));
@@ -106,6 +89,7 @@ void FolderDataManager::RemoveFolder(int index) {
     if (index < 0 || index >= static_cast<int>(m_folders.size())) return;
     
     m_folders.erase(m_folders.begin() + index);
+    NotifyPreviewLayoutChanged();
 
     if (m_folders.empty()) {
         m_currentFolderIdx = -1;
@@ -323,11 +307,41 @@ void FolderDataManager::AddToHistory(const std::wstring& filePath) {
     }
 }
 
+bool FolderDataManager::IsPreviewRequestCurrent(const ImageRequestToken& request) const {
+    if (!request) return false;
+    for (const auto& folder : m_folders) {
+        for (const auto& item : folder.previews) {
+            if (item.pendingRequest == request && item.filePath == *request) return true;
+        }
+    }
+    return false;
+}
+
+bool FolderDataManager::CompletePreview(const ImageRequestToken& request, std::shared_ptr<ImageData> image) {
+    if (!request) return false;
+    for (auto& folder : m_folders) {
+        for (auto& item : folder.previews) {
+            if (item.pendingRequest != request || item.filePath != *request) continue;
+            item.pendingRequest.reset();
+            item.isLoading = false;
+            if (image) {
+                item.texture = std::move(image);
+                NotifyPreviewLayoutChanged();
+            } else {
+                item.loadFailed = true;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
     if (folderIdx < 0 || folderIdx >= static_cast<int>(m_folders.size())) return;
     auto& folder = m_folders[folderIdx];
     if (folder.filePaths.empty()) return;
 
+    // Keeps file sort keys and its existing preview together during reordering.
     struct FileEntry {
         std::wstring path;
         std::wstring name;
@@ -406,6 +420,7 @@ void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
         folder.filePaths.push_back(entry.path);
         folder.previews.push_back(entry.preview);
     }
+    NotifyPreviewLayoutChanged();
 }
 
 } // namespace kv

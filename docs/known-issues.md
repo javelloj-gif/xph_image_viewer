@@ -1,3 +1,5 @@
+> Disposición vigente 2026-10-23: base cerrada en [013](changes/013-cierre-base/result.md). AR-006 corregido con lectura transaccional; AR-005 ampliado con join de productores, pero cancelación por consumidor/WIC/cliente y latencia de scanners siguen diferidos. AR-007 preexistente progresivo. Aceptación funcional base reportada; los pendientes históricos de abajo no son tareas abiertas del lote base.
+
 # Problemas conocidos y asuntos pendientes
 
 La reforma de estructura no pretende corregir la lógica funcional. Las siguientes
@@ -7,12 +9,13 @@ completo ni una lista de fallos reproducidos visualmente.
 | Área | Evidencia y alcance | Siguiente comprobación |
 | --- | --- | --- |
 | Instancias y responsividad | **Usuario:** problemas por detallar. **Código:** sondeo de pipe sin elección por mutex; cargas principales síncronas | Reproducir aperturas simultáneas, rutas desde Explorer y cierre con cola ocupada |
-| Apertura IPC del portable | **Ejecución:** la segunda instancia termina con código 0, pero no cambió la imagen activa (BMP y PNG). El binario previo también falló al recibir JPEG. Las fuentes C++ de IPC/visor son idénticas al commit de preservación | Diagnosticar con trazas y pruebas de entrega; no certificar recepción solo por el exit code del cliente |
+| Apertura IPC | **003 histórico:** cinco clientes fallaban con error 2 tras detectar receptor. **005:** reintento de apertura, resultado explícito y payload RAII; regresiones correctas. **Validación real posterior:** PNG presentado y error Win32 231 con salida 2 | Completar Explorer/asociaciones y aclarar AR-008; no hay ACK ni elección atómica y no se atribuye toda la historia a una causa |
+| Captura/presentación (AR-008) | **Campaña aislada:** seis procesos capturaron JPEG sin F11/resize; negros en los tres tipos de entrada. Oclusión en una captura y usuario viendo paisaje estable durante último contraste negro | Limitación de captura constatada; no fallo persistente de --lite reproducido. No corregir renderer por este indicio; reabrir con negro/parpadeo nativo |
 | Carpetas grandes | **Código:** enumeración síncrona; previews y listas por carpeta; no hay presupuesto global RAM/VRAM | Medir 10k–50k imágenes, scroll, latencia y memoria con tamaños/códecs conocidos |
 | Compacto fuera de Viewer | **Usuario/Código:** tamaño depende de imagen global o queda previo si no existe; mínimo 512 | Definir criterio de producto por modo antes de cambiarlo |
-| Estado y callbacks | **Código:** acceso `friend`, transformaciones duplicadas e índices capturados en cargas | Revisar cambios rápidos de carpeta, ordenación y borrado con cargas pendientes |
+| Estado y callbacks | **Código/ejecución:** 004 corrige los índices capturados en tira/previews con tokens; quedan otras áreas de estado/hover sin auditoría completa | Conservar regresiones de entrega diferida; revisar otros consumidores por su propio alcance |
 | Animaciones/memoria | **Código:** frames y bytes CPU permanecen al subir a GPU; tablero limita número de texturas, no bytes | Medir animaciones grandes y revisar presupuesto/expulsión |
-| Cierre | **Código:** loader drena la cola y escáneres hacen join | Medir cancelación y latencia al salir durante carga/escaneo |
+| Cierre | **012:** loader descarta cola no iniciada al parar; servidor IPC cancela espera de conexión/lectura. Cliente silencioso bloqueaba baseline; candidato termina en procesos aislados | AR-005 parcial: WIC activo, cancelación por consumidor, scanners y cliente síncrono pendientes; sin plazo universal |
 | Formatos opcionales | **Código:** lista por extensión depende de decodificadores WIC | Probar SVG/WebP/AVIF/HEIF/APNG en equipos con/sin códecs |
 | Escritura de metadatos | **Código:** temporal, borrado y rename; fallos/interrupciones pueden afectar originales | Diseñar reemplazo seguro y preservación de metadatos no editados, con tests sobre copias |
 | Catálogo de tags | **Código:** Ctrl+L omite escaneo si existe `xmpTags.json` | Definir actualización e invalidación; no asumir índice siempre vigente |
@@ -31,6 +34,29 @@ de datos, cierre, caché binaria y comentarios. Su cobertura es parcial y no inc
 reproducción nueva. El [plan de refactorización](changes/001-refactorizacion-base/plan.md)
 registra el destino de cada hallazgo; no se consideran corregidos ni se atribuyen
 automáticamente al arranque lento reportado.
+
+Seguimiento: AR-004 se resolvió en R1 y AR-001 en R2; AR-002 se corrigió en
+[004](changes/004-vigencia-miniaturas/result.md). AR-003 se corrige en el alcance de
+[005](changes/005-entrega-ipc/result.md); AR-005/006 y la cobertura
+documental restante siguen pendientes. La nueva regresión reprodujo asociación
+errónea de resultado en la tira, no un crash ni un problema de rendimiento.
+
+Actualización 2026-10-23: [inventario acumulado 004–011](changes/001-refactorizacion-base/coverage-004-011.md)
+reconcilia cobertura. [012](changes/012-cierre-colas-ipc/result.md) implementa la primera
+porción AR-005: admisión/cola al cerrar, servidor cancelable, payloads y orden antes de
+destruir HWND/consumidores. Release/CTest 6/6 y diez escenarios nativos pasados. No
+declara resueltos WIC activo, otros scanners ni cancelación por consumidor; AR-006/007
+siguen separados. Paquete temporal 012 listo para aceptación funcional del usuario.
+
+003 añadió diagnóstico IPC con reproducción nueva de AR-003, no su corrección; la
+matriz y los límites de imagen aplicada/presentación figuran en su [resultado](changes/003-diagnostico-rendimiento/result.md).
+005 convierte esa matriz en regresión de aplicación exacta y error explícito, sin
+ACK, elección atómica ni rediseño de cierre. No se midió rendimiento.
+
+La [validación real posterior a 005](changes/003-diagnostico-rendimiento/real-validation.md)
+confirma PNG presentado tras IPC y diálogo Win32 231/salida 2 reales, con ventanas
+independientes de ambos flags y límite AR-008. Añade CPU/memoria en reposo con logging
+activo, sin GPU/VRAM ni comparación. Primera ejecución real y Explorer siguen pendientes.
 
 ## Información rescatada de los planes anteriores
 

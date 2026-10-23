@@ -6,21 +6,26 @@
 #pragma once
 
 #include "common/types.h"
+#include "common/image_request.h"
 #include "rendering/renderer.h"
 #include "loader/image_loader.h"
+#include <utility>
 
 namespace kv {
 
 class App; // Forward declaration
 
+// UI-thread thumbnail cache entry; pending request identity travels with retained/moved entries.
 struct ThumbnailInfo {
     std::wstring         path;
     ComPtr<ID2D1Bitmap1> texture;
     bool                 isLoading = false;
     bool                 loadFailed = false;
+    ImageRequestToken    pendingRequest;
 };
 
 class ThumbnailStrip {
+    friend class AsyncPreviewTests; // Exercises real requests and callbacks without visible UI.
 public:
     ThumbnailStrip() = default;
     ~ThumbnailStrip() = default;
@@ -32,13 +37,13 @@ public:
     /// Initialize with the parent App context
     void Initialize(App* app);
 
-    /// Update animations and check pre-fetching
+    /// UI thread: updates animations/autohide and requests thumbnails within the visible interval.
     void Update(double dt);
 
-    /// Draw the thumbnail strip
+    /// UI thread: draws the panel and visible thumbnails with the existing clipping and effects.
     void Draw(Renderer& renderer);
 
-    /// Rebuild the thumbnail cache when the file list changes
+    /// UI thread: rebuilds via a temporary occurrence index; retains each old entry/request once and resets selection.
     void SetFileList(const std::vector<std::wstring>& fileList);
 
     /// Sync the selection to the active index when not dragging/multi-selecting
@@ -70,9 +75,16 @@ public:
 private:
     // ── Private Helpers ────────────────────────────────────────────────────
     RectF GetThumbnailRect(int index, float windowWidth, float windowHeight) const;
+    // Returns a half-open candidate interval with inclusive edge visibility; invalid geometry falls back to all items.
+    std::pair<size_t, size_t> GetVisibleRange(float windowWidth) const;
     float GetThumbnailWidth() const;
     void DrawMirror(Renderer& renderer, ID2D1Bitmap1* bitmap, const RectF& rect, float opacity);
+    // Requests a thumbnail with unique identity and a pre-upload UI validity check; completion still checks identity.
     void LoadThumbnail(int index);
+    // UI-only read: matches token and exact path without consuming loading state or retaining an item address.
+    bool IsThumbnailRequestCurrent(const ImageRequestToken& request) const;
+    // Applies a completion once to the current token/path match; removed requests do nothing.
+    void CompleteThumbnail(const ImageRequestToken& request, std::shared_ptr<ImageData> image);
     void Rearrange(int insertIndex);
     void ShowContextMenu(float screenX, float screenY);
 

@@ -25,6 +25,7 @@ class BoardLayoutHelper;
 class BoardPage {
 public:
     friend class App;
+    friend class AsyncPreviewTests; // Exercises producer join order before App dependency teardown.
     friend class BoardSearchManager;
     friend class BoardTagScanner;
     friend class BoardLayoutHelper;
@@ -79,6 +80,7 @@ private:
 
     // Helpers
     void DrawToastNotification(Renderer& renderer);
+    // Uses App's active files, then shared selected folder, then the working directory.
     std::filesystem::path GetActiveDirectory() const;
 
     App* m_app = nullptr;
