@@ -1,5 +1,11 @@
 # Prueba funcional del portable 014
 
+Resultado reportado 2026-10-23: pruebas realizadas; **punto 6 fallido**, la nueva
+imagen no se muestra y permanece la anterior. [IPC-014-01](user-validation.md)
+se difiere por decisión del propietario como error legado reportado. No se ejecuta
+una nueva campaña ni se infiere aprobación de los demás puntos. La lista siguiente
+conserva el protocolo de referencia, no una orden de repetirlo ahora.
+
 Usar el EXE/ZIP **final** enlazado en [resultado](result.md). Los paquetes 010–013
 y el candidato preliminar 014 se conservaron; no sustituir el portable personal.
 Este binario es posterior al reporte funcional de la base.

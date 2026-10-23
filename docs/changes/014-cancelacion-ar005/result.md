@@ -3,7 +3,19 @@
 Fecha: 2026-10-23. **Completado.** Base 6f84dc5, implementación y pruebas en
 codex/repository-foundation. [Spec](spec.md), [plan](plan.md), [revisión](review.md).
 La entrega implementa los cuatro faltantes; no los sustituye por una nueva
-disposición documental. Lista para los siguientes cambios funcionales del usuario.
+disposición documental. Lista para los siguientes cambios funcionales del usuario,
+con la excepción IPC reportada y diferida expresamente que se registra a continuación.
+
+## Resultado manual posterior — 2026-10-23
+
+El propietario realizó pruebas del portable 014 y reportó fallo en el punto 6:
+abrir otra imagen mediante el mismo ejecutable mantiene la imagen anterior.
+**IPC-014-01**, [reporte y decisión](user-validation.md), queda diferido por
+instrucción expresa del propietario, que lo identifica como error legado.
+Sin reproducción adicional ni causa confirmada; no se modifica código ni paquete.
+No se declara aceptación funcional completa de IPC ni se infieren resultados de
+los demás puntos. El cierre de implementación AR-005 y las pruebas históricas
+inferiores conservan su alcance; no invalidan ni resuelven este reporte manual.
 
 ## Matriz de cierre
 
@@ -60,8 +72,9 @@ el candidato final conserva los defaults. No se instala ni cambia asociaciones.
 **final** para esta entrega. Artefactos/datos permanecen ignorados y fuera del commit.
 
 [Protocolo funcional](functional-test.md) para el propietario y
-[continuidad](resume.md). La aceptación visual/manual de este binario queda para
-esa prueba; no se le atribuye el reporte de la base ni equivalencia visual universal.
+[continuidad](resume.md). La prueba manual posterior está registrada en
+[user-validation.md](user-validation.md), con excepción IPC diferida; no se le
+atribuye equivalencia visual universal ni aprobación de puntos no detallados.
 
 ## Límites del contrato completado
 

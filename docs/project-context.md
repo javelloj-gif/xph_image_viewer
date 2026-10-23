@@ -2,6 +2,14 @@
 
 # Contexto técnico de LenteUV
 
+**Reporte funcional posterior, 2026-10-23:** en portable 014, abrir otra imagen
+mediante el mismo ejecutable mantiene la anterior en el visor (punto 6 IPC).
+El propietario lo identifica como error legado y difiere expresamente su
+tratamiento. [IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) es
+evidencia de usuario, sin causa ni reproducción adicional confirmadas aquí.
+Las pruebas aisladas y el cierre de implementación AR-005 no certifican la
+aceptación global de IPC. No investigar ni corregir este caso hasta nueva instrucción.
+
 Última revisión: 2026-10-22 (servicios R1/R2, contratos de carga y optimizaciones 006..009). Audiencia: agentes y desarrolladores que mantengan este repositorio.
 
 Estructura vigente: `src/` contiene el código, la raíz contiene CMake y `tests/fixtures/` conserva las muestras. Los builds y paquetes se generan en `build/` y `dist/`.

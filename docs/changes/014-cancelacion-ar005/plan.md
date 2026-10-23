@@ -2,6 +2,11 @@
 
 [Spec](spec.md). Estado: completado; evidencia por criterio en [resultado](result.md).
 
+Seguimiento manual: [IPC-014-01](user-validation.md), fallo del punto 6 reportado
+el 2026-10-23. El propietario lo considera legado y pospone expresamente su
+tratamiento. No añadir investigación/corrección a este plan ni reabrir AR-005 por
+inercia. No hay aceptación funcional completa de IPC.
+
 - [x] Revisar Git, contratos 012/013, guías, habilidad y consumidores actuales.
 - [x] Especificar alcance completo y límites físicos de WIC antes de implementar.
 - [x] Loader: lifetime débil por solicitud, poda real de cola, parada cooperativa

@@ -6,7 +6,17 @@ Se registra como aceptación funcional del usuario; no aportó hash ni una matri
 por escenario. [013](changes/013-cierre-base/result.md) registra la revisión final,
 la lectura transaccional KTAG y el orden de cierre de productores.
 
-014 implementa los cuatro faltantes de AR-005 y entrega un portable final comprobado. La aplicación queda preparada para nuevos cambios funcionales del usuario. No continuar la refactorización por inercia. Las propuestas opcionales y los límites
+**Prueba manual posterior del portable 014:** el propietario reporta fallo en el
+punto 6 (IPC): al abrir otra imagen mediante el mismo EXE, el visor conserva la
+anterior. [IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) queda
+**diferido por decisión expresa del propietario**, que lo identifica como error
+legado. No investigar ni corregir ahora. No hay aceptación funcional completa de IPC;
+no se infiere aprobación individual de los demás puntos del protocolo.
+
+014 implementa los cuatro faltantes de AR-005 y entrega un portable comprobado en
+sus escenarios automatizados. Se puede continuar con nuevos cambios funcionales
+según la decisión del propietario, conservando la limitación IPC conocida.
+No continuar la refactorización por inercia. Las propuestas opcionales y los límites
 de cobertura quedan identificados abajo; no son tareas restantes del lote base ni
 defectos declarados corregidos. El próximo cambio de producto se elige por separado.
 
@@ -25,7 +35,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | 011 | [Vigencia antes del upload](changes/011-vigencia-antes-upload/result.md) | Completado en alcance: 321 checks nuevos WARP; sin mejora global afirmada |
 | 012 | [Cierre de colas y servidor IPC](changes/012-cierre-colas-ipc/result.md) | Completado en alcance y aceptación funcional base reportada; ampliado el orden de productores en 013 |
 | 013 | [Cierre de la base](changes/013-cierre-base/spec.md) | Completado: AR-006 y join de productores; Release/CTest 6/6, documentación y continuidad |
-| 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Completado: Release/CTest 7/7, 42 checks específicos, 314 WIC, 13 cierres por proceso, diez nativos y producto empaquetado; portable final listo para prueba funcional |
+| 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Implementación completada y pruebas automatizadas conservadas. Prueba manual realizada: punto 6 IPC fallido (IPC-014-01), diferido por el propietario como legado reportado |
 
 ## Disposición final de la base
 
@@ -33,7 +43,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | --- | --- |
 | AR-001 | Resuelto en R2: gestor/modelo compartido en core |
 | AR-002 | Resuelto en 004, ampliado en 011: identidad/vigencia; no equivale a cancelar CPU |
-| AR-003 | Resuelto en 005 en transporte/error/propiedad; no añade ACK ni elección atómica |
+| AR-003 | Corrección histórica 005 en transporte/error/propiedad; sin ACK/elección. IPC-014-01 reporta apertura visible fallida, diferida y sin diagnóstico; no se declara IPC globalmente resuelto |
 | AR-004 | Resuelto en R1: resolución común de datos preservando algoritmo |
 | AR-005 | Completado en 014 sobre 012/013: cancelación por consumidor, stop cooperativo WIC y caracterización de llamada activa, escáneres y cliente IPC con presupuesto total. Sin faltantes de implementación diferidos; una llamada WIC/E/S activa debe retornar antes del join |
 | AR-006 | Resuelto en 013 para lectura KTAG: comprobación de longitudes/lecturas y publicación transaccional |
@@ -44,6 +54,9 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Trabajo futuro separado, sin ejecución automática
 
+- **IPC-014-01:** nueva imagen no visible mediante el mismo EXE; conserva la
+  anterior. Fallo manual del punto 6, identificado como legado por el propietario.
+  Diferido expresamente: sin investigación ni corrección hasta nueva instrucción.
 - **002:** decidir qué hace una preferencia antigua con valor 4 y fijar texto de
   placeholder/tooltip antes de retirar Library. Conservar enums, KTAG/KBRD y datos.
 - **003:** primera apertura real tras iniciar sesión y caso representativo de demora.
@@ -68,8 +81,10 @@ Runtime, locales y defaults limpios; SHA256/evidencia en
 [resultado 014](changes/014-cancelacion-ar005/result.md). Release y CTest 7/7, diez
 escenarios nativos y EXE empaquetado con --multiple/--lite, cuatro modos y cierre 0.
 No quedan pendientes de implementación de AR-005; su límite de WIC/E/S activa está
-caracterizado y documentado. La aceptación manual del candidato corresponde a la
-[prueba funcional del usuario](changes/014-cancelacion-ar005/functional-test.md).
+caracterizado y documentado. La [prueba funcional del usuario](changes/014-cancelacion-ar005/functional-test.md)
+ya se realizó, con fallo IPC registrado en [user-validation](changes/014-cancelacion-ar005/user-validation.md).
+La implementación de cancelación/cierre queda cerrada; la apertura IPC visible no
+se da por aceptada y permanece diferida por el propietario.
 
 Los candidatos 010–013 y el preliminar 014 se conservaron. Usar el sufijo **final**.
 No se atribuye al candidato nuevo la aceptación funcional histórica de la base.
