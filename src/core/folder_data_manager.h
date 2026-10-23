@@ -20,7 +20,7 @@ class App; // Forward declaration
 // Shared preview state; texture ownership is shared and all mutations occur on the UI thread.
 struct PreviewItem {
     std::wstring filePath;
-    std::shared_ptr<ImageData> texture = nullptr; // decoded 180px/200px preview image
+    std::shared_ptr<ImageData> texture = nullptr; // decoded shared preview image
     RectF rect = {};                              // layout rect in screen coordinates
     bool isLoading = false;
     bool loadFailed = false;
@@ -61,9 +61,9 @@ public:
 
     // ─── Folder Management ───────────────────────────────────────────────────
     // Scans supported files synchronously, builds previews and sorts; ignores empty folders.
-    // libraryLoading suppresses selection/session save. Otherwise selects (also for duplicates),
+    // restoringSession suppresses selection/session save. Otherwise selects (also for duplicates),
     // optionally loads an image through App, and saves the session only for a new folder.
-    void AddFolder(const std::wstring& folderPath, bool libraryLoading = false, bool loadImage = true);
+    void AddFolder(const std::wstring& folderPath, bool restoringSession = false, bool loadImage = true);
     // Erases a valid folder (canceling its leases/hover), clamps selection, saves and redraws; does not reload App's file list.
     void RemoveFolder(int index);
     // Returns the shared folder index, or -1 when no folder is selected.
@@ -77,7 +77,7 @@ public:
     std::vector<FolderInfo>& GetFolders() { return m_folders; }
     const std::vector<FolderInfo>& GetFolders() const { return m_folders; }
 
-    // UI-thread transient epoch for both page layouts; never persisted or reset during reinitialization.
+    // UI-thread transient epoch for the preview layout; never persisted or reset during reinitialization.
     uint64_t GetPreviewLayoutRevision() const { return m_previewLayoutRevision; }
     // UI thread: call after changing folders, preview order/structure or effective texture dimensions (not scroll/hover).
     void NotifyPreviewLayoutChanged() { ++m_previewLayoutRevision; }
@@ -120,7 +120,7 @@ public:
     bool IsPreviewRequestCurrent(const ImageRequestToken& request) const;
 
     // UI thread: resolves token and exact path in current folders, applies success/failure once,
-    // and ends loading; a texture invalidates both layouts. False for obsolete requests; no redraw or I/O.
+    // and ends loading; a texture invalidates the preview layout. False for obsolete requests; no redraw or I/O.
     bool CompletePreview(const ImageRequestToken& request, std::shared_ptr<ImageData> image);
 
 private:

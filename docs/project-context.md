@@ -46,7 +46,6 @@ No hay dependencia de Qt ni de un runtime Python para ejecutar o compilar el vis
 | `rendering/` | Dispositivo D3D11, DXGI, Direct2D, DirectWrite, DirectComposition, curvas y animaciones por nombre |
 | `loader/` | `ImageLoader`, decodificación WIC, trabajadores, colas de texturas y `FrameSequencer` |
 | `viewer/`, `ui/thumbnail_strip.*` | Imagen principal, transformaciones, zoom de región y tira inferior |
-| `library/` | Página Library: paneles, miniaturas y vista previa al hover; consume el modelo compartido de core |
 | `waterfall/` | Distribución en columnas, desplazamiento y visor modal dentro de la misma aplicación |
 | `board/` | Tablero, selección, edición, conexiones, serialización, búsqueda, escaneo y distribución |
 | `metadata/` | Fachada XMP, caché, escaneo asíncrono y lectores/escritores por formato |
@@ -59,9 +58,9 @@ Patrones observados: composición de componentes, callbacks `std::function`, RAI
 `FolderDataManager` reside en core y se usa en el hilo UI. App mantiene referencias
 `m_folders`/`m_currentFolderIdx` a ese estado; mover el servicio no las convierte en
 copias. La API sigue combinando navegación y persistencia: AddFolder escanea y ordena
-sincrónicamente, y normalmente selecciona/carga/guarda; `libraryLoading=true` suprime
-selección y guardado para restaurar sesión. Library conserva su propio AddFolder con
-efectos distintos. No eliminar el gestor/modelo al retirar la página de Library.
+sincrónicamente, y normalmente selecciona/carga/guarda; `restoringSession=true` suprime
+selección y guardado para restaurar sesión. El gestor/modelo compartido permanece
+en core tras retirar la página en 002.
 
 ## Arranque, entrada, renderizado y cierre
 
@@ -69,7 +68,7 @@ efectos distintos. No eliminar el gestor/modelo al retirar la página de Library
 
 `App::Initialize` carga settings/traducciones y crea HWND oculto; instala un callback temporal propietario de rutas tempranas y resuelve IPC. Solo si continúa inicializa gestor/favoritos, loader de cuatro trabajadores, fachada XMP y overlays; registra bandeja/callbacks restantes y crea el renderer; muestra la ventana según preferencias; inicializa las páginas y restaura sesión antes de cargar el argumento explícito. El orden importa: una carga prematura antes del renderer/páginas produjo problemas históricos de arranque. Sin argumentos ni carpetas restauradas se intenta el directorio de trabajo. Tras contenido inicial y timer instala el callback IPC definitivo y aplica rutas retenidas; los secundarios evitan los servicios pesados y conservan errores 005.
 
-`Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Library=4, Waterfall=5. Los atajos de cambio de modo NO corresponden directamente a esos valores. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las cuatro páginas funcionales.
+`Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Waterfall=5; el valor retirado 4 no tiene enumerador. Los atajos de cambio de modo NO corresponden directamente a esos valores. NUM2/2 quedan reservados y la posición radial — / Unavailable está inactiva. No hay diálogo ni migración añadidos para preferencias antiguas; 4 ya no designa un modo soportado. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las tres páginas funcionales.
 
 `App::Run` vacía mensajes mediante `PeekMessageW`, actualiza/renderiza y espera hasta 16 ms cuando no considera necesaria animación continua. No es un renderer que duerma indefinidamente hasta invalidación. `RenderFrame` limita `dt`, actualiza animaciones y página, procesa cargas pendientes, dibuja el contenido, overlays y menú radial, y presenta. `WindowEvents` convierte mensajes nativos en llamadas a `App`; los handlers ofrecen primero eventos a overlays y páginas. Un handler puede consumir una tecla antes del switch global.
 
@@ -114,10 +113,9 @@ plazo universal para una llamada ya iniciada. Desde 014, stop_token y lease déb
 
 ## Modos y controles
 
-**Código:** consultar la [guía de uso](usage.md) para la matriz operativa. Las selecciones de miniaturas, imagen actual, hover de biblioteca e ítems del tablero son estados distintos.
+**Código:** consultar la [guía de uso](usage.md) para la matriz operativa. Las selecciones de miniaturas, imagen actual, hover de cascada e ítems del tablero son estados distintos.
 
 - **Viewer:** fondo compuesto con alfa, imagen estática/animada, metadatos y tira inferior que aparece al acercar el puntero. `ViewerPage` implementa zoom, paneo, región con Ctrl+clic y menú contextual. `1` de la fila superior alterna ajuste/1:1; NUM1 cambia a Viewer en el handler global. La rueda usa `zoom_on_mousewheel` para intercambiar zoom y navegación con Ctrl. Arriba/abajo se consumen como zoom en esta página. El código local previo a la reforma usa arrastre izquierdo de ventana en compacto y paneo en fullscreen.
-- **Library:** panel de carpetas a la izquierda, distribución de previews a la derecha y original al hover. `FolderDataManager` enumera el directorio de forma síncrona y crea entradas de preview. El clic abre Viewer. NUM4/4 puede llevar el archivo bajo hover al tablero; seguir `LibraryPage::OnKeyDown` y `BoardPage::OnEnterPage`.
 - **Waterfall:** miniaturas en columnas y scroll suavizado. El clic carga la imagen mediante `App::LoadImage` y activa `m_viewerModal`: no crea una aplicación secundaria ni un proceso. El clic externo regresa a la cuadrícula. El modo modal reutiliza el visor y tiene sus propias reglas de teclas.
 - **Board:** cámara en coordenadas de mundo, imágenes, notas, nodos y enlaces. Alt+clic derecho inicia conexión; menús nativos añaden/configuran ítems. Ctrl+F abre búsqueda; Ctrl+L genera catálogo de tags si no existe; Ctrl+Shift+L trae imágenes del directorio. El catálogo `xmpTags.json` alimenta sugerencias: no es una base de rutas de imágenes. Los formatos y selección tienen gestores separados.
 
@@ -144,7 +142,7 @@ ni bombeo; consumidor/modelo deben vivir durante la entrega. Los callbacks de
 
 La lista de extensiones incluye JPEG/JFIF, PNG/APNG, GIF, BMP, TIFF, TGA, ICO, SVG/SVGZ, WebP, AVIF/AVF, HEIF/HEIC y JXR/WDP/HDP. La decodificación real depende de WIC/códecs instalados; las muestras por extensión no certifican soporte. PNG se considera candidato animado. Consultar `DecodeAnimatedImage` antes de atribuir soporte completo a una animación/códec concreto.
 
-Miniaturas de biblioteca/cascada se solicitan al necesitarse y se guardan en previews.
+Miniaturas de cascada se solicitan al necesitarse y se guardan en previews.
 Desde 004, sus callbacks y los de la tira llevan un token único por solicitud y ruta;
 se aplica el resultado una sola vez al elemento actual, localizado sin índices capturados.
 Ordenar/desplazar conserva el token; borrar o reemplazar lo descarta, incluso al volver
@@ -231,13 +229,13 @@ reconstrucción sintética, sin prueba de menor RAM o mejor arranque global. Los
 candidatos del informe siguen siendo propuestas.
 
 [007](changes/007-layouts-por-cambios/result.md) reutiliza los rectángulos de
-Library/Waterfall mediante clave de revisión transitoria de FolderDataManager,
+Waterfall mediante clave de revisión transitoria de FolderDataManager,
 selección, ancho/cantidad y parámetros de Waterfall. El greedy y el dibujo no cambian.
 Mutadores del gestor notifican automáticamente; las rutas directas App::DeleteImage
-y Library::AddFolder también. Todo acceso mutable futuro a carpetas/previews que
+también. Todo acceso mutable futuro a carpetas/previews que
 cambie estructura/orden/dimensiones o rects debe llamar NotifyPreviewLayoutChanged
 en UI. No notificar scroll/hover. No se duplica geometría ni se persiste la revisión.
-24 frames offscreen idénticos; métricas de cálculo aislado, sin ahorro global demostrado.
+Evidencia histórica de 007: 24 frames offscreen idénticos con ambas páginas; métricas de cálculo aislado, sin ahorro global demostrado.
 
 [008](changes/008-formatos-texto/result.md) reutiliza formatos privados de Renderer
 en UI/render, máximo 32/FIFO y clave de familia hasta 128 wchar_t, sin truncar inputs

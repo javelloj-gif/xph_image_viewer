@@ -1,7 +1,6 @@
 # 002: Retirada de Library
 
-Actualización: 2026-10-23. Estado: en definición por compatibilidad pendiente.
-Intención funcional acordada; implementación no iniciada.
+Actualización: 2026-10-23. Estado: retirada implementada; verificación final en curso.
 
 ## Problema y evidencia inicial
 
@@ -42,16 +41,14 @@ preservando las capacidades compartidas que necesitan los modos restantes.
 
 ## Restricciones y compatibilidad
 
-El propietario rechazó conservar referencias funcionales a Library y la propuesta
-de convertir específicamente la preferencia antigua de Library a Viewer.
-No se ha decidido qué hacer con una configuración existente que contenga el valor
-numérico antiguo `4`. No implementar silenciosamente ese fallback ni renumerar los
-valores persistidos de Viewer/Board/Waterfall.
-Los IDs restantes son Start=1, Viewer=2, Board=3 y Waterfall=5; 4 no tendrá
-enumerador ni alias. Start no es una página dibujada actualmente y su rediseño
-queda fuera de 002. Las preferencias afectadas son
-`page_on_app_launch_from_explorer`, `page_to_open_on_drag_and_drop` y `debug_page`;
-esta última se persiste y aparece en opciones, pero no tiene consumidor funcional.
+Última instrucción del propietario, 2026-10-23: limitar el trabajo a eliminar
+Library y sus referencias en código, sin cuadros de diálogo ni opciones nuevas.
+Esta instrucción sustituye la elección anterior de solicitar un modo para el valor 4.
+No se añade fallback, migración, selector ni guardado de reemplazos; las preferencias
+antiguas no reciben tratamiento específico. El antiguo 4 deja de designar un modo
+soportado. No certificar compatibilidad funcional con ese valor.
+Los IDs restantes son Start=1, Viewer=2, Board=3 y Waterfall=5; 4 no tiene enumerador
+ni alias. Start conserva su comportamiento preexistente.
 Mantener sesión, favoritos, rutas y formatos existentes salvo decisión explícita.
 Se admite únicamente el placeholder visual reservado requerido, sin presentar un modo utilizable.
 
@@ -64,23 +61,16 @@ Se admite únicamente el placeholder visual reservado requerido, sin presentar u
 | AC-03 | Ningún camino activo intenta iniciar Library | Revisar arranque, menú, opciones, drop e IPC |
 | AC-04 | Código exclusivo retirado, servicios compartidos preservados | Búsqueda clasificada de referencias, CMake y revisión del diff |
 | AC-05 | Viewer, Waterfall y Board conservan funciones afectadas | Build/CTest y recorridos funcionales pertinentes |
-| AC-06 | Preferencias antiguas tienen tratamiento explícito y comprobado | Decisión pendiente; prueba con copia de configuración |
+| AC-06 | No se añaden diálogos, opciones nuevas, fallback ni migración de preferencias | Revisión del diff final y búsqueda de referencias |
 | AC-07 | Guías vigentes y comentarios coinciden con el resultado | Revisión documental y de clases/métodos modificados |
 
-## Preguntas y decisiones pendientes
+## Decisiones vigentes
 
-- ¿Qué comportamiento se espera al leer el valor de modo ya retirado en preferencias?
-  La refactorización no elimina por sí sola los datos existentes fuera del código.
-- Confirmar texto del placeholder y tooltip: recomendación pendiente, posición reservada
-  con texto de no disponibilidad, sin prometer un acceso por NUM2.
+- Retirar Library y referencias funcionales, conservando servicios y modos restantes.
+- No introducir diálogos ni opciones nuevas ni tratamiento especial del valor 4.
+  El selector implementado provisionalmente y sus tests auxiliares fueron retirados
+  tras la instrucción final del propietario; sus pruebas no acreditan la versión final.
+- Mantener lo acordado sobre teclas reservadas y posición gris `—` / `Unavailable`.
+- Mantener diferido IPC-014-01 y conservar documentos históricos/atribuciones.
 
-Consulta conjunta enviada el 2026-10-23, aún sin decisión aplicada:
-
-1. Valor 4: propuesto selector explícito Viewer/Waterfall/Board con guardado solo
-   al confirmar; alternativa, error con clave afectada y edición manual antes de
-   continuar la operación. Incluye `debug_page`; cancelación y momento exacto de
-   resolución se concretarán con la decisión. Ninguna propuesta es un fallback aprobado.
-2. Texto: propuesto `RES` / `Reserved (no action)`; alternativa `—` / `Unavailable`.
-
-Inventario y diseño: [review.md](review.md). No implementar comportamiento dependiente
-hasta que el propietario resuelva ambas decisiones.
+Inventario y revisión del diff: [review.md](review.md).

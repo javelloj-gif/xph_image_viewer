@@ -23,7 +23,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | ID | Cambio | Estado |
 | --- | --- | --- |
 | 001 | [Refactorización base y auditoría](changes/001-refactorizacion-base/spec.md) | Completado en alcance: R1/R2, inventario, disposición de AR-001..007 y aceptación funcional reportada |
-| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Inventario/diseño actualizados contra 8625d95; consulta conjunta de valor 4 y placeholder/tooltip pendiente. Sin implementación |
+| 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Retirada implementada sin diálogos ni migración por instrucción final; Release/CTest 7/7. Aceptación visual final pendiente; campaña ampliada detenida |
 | 003 | [Diagnóstico de arranque, IPC y reposo](changes/003-diagnostico-rendimiento/spec.md) | Investigación independiente en curso; campañas restantes sin prioridad de ejecución asignada |
 | 004 | [Vigencia de miniaturas](changes/004-vigencia-miniaturas/result.md) | Completado: AR-002, regresión previa y 98 checks iniciales |
 | 005 | [Entrega IPC y fallo explícito](changes/005-entrega-ipc/result.md) | Completado en alcance: AR-003, transporte/error/propiedad; presentación real posterior en 003 |
@@ -57,12 +57,11 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 - **IPC-014-01:** nueva imagen no visible mediante el mismo EXE; conserva la
   anterior. Fallo manual del punto 6, identificado como legado por el propietario.
   Diferido expresamente: sin investigación ni corrección hasta nueva instrucción.
-- **002:** decidir qué hace una preferencia antigua con valor 4 y fijar texto de
-  placeholder/tooltip antes de retirar Library. Conservar enums, KTAG/KBRD y datos.
-  [Inventario y diseño](changes/002-retirar-library/review.md) separan página,
-  servicios core, tests y referencias históricas. No repetir extracción de
-  FolderDataManager ni correcciones AR-002/AR-005; [plan](changes/002-retirar-library/plan.md)
-  y matriz actualizados para continuar tras las dos decisiones.
+- **002:** [Retirada implementada](changes/002-retirar-library/result.md), sin
+  selector ni opciones nuevas. El propietario detuvo el trabajo ampliado y limitó
+  el alcance a eliminar Library; no continuar UI/empaquetado/compatibilidad de forma
+  automática. Release/CTest 7/7; observación visual final pendiente, sin declarar
+  aceptación funcional completa. Gestor core y AR-002/AR-005 conservados.
 - **003:** primera apertura real tras iniciar sesión y caso representativo de demora.
   [Explorer/reposo](changes/003-diagnostico-rendimiento/explorer-validation.md) y
   [presentación/errores](changes/003-diagnostico-rendimiento/real-validation.md)

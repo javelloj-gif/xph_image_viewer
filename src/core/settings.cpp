@@ -195,9 +195,9 @@ bool Settings::Save() {
 
     file << "  \"---general\": \"General\",\n";
     file << "  \"ui_lang\": [\n   \"" << toUtf8(ui_lang) << "\",\n   \"UI language\"\n  ],\n";
-    file << "  \"page_on_app_launch_from_explorer\": [\n   " << page_on_app_launch_from_explorer << ",\n   [\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [4, \"LIBRARY\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page on App Launch (when opened from Explorer)\"\n  ],\n";
-    file << "  \"page_to_open_on_drag_and_drop\": [\n   " << page_to_open_on_drag_and_drop << ",\n   [\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [4, \"LIBRARY\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page to open on Drag&Drop\"\n  ],\n";
-    file << "  \"debug_page\": [\n   " << debug_page << ",\n   [\n    [1, \"START\"],\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [4, \"LIBRARY\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page to open when run debug mode\"\n  ],\n";
+    file << "  \"page_on_app_launch_from_explorer\": [\n   " << page_on_app_launch_from_explorer << ",\n   [\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page on App Launch (when opened from Explorer)\"\n  ],\n";
+    file << "  \"page_to_open_on_drag_and_drop\": [\n   " << page_to_open_on_drag_and_drop << ",\n   [\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page to open on Drag&Drop\"\n  ],\n";
+    file << "  \"debug_page\": [\n   " << debug_page << ",\n   [\n    [1, \"START\"],\n    [2, \"VIEWER\"],\n    [3, \"BOARD\"],\n    [5, \"WATERFALL\"]\n   ],\n   \"Page to open when run debug mode\"\n  ],\n";
     file << "  \"run_on_windows_startup\": [\n   " << (run_on_windows_startup ? "true" : "false") << ",\n   \"Run on Windows Startup\"\n  ],\n";
     file << "  \"do_not_show_start_dialog\": [\n   " << (do_not_show_start_dialog ? "true" : "false") << ",\n   \"Supress start dialog and run lite mode\"\n  ],\n";
     file << "  \"show_fullscreen\": [\n   " << (show_fullscreen ? "true" : "false") << ",\n   \"Full-screen mode on application start\"\n  ],\n";

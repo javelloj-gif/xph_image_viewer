@@ -88,7 +88,7 @@ private:
     bool m_waterfallBlockActiveItem = false;
     double m_unblockTimer = 0.0;
 
-    // Hovered animated file caching (same as library page)
+    // Hovered animated file caching for the Waterfall grid
     std::wstring m_hoveredOriginalPath;
     ImageLoadLifetime m_hoverLoadLifetime; // Changed on hover/folder/page exit; loader holds only a weak lease.
     std::shared_ptr<AnimatedImageData> m_hoveredOriginalAnim;

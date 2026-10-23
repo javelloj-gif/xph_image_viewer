@@ -208,7 +208,6 @@ InitResult App::Initialize(const AppConfig& config) {
 
     m_viewerPage.Initialize(this);
     m_thumbnailStrip.Initialize(this);
-    m_libraryPage.Initialize(this);
     m_boardPage.Initialize(this);
     m_waterfallPage.Initialize(this);
 
@@ -245,7 +244,6 @@ void App::OnIpcOpenPath(const std::wstring& rawPath) {
 
     if (fs::is_directory(path, ec)) {
         LoadFolder(path);
-        SetPage(Page::Library);
     } else if (fs::is_regular_file(path, ec)) {
         LoadImage(path);
         SetPage(Page::Viewer);
@@ -305,7 +303,6 @@ int App::Run() {
                                    || m_thumbnailStrip.HasActiveAnimations()
                                    || (m_currentPage == Page::Viewer && m_viewerPage.HasActiveAnimations())
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
-                                   || (m_currentPage == Page::Library && m_libraryPage.m_hoveredOriginalAnim && !m_libraryPage.m_hoveredAnimSequencer.IsPaused())
                                    || (m_currentPage == Page::Board && m_boardPage.m_editor.m_editingNoteIdx != -1)
                                    || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())))
                                    || (m_radialMenuProgress > 0.0f && m_radialMenuProgress < 1.0f);
@@ -349,8 +346,6 @@ void App::RenderFrame() {
     if (m_currentPage == Page::Viewer) {
         m_viewerPage.Update(dt);
         m_thumbnailStrip.Update(dt);
-    } else if (m_currentPage == Page::Library) {
-        m_libraryPage.Update(dt);
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Update(dt);
     } else if (m_currentPage == Page::Waterfall) {
@@ -402,8 +397,6 @@ void App::DrawViewerContent() {
     if (m_currentPage == Page::Viewer) {
         m_viewerPage.Draw(m_renderer);
         m_thumbnailStrip.Draw(m_renderer);
-    } else if (m_currentPage == Page::Library) {
-        m_libraryPage.Draw(m_renderer);
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Draw(m_renderer);
     } else if (m_currentPage == Page::Waterfall) {
@@ -660,7 +653,6 @@ void App::LoadImage(const std::wstring& path) {
     }
 
     m_thumbnailStrip.SyncSelection(m_currentIndex);
-    m_libraryPage.SyncCurrentFolderWithApp();
     if (!m_window.IsFullscreen()) {
         AdjustWindowToImage();
     }
@@ -672,7 +664,6 @@ void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
 
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
-    m_libraryPage.SyncCurrentFolderWithApp();
 }
 
 void App::ApplySortMode(int mode) {
@@ -706,14 +697,13 @@ void App::ApplySortMode(int mode) {
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
 
-    m_libraryPage.CalculateLayout();
     m_waterfallPage.CalculateLayout();
 
     m_window.RequestRedraw();
 }
 
 void App::DeleteImage(const std::wstring& path) {
-    if (m_libraryPage.m_hoveredOriginalPath == path || m_waterfallPage.m_hoveredOriginalPath == path) CancelHoverLoads();
+    if (m_waterfallPage.m_hoveredOriginalPath == path) CancelHoverLoads();
     for (auto& folder : m_folders) {
         auto itPath = std::find(folder.filePaths.begin(), folder.filePaths.end(), path);
         if (itPath != folder.filePaths.end()) {
@@ -778,7 +768,6 @@ void App::DeleteImage(const std::wstring& path) {
     m_thumbnailStrip.SetFileList(m_fileList);
     m_thumbnailStrip.SyncSelection(m_currentIndex);
 
-    m_libraryPage.CalculateLayout();
     m_waterfallPage.CalculateLayout();
 
     m_window.RequestRedraw();
@@ -888,12 +877,6 @@ void App::ResetView() {
 }
 
 void App::CancelHoverLoads() {
-    m_libraryPage.m_hoverLoadLifetime.reset();
-    m_libraryPage.m_hoveredOriginalPath.clear();
-    m_libraryPage.m_hoveredPreviewIdx = -1;
-    m_libraryPage.m_hoveredOriginalImage.reset();
-    m_libraryPage.m_hoveredOriginalAnim.reset();
-    m_libraryPage.m_hoveredOriginalLoading = false;
     m_waterfallPage.m_hoverLoadLifetime.reset();
     m_waterfallPage.m_hoveredOriginalPath.clear();
     m_waterfallPage.m_hoveredPreviewIdx = -1;
@@ -904,7 +887,7 @@ void App::CancelHoverLoads() {
 void App::SetPage(Page page) {
     if (page != m_currentPage) {
         CancelHoverLoads();
-        if (page != Page::Library && page != Page::Waterfall) m_folderData.CancelPreviewLoads();
+        if (page != Page::Waterfall) m_folderData.CancelPreviewLoads();
         if (page != Page::Viewer) {
             m_thumbnailStrip.CancelPendingLoads();
         }
@@ -922,8 +905,6 @@ void App::SetPage(Page page) {
     if (page == Page::Viewer) {
         m_thumbnailStrip.SetFileList(m_fileList);
         m_thumbnailStrip.SyncSelection(m_currentIndex);
-    } else if (page == Page::Library) {
-        m_libraryPage.SyncCurrentFolderWithApp();
     } else if (page == Page::Board) {
         m_boardPage.OnEnterPage();
     } else if (page == Page::Waterfall) {
@@ -1006,9 +987,7 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
         }
     }
 
-    if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnMouseMove(x, y, mods)) return;
-    } else if (m_currentPage == Page::Board) {
+    if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseMove(x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseMove(x, y, mods)) return;
@@ -1033,7 +1012,7 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (btn == MouseButton::Left && m_radialMenuHoveredIdx != -1) {
             Page targetPage;
             if (m_radialMenuHoveredIdx == 0) targetPage = Page::Viewer;
-            else if (m_radialMenuHoveredIdx == 1) targetPage = Page::Library;
+            else if (m_radialMenuHoveredIdx == 1) return; // Reserved: consume without activating or forwarding.
             else if (m_radialMenuHoveredIdx == 2) targetPage = Page::Waterfall;
             else targetPage = Page::Board;
 
@@ -1060,9 +1039,7 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         }
     }
 
-    if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnMouseDown(btn, x, y, mods)) return;
-    } else if (m_currentPage == Page::Board) {
+    if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDown(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseDown(btn, x, y, mods)) return;
@@ -1088,9 +1065,7 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
         }
     }
 
-    if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnMouseUp(btn, x, y, mods)) return;
-    } else if (m_currentPage == Page::Board) {
+    if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseUp(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseUp(btn, x, y, mods)) return;
@@ -1106,9 +1081,7 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
     if (m_taggingModal.IsVisible()) {
         if (m_taggingModal.OnMouseWheel(delta, x, y, mods)) return;
     }
-    if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnMouseWheel(delta, x, y, mods)) return;
-    } else if (m_currentPage == Page::Board) {
+    if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseWheel(delta, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseWheel(delta, x, y, mods)) return;
@@ -1121,9 +1094,8 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
-    if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnMouseDoubleClick(btn, x, y, mods)) return;
-    } else if (m_currentPage == Page::Board) {
+    if (m_radialMenuProgress > 0.5f && x < 200.0f && y < 200.0f) return;
+    if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseDoubleClick(btn, x, y, mods)) return;
@@ -1147,10 +1119,6 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         if (m_viewerPage.OnKeyDown(vk, mods)) {
             return;
         }
-    } else if (m_currentPage == Page::Library) {
-        if (m_libraryPage.OnKeyDown(vk, mods)) {
-            return;
-        }
     } else if (m_currentPage == Page::Board) {
         if (m_boardPage.OnKeyDown(vk, mods)) {
             return;
@@ -1167,13 +1135,6 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             if (m_currentPage == Page::Viewer) {
                 if (m_currentImage) targetPath = m_currentImage->filePath;
                 else if (m_animatedImage) targetPath = m_animatedImage->filePath;
-            } else if (m_currentPage == Page::Library) {
-                if (m_libraryPage.m_hoveredPreviewIdx != -1 && m_currentFolderIdx >= 0) {
-                    auto& folder = m_folders[m_currentFolderIdx];
-                    if (m_libraryPage.m_hoveredPreviewIdx < static_cast<int>(folder.filePaths.size())) {
-                        targetPath = folder.filePaths[m_libraryPage.m_hoveredPreviewIdx];
-                    }
-                }
             } else if (m_currentPage == Page::Waterfall) {
                 if (m_waterfallPage.m_viewerModal) {
                     if (m_currentImage) targetPath = m_currentImage->filePath;
@@ -1210,8 +1171,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             break;
         case VK_NUMPAD2:
         case '2':
-            SetPage(Page::Library);
-            break;
+            break; // Reserved navigation keys; WM_CHAR remains available to editors.
         case VK_NUMPAD3:
         case '3':
             SetPage(Page::Waterfall);
@@ -1282,10 +1242,6 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 if (m_currentPage == Page::Viewer) {
                     if (m_currentImage) selectedPath = m_currentImage->filePath;
                     else if (m_animatedImage) selectedPath = m_animatedImage->filePath;
-                } else if (m_currentPage == Page::Library) {
-                    if (m_libraryPage.m_hoveredPreviewIdx != -1) {
-                        selectedPath = m_libraryPage.m_hoveredOriginalPath;
-                    }
                 } else if (m_currentPage == Page::Waterfall) {
                     if (m_waterfallPage.m_viewerModal) {
                         if (m_currentImage) selectedPath = m_currentImage->filePath;
@@ -1406,7 +1362,7 @@ void App::DrawRadialMenu() {
     // Draw connection lines to each active button center
     for (int i = 0; i < 4; ++i) {
         PointF btnCenter = GetRadialButtonCenter(i, progress);
-        Color lineCol = (m_radialMenuHoveredIdx == i) 
+        Color lineCol = (i == 1) ? Color::White(0.15f * progress) : (m_radialMenuHoveredIdx == i)
             ? Color::FromHex(0x00ffff, 0.4f * progress) 
             : Color::FromHex(0x00ff88, 0.2f * progress);
         m_renderer.DrawLine(hubCenter, btnCenter, lineCol, 1.5f);
@@ -1423,19 +1379,25 @@ void App::DrawRadialMenu() {
     m_renderer.DrawText(L"KV", RectF::FromXYWH(10.0f, 10.0f, 80.0f, 80.0f), Color::FromHex(0x00ffff, 0.8f * progress), 14.0f, TextAlign::Center, TextVAlign::Center);
 
     // Draw Buttons
-    const wchar_t* labels[] = { L"VIS", L"LIB", L"WAT", L"BRD" };
-    Page pages[] = { Page::Viewer, Page::Library, Page::Waterfall, Page::Board };
+    const wchar_t* labels[] = { L"VIS", L"—", L"WAT", L"BRD" };
 
     for (int i = 0; i < 4; ++i) {
         PointF btnCenter = GetRadialButtonCenter(i, progress);
-        bool hovered = (m_radialMenuHoveredIdx == i);
-        bool isActive = (m_currentPage == pages[i]);
+        const bool reserved = (i == 1);
+        bool hovered = !reserved && (m_radialMenuHoveredIdx == i);
+        const bool isActive = (i == 0 && m_currentPage == Page::Viewer)
+            || (i == 2 && m_currentPage == Page::Waterfall)
+            || (i == 3 && m_currentPage == Page::Board);
 
         Color ringColor;
         Color fillColor;
         Color textColor;
 
-        if (hovered) {
+        if (reserved) {
+            ringColor = Color::White(0.18f * progress);
+            fillColor = Color::FromRGBA(30, 30, 30, static_cast<uint8_t>(180.0f * progress));
+            textColor = Color::White(0.3f * progress);
+        } else if (hovered) {
             ringColor = Color::FromHex(0x00ffff, 0.9f * progress);
             fillColor = Color::FromHex(0x00ffff, 0.25f * progress);
             textColor = Color::White(0.95f * progress);
@@ -1462,12 +1424,12 @@ void App::DrawRadialMenu() {
     if (m_radialMenuHoveredIdx != -1) {
         const wchar_t* modeNames[] = {
             L"Viewer Mode (num1)",
-            L"Library Mode (num2)",
+            L"Unavailable",
             L"Waterfall Mode (num3)",
             L"Board Mode (num4)"
         };
         RectF tooltipRect = RectF::FromXYWH(15.0f, 155.0f, 220.0f, 25.0f);
-        m_renderer.DrawText(modeNames[m_radialMenuHoveredIdx], tooltipRect, Color::FromHex(0x00ffff, 0.9f * progress), 12.0f, TextAlign::Left, TextVAlign::Center);
+        m_renderer.DrawText(modeNames[m_radialMenuHoveredIdx], tooltipRect, m_radialMenuHoveredIdx == 1 ? Color::White(0.4f * progress) : Color::FromHex(0x00ffff, 0.9f * progress), 12.0f, TextAlign::Left, TextVAlign::Center);
     }
 }
 

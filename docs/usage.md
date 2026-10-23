@@ -14,7 +14,7 @@ envía aperturas externas al proceso activo; `--multiple` o `--lite` la omiten.
 | Entrada | Resultado cuando no la consume un overlay/modo |
 | --- | --- |
 | NUM1 | Ir al visor principal |
-| NUM2 o 2 | Biblioteca |
+| NUM2 o 2 | Reservados, sin acción de navegación; 2 sigue disponible en editores |
 | NUM3 o 3 | Cascada |
 | NUM4 o 4 | Tablero; al entrar se incorpora la imagen activa si no está ya |
 | O o tecla de tilde | Abrir opciones |
@@ -25,7 +25,7 @@ envía aperturas externas al proceso activo; `--multiple` o `--lite` la omiten.
 | Supr | Papelera para imágenes en los modos que lo ofrecen; en Board elimina ítems del lienzo |
 
 El menú radial aparece en la esquina superior izquierda; clic derecho abre el menú
-del modo. La opción de cierre a bandeja puede ocultar la ventana en vez de terminar
+del modo. La posición `—` permanece gris e inactiva y muestra `Unavailable`. La opción de cierre a bandeja puede ocultar la ventana en vez de terminar
 el proceso. Usa la salida de su menú para asegurar cierre completo.
 
 ## Visor
@@ -43,11 +43,9 @@ El modo compacto usa la imagen global para calcular tamaño y contiene un mínim
 de 512; no garantiza ajuste exacto a imágenes pequeñas. En otros modos el tamaño
 puede depender de la última imagen abierta.
 
-## Biblioteca y cascada
+## Cascada
 
-En Library, selecciona carpeta a la izquierda y una miniatura a la derecha. El hover
-muestra el original sobre el panel izquierdo; el clic abre Viewer. NUM4/4 puede enviar
-el archivo del hover al tablero. En Waterfall, scroll recorre las columnas y el clic
+En Waterfall, scroll recorre las columnas y el clic
 abre el visor modal; hacer clic fuera regresa a la cuadrícula. El modal reutiliza el
 visor dentro de la misma ventana, sin crear otro proceso.
 

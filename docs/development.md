@@ -230,7 +230,7 @@ ventanas; usa EXE/user_data/fixtures copiados y endpoint privado:
 
 Cubre diez escenarios: reentrada inducida antes de WIC, flags, bypass, archivo,
 carpeta, sesión/directorio actual y fallos HWND/WIC/renderer. Imports temporales solo
-en el EXE de tests; no hooks productivos. Siete arranques dibujan los cuatro modos;
+en el EXE de tests; no hooks productivos. Desde 002 esos arranques dibujan los tres modos restantes;
 no se comprueban visualmente sus píxeles ni gestos. `-ReferenceExecutable` permite
 comparar con un harness previo que admita `--ipc-app-reference`; no pasar el EXE de
 producto. [Resultado 010](changes/010-inicializacion-secundaria/result.md) conserva
@@ -259,7 +259,7 @@ imagen sintética BMP de 64 MiB; 314 checks. No modificar fixtures ni usar datos
 Pruebas y portable final en [014/result](changes/014-cancelacion-ar005/result.md).
 Para comprobar el producto empaquetado en una copia aislada, el harness admite
 --ipc-package <lenteuv.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
-Lanza solo sus hijos con --multiple/--lite, recorre los cuatro modos por mensajes a
+Lanza solo sus hijos con --multiple/--lite, recorre los tres modos restantes y envía NUM2 reservado por mensajes a
 su HWND/PID y solicita cierre normal. El watchdog solo limpia sus propios hijos.
 Conservar otra extracción limpia para el usuario. No certifica UX visual universal.
 
@@ -267,3 +267,13 @@ El contrato de loader distingue predicado 011 (rechaza upload pero entrega CPU)
 de cancelación 014 por lease débil (omite trabajo/entrega). No capturar el lease
 fuerte en callbacks. Los checks WIC son cooperativos; join espera la llamada ya
 iniciada. La base/AR-005 quedan cerrados para implementar el siguiente cambio funcional.
+
+## Retirada de Library: 002
+
+La retirada elimina la página, su enum, routing, opciones y fuentes CMake exclusivas;
+conserva FolderDataManager en core y las regresiones de Waterfall/tira/Board.
+No incorpora diálogo, opción nueva ni migración de preferencias. Los casos de tests
+exclusivos de Library se retiraron; snapshots/layout-benchmark actuales cubren solo
+Waterfall, sin reinterpretar los resultados históricos de 007. El snapshot de layout
+actual escribe 12 frames, no los 24 históricos con las dos páginas.
+Validación final y límites en [resultado 002](changes/002-retirar-library/result.md).

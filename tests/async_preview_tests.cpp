@@ -20,7 +20,6 @@ public:
         Check(app.m_window.m_hwnd != nullptr, "message-only window");
         Check(app.m_imageLoader.Initialize(0), "WIC without workers");
         app.m_thumbnailStrip.Initialize(&app);
-        app.m_libraryPage.Initialize(&app);
         app.m_waterfallPage.Initialize(&app);
     }
 
@@ -182,17 +181,16 @@ public:
         app.m_currentFolderIdx = 0;
     }
 
-    // Uses each page's real entry point, keeping both consumers of shared previews covered.
-    ImageLoadCallback PreviewRequest(bool library, int folder, int preview) {
-        if (library) app.m_libraryPage.LoadPreviewTexture(folder, preview);
-        else app.m_waterfallPage.LoadPreviewTexture(folder, preview);
+    // Uses Waterfall's real entry point for shared preview completion tests.
+    ImageLoadCallback PreviewRequest(int folder, int preview) {
+        app.m_waterfallPage.LoadPreviewTexture(folder, preview);
         return TakeRequest();
     }
 
-    // Checks sorting, folder shifts, deletion/recreation, changed path and failure for both pages.
-    void PreviewMutations(bool library) {
+    // Checks sorting, folder shifts, deletion/recreation, changed path and failure for Waterfall.
+    void PreviewMutations() {
         Folders();
-        auto sorted = PreviewRequest(library, 0, 0);
+        auto sorted = PreviewRequest(0, 0);
         app.m_folderData.SortFolder(0, FolderDataManager::SortMode::NameDesc);
         auto image = std::make_shared<ImageData>();
         Deliver(sorted, image);
@@ -204,28 +202,28 @@ public:
         Check(!app.m_folders[0].previews[1].texture, "preview completion consumed once");
 
         Folders();
-        auto shiftedFolder = PreviewRequest(library, 1, 0);
+        auto shiftedFolder = PreviewRequest(1, 0);
         app.m_folders.erase(app.m_folders.begin());
         Deliver(shiftedFolder, image);
         Check(app.m_folders[0].previews[0].texture == image, "request follows shifted folder");
 
         Folders();
-        auto removedFolder = PreviewRequest(library, 0, 0);
+        auto removedFolder = PreviewRequest(0, 0);
         app.m_folders.erase(app.m_folders.begin());
         Deliver(removedFolder, image);
         Check(!app.m_folders[0].previews[0].texture, "same paths in replacement folder untouched");
 
         Folders();
-        auto shiftedItem = PreviewRequest(library, 0, 1);
+        auto shiftedItem = PreviewRequest(0, 1);
         app.m_folders[0].previews.erase(app.m_folders[0].previews.begin());
         Deliver(shiftedItem);
         Check(app.m_folders[0].previews[0].loadFailed && !app.m_folders[0].previews[0].isLoading,
             "failure follows shifted preview");
 
         Folders();
-        auto recreated = PreviewRequest(library, 0, 0);
+        auto recreated = PreviewRequest(0, 0);
         Folders();
-        auto newRequest = PreviewRequest(library, 0, 0);
+        auto newRequest = PreviewRequest(0, 0);
         Deliver(recreated, image);
         Check(app.m_folders[0].previews[0].isLoading && !app.m_folders[0].previews[0].texture,
             "recreated same-path preview rejects old result");
@@ -234,7 +232,7 @@ public:
             "current preview failure completes");
 
         Folders();
-        auto changedPath = PreviewRequest(library, 0, 0);
+        auto changedPath = PreviewRequest(0, 0);
         app.m_folders[0].previews[0].filePath = L"missing-c.png";
         Deliver(changedPath, image);
         Check(!app.m_folders[0].previews[0].texture, "token also requires matching path");
@@ -246,16 +244,16 @@ public:
     // Confirms one shared in-flight request and uses App's in-memory deletion path (no filesystem deletion).
     void SharedPreviews() {
         Folders();
-        auto shared = PreviewRequest(false, 0, 0);
-        app.m_libraryPage.LoadPreviewTexture(0, 0);
-        Check(app.m_imageLoader.m_taskQueue.empty(), "Library shares Waterfall in-flight request");
+        auto shared = PreviewRequest(0, 0);
+        app.m_waterfallPage.LoadPreviewTexture(0, 0);
+        Check(app.m_imageLoader.m_taskQueue.empty(), "repeated Waterfall request shares in-flight preview");
         Deliver(shared);
         Check(app.m_folders[0].previews[0].loadFailed && !app.m_folders[0].previews[0].isLoading,
             "shared failure releases loading");
 
         Folders();
-        auto removed = PreviewRequest(true, 0, 0);
-        auto kept = PreviewRequest(false, 0, 1);
+        auto removed = PreviewRequest(0, 0);
+        auto kept = PreviewRequest(0, 1);
         app.DeleteImage(L"missing-a.png");
         Deliver(removed);
         Check(app.m_folders[0].previews.size() == 1 && app.m_folders[0].previews[0].isLoading &&
@@ -435,24 +433,22 @@ public:
     }
 
     // Preserves the pre-007 greedy formulas and tie-breaking, writing only caller-owned reference rects.
-    void ReferenceLayout(bool library, std::vector<RectF>& result) {
+    void ReferenceLayout(std::vector<RectF>& result) {
         result.clear();
         if (app.m_currentFolderIdx < 0 || app.m_currentFolderIdx >= static_cast<int>(app.m_folders.size())) return;
         const auto& previews = app.m_folders[app.m_currentFolderIdx].previews;
         const float width = app.m_renderer.GetTargetSize().ToFloat().width;
-        const float itemWidth = library ? 180.0f : 200.0f;
-        const float gap = library ? 15.0f : app.m_waterfallPage.m_gridSpacing;
-        float available = library ? width - (width / 2.0f + 50.0f) : width - 100.0f;
-        if (!library && available < 100.0f) available = width;
-        int columns = library ? static_cast<int>((available - gap) / (itemWidth + gap)) :
-            static_cast<int>((available + gap) / (itemWidth + gap));
+        const float itemWidth = 200.0f;
+        const float gap = app.m_waterfallPage.m_gridSpacing;
+        float available = width - 100.0f;
+        if (available < 100.0f) available = width;
+        int columns = static_cast<int>((available + gap) / (itemWidth + gap));
         columns = std::max(1, columns);
-        if (!library && app.m_waterfallPage.m_columnsNumber > 0)
+        if (app.m_waterfallPage.m_columnsNumber > 0)
             columns = std::min(columns, app.m_waterfallPage.m_columnsNumber);
-        std::vector<float> heights(columns, library ? 10.0f : 90.0f);
+        std::vector<float> heights(columns, 90.0f);
         const float layoutWidth = columns * itemWidth + (columns - 1) * gap;
-        const float startX = library ? (width / 2.0f + 50.0f) + (available - layoutWidth) / 2.0f :
-            (width - layoutWidth) / 2.0f;
+        const float startX = (width - layoutWidth) / 2.0f;
         result.resize(previews.size());
         for (size_t i = 0; i < previews.size(); ++i) {
             int column = 0;
@@ -465,24 +461,21 @@ public:
         }
     }
 
-    // Executes both real caches and compares all rect bits against the original greedy formulas.
+    // Executes the Waterfall cache and compares all rect bits against the original greedy formulas.
     void CheckLayouts() {
         if (app.m_currentFolderIdx < 0 || app.m_currentFolderIdx >= static_cast<int>(app.m_folders.size())) {
-            app.m_libraryPage.CalculateLayout();
             app.m_waterfallPage.CalculateLayout();
-            Check(!app.m_libraryPage.m_layoutValid && !app.m_waterfallPage.m_layoutValid &&
+            Check(!app.m_waterfallPage.m_layoutValid &&
                 app.m_waterfallPage.m_previewRects.empty(), "invalid selection clears cache validity");
             return;
         }
         std::vector<RectF> expected;
-        for (const bool library : {true, false}) {
-            ReferenceLayout(library, expected);
-            if (library) app.m_libraryPage.CalculateLayout();
-            else app.m_waterfallPage.CalculateLayout();
-            const auto& previews = app.m_folders[app.m_currentFolderIdx].previews;
-            if (!library) Check(app.m_waterfallPage.m_previewRects.size() == expected.size(), "Waterfall rect count matches");
+        {
+            ReferenceLayout(expected);
+            app.m_waterfallPage.CalculateLayout();
+            Check(app.m_waterfallPage.m_previewRects.size() == expected.size(), "Waterfall rect count matches");
             for (size_t i = 0; i < expected.size(); ++i) {
-                const auto& rect = library ? previews[i].rect : app.m_waterfallPage.m_previewRects[i];
+                const auto& rect = app.m_waterfallPage.m_previewRects[i];
                 Check(std::memcmp(&rect, &expected[i], sizeof(RectF)) == 0, "layout rect bits match reference");
             }
         }
@@ -490,14 +483,10 @@ public:
 
     // Reuses a sentinel output on a stable frame, then restores it through the normal invalidation contract.
     void CheckLayoutHit() {
-        auto& preview = app.m_folders[app.m_currentFolderIdx].previews[0];
         const RectF marker = RectF::FromXYWH(-123, -456, 7, 8);
-        preview.rect = marker;
         app.m_waterfallPage.m_previewRects[0] = marker;
-        app.m_libraryPage.CalculateLayout();
         app.m_waterfallPage.CalculateLayout();
-        Check(std::memcmp(&preview.rect, &marker, sizeof(RectF)) == 0 &&
-            std::memcmp(&app.m_waterfallPage.m_previewRects[0], &marker, sizeof(RectF)) == 0,
+        Check(std::memcmp(&app.m_waterfallPage.m_previewRects[0], &marker, sizeof(RectF)) == 0,
             "stable keys do not reconstruct geometry");
         app.m_folderData.NotifyPreviewLayoutChanged();
         CheckLayouts();
@@ -549,22 +538,22 @@ public:
             app.m_currentFolderIdx = 0;
             CheckLayouts();
         }
-        // Real LoadPreviewTexture/ProcessPendingTextures callbacks from each page invalidate both caches.
-        for (const bool library : {true, false}) {
+        // Real LoadPreviewTexture/ProcessPendingTextures callbacks from Waterfall invalidate the Waterfall cache.
+        {
             Folders();
             CheckLayouts();
-            const auto callback = PreviewRequest(library, 0, 0);
+            const auto callback = PreviewRequest(0, 0);
             const auto before = app.m_folderData.GetPreviewLayoutRevision();
             auto image = std::make_shared<ImageData>();
             image->width = 100;
             image->height = 333;
             Deliver(callback, image);
-            Check(app.m_folderData.GetPreviewLayoutRevision() != before, "either page completion invalidates shared geometry");
+            Check(app.m_folderData.GetPreviewLayoutRevision() != before, "Waterfall completion invalidates shared geometry");
             CheckLayouts();
             const auto applied = app.m_folderData.GetPreviewLayoutRevision();
             Deliver(callback, image);
             Check(app.m_folderData.GetPreviewLayoutRevision() == applied, "duplicate completion does not invalidate");
-            Deliver(PreviewRequest(library, 0, 1));
+            Deliver(PreviewRequest(0, 1));
             Check(app.m_folderData.GetPreviewLayoutRevision() == applied, "failed placeholder keeps geometry revision");
         }
         Folders();
@@ -580,7 +569,7 @@ public:
         revision = app.m_folderData.GetPreviewLayoutRevision();
         app.m_fileList.clear();
         app.DeleteImage(L"missing-a.png");
-        Check(app.m_folderData.GetPreviewLayoutRevision() != revision, "App deletion invalidates both layouts");
+        Check(app.m_folderData.GetPreviewLayoutRevision() != revision, "App deletion invalidates Waterfall layout");
         CheckLayouts();
         // Same slot/count replacement and folder-vector relocation use the shared mutation contract.
         app.m_folders.erase(app.m_folders.begin());
@@ -590,7 +579,6 @@ public:
         app.m_folderData.NotifyPreviewLayoutChanged();
         CheckLayouts();
         app.m_currentFolderIdx = -1;
-        app.m_libraryPage.CalculateLayout();
         app.m_waterfallPage.CalculateLayout();
         CheckLayouts();
         revision = app.m_folderData.GetPreviewLayoutRevision();
@@ -616,7 +604,7 @@ public:
             }
             app.m_folderData.NotifyPreviewLayoutChanged();
             app.m_renderer.m_width = 1601;
-            for (const bool library : {true, false}) {
+            {
                 for (const bool forced : {false, true}) {
                     std::vector<double> referenceTimes, cachedTimes;
                     for (int sample = 0; sample < 6; ++sample) {
@@ -624,13 +612,11 @@ public:
                             const auto begin = std::chrono::steady_clock::now();
                             for (int repeat = 0; repeat < 100; ++repeat) {
                                 if (old) {
-                                    if (library) app.m_libraryPage.m_layoutValid = false;
-                                    else app.m_waterfallPage.m_layoutValid = false;
+                                    app.m_waterfallPage.m_layoutValid = false;
                                 } else if (forced) {
                                     app.m_folderData.NotifyPreviewLayoutChanged();
                                 }
-                                if (library) app.m_libraryPage.CalculateLayout();
-                                else app.m_waterfallPage.CalculateLayout();
+                                app.m_waterfallPage.CalculateLayout();
                             }
                             return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - begin).count() / 100;
                         };
@@ -641,7 +627,7 @@ public:
                     }
                     std::sort(referenceTimes.begin(), referenceTimes.end());
                     std::sort(cachedTimes.begin(), cachedTimes.end());
-                    std::cout << count << ',' << (library ? "Library" : "Waterfall") << ',' << (forced ? "forced" : "stable")
+                    std::cout << count << ',' << "Waterfall" << ',' << (forced ? "forced" : "stable")
                         << ',' << referenceTimes[2] << ',' << cachedTimes[2] << '\n';
                 }
             }
@@ -999,7 +985,6 @@ public:
                         progressive->gpuBitmap = bitmap;
                         Check(app.m_folderData.CompletePreview(preview.pendingRequest, progressive), "snapshot progressive completion");
                     }
-                    for (int page = 0; page < (grids ? 2 : 1); ++page) {
                     renderer.BeginFrame();
                     renderer.Clear(Color::Transparent());
                     if (textOnly) {
@@ -1007,11 +992,9 @@ public:
                     } else if (grids) {
                         app.m_folders[0].scrollOffset = state == 0 ? 0.0f : -135.25f * state;
                         app.m_waterfallPage.m_scrollOffset = app.m_folders[0].scrollOffset;
-                        app.m_libraryPage.m_hoveredPreviewIdx = state == 0 ? -1 : 3;
                         app.m_waterfallPage.m_hoveredPreviewIdx = state == 0 ? -1 : 3;
                         const auto rect = RectF::FromXYWH(0, 0, static_cast<float>(width), 480);
-                        if (page == 0) app.m_libraryPage.DrawPreviewsGrid(renderer, rect);
-                        else app.m_waterfallPage.DrawPreviewsGrid(renderer, rect);
+                        app.m_waterfallPage.DrawPreviewsGrid(renderer, rect);
                     } else {
                         strip.Draw(renderer);
                         app.m_viewerPage.DrawOverlayInfo(renderer);
@@ -1024,7 +1007,6 @@ public:
                         stream.write(reinterpret_cast<const char*>(mapped.bits + row * mapped.pitch), width * 4);
                     Check(SUCCEEDED(readable->Unmap()), "snapshot unmap");
                     ++frames;
-                    }
                 }
             }
         }
@@ -1110,7 +1092,7 @@ public:
         }
 
         // 0 retained/reordered, 1 removed, 2 recreated, 3 changed path, 4 duplicate, 5 failure, 6 replacement.
-        for (int consumer = 0; consumer < 3; ++consumer) {
+        for (int consumer = 0; consumer < 2; ++consumer) {
             for (int mutation = 0; mutation < 7; ++mutation) {
                 auto& strip = app.m_thumbnailStrip;
                 strip.SetFileList({});
@@ -1118,8 +1100,7 @@ public:
                 if (consumer == 0) {
                     strip.SetFileList({L"missing-a.png", L"missing-b.png"});
                     strip.LoadThumbnail(0);
-                } else if (consumer == 1) app.m_libraryPage.LoadPreviewTexture(0, 0);
-                else app.m_waterfallPage.LoadPreviewTexture(0, 0);
+                } else app.m_waterfallPage.LoadPreviewTexture(0, 0);
                 auto pending = TakeUploadRequest();
                 Check(static_cast<bool>(pending.isCurrent), "consumer opts into guard");
                 if (consumer == 0) {
@@ -1173,10 +1154,9 @@ public:
             }
         }
         // Removal/re-add with a new outstanding request must not let the old completion end loading.
-        for (int consumer = 0; consumer < 3; ++consumer) {
+        for (int consumer = 0; consumer < 2; ++consumer) {
             auto request = [&]() {
                 if (consumer == 0) app.m_thumbnailStrip.LoadThumbnail(0);
-                else if (consumer == 1) app.m_libraryPage.LoadPreviewTexture(0, 0);
                 else app.m_waterfallPage.LoadPreviewTexture(0, 0);
                 return TakeUploadRequest();
             };
@@ -1274,7 +1254,7 @@ public:
         Check(strip.m_thumbnails[0].loadFailed, "same path can be requested after cancellation");
 
         Folders();
-        app.m_libraryPage.LoadPreviewTexture(0, 0);
+        app.m_waterfallPage.LoadPreviewTexture(0, 0);
         app.m_waterfallPage.LoadPreviewTexture(0, 1);
         app.m_folders[0].previews.erase(app.m_folders[0].previews.begin());
         loader.CancelObsoleteRequests();
@@ -1303,28 +1283,13 @@ public:
         loader.ProcessPendingTextures(app.m_renderer);
         Check(callbacks == 0 && loader.m_pendingAnimatedTextures.empty(), "animation delivery cancellation");
 
-        // Exercise hover handlers with fixed geometry, including A->leave->A before decode and animation fallback.
+        // Exercise Waterfall hover cancellation with fixed geometry before decode.
         Folders();
         app.m_renderer.m_width = 1000;
         app.m_renderer.m_height = 700;
-        app.m_folders[0].previews[0].rect = RectF::FromXYWH(600, 100, 100, 100);
-        app.m_libraryPage.m_hoveredPreviewIdx = -1;
-        app.m_libraryPage.OnMouseMove(650, 150, {});
-        std::weak_ptr<const bool> oldHover = app.m_libraryPage.m_hoverLoadLifetime;
-        app.m_libraryPage.OnMouseMove(500, 600, {});
-        app.m_libraryPage.OnMouseMove(650, 150, {});
-        loader.CancelObsoleteRequests();
-        Check(oldHover.expired() && loader.m_taskQueue.size() == 1, "Library hover leave/re-enter cancels only prior same-path generation");
-        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
-        loader.ProcessPendingTextures(app.m_renderer); // Missing PNG animation invokes the existing static fallback.
-        Check(loader.m_taskQueue.size() == 1, "Library animation failure retains its static fallback");
-        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
-        loader.ProcessPendingTextures(app.m_renderer);
-        Check(!app.m_libraryPage.m_hoveredOriginalLoading, "Library static fallback completes under same lease");
-        app.CancelHoverLoads();
         app.m_waterfallPage.m_previewRects = {RectF::FromXYWH(100, 100, 100, 100), RectF::FromXYWH(300, 100, 100, 100)};
         app.m_waterfallPage.OnMouseMove(150, 150, {});
-        oldHover = app.m_waterfallPage.m_hoverLoadLifetime;
+        std::weak_ptr<const bool> oldHover = app.m_waterfallPage.m_hoverLoadLifetime;
         app.m_waterfallPage.OnMouseMove(900, 600, {});
         loader.CancelObsoleteRequests();
         Check(oldHover.expired() && loader.m_taskQueue.empty(), "Waterfall hover exit cancels queued animation");
@@ -1333,23 +1298,21 @@ public:
         app.m_folderData.SortFolder(0, FolderDataManager::SortMode::NameDesc);
         loader.CancelObsoleteRequests();
         Check(oldHover.expired() && loader.m_taskQueue.empty(), "sorting retains previews but cancels index-dependent hover");
-        app.m_libraryPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
-        app.m_libraryPage.m_hoveredOriginalPath = L"missing-a.png";
-        loader.LoadAnimatedAsync(L"missing-a.png", [&](auto) { ++callbacks; }, app.m_libraryPage.m_hoverLoadLifetime);
+        app.m_waterfallPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
+        app.m_waterfallPage.m_hoveredOriginalPath = L"missing-a.png";
+        loader.LoadAnimatedAsync(L"missing-a.png", [&](auto) { ++callbacks; }, app.m_waterfallPage.m_hoverLoadLifetime);
         app.DeleteImage(L"missing-a.png");
         loader.CancelObsoleteRequests();
-        Check(loader.m_taskQueue.empty() && !app.m_libraryPage.m_hoverLoadLifetime, "deleting hovered path cancels original request");
+        Check(loader.m_taskQueue.empty() && !app.m_waterfallPage.m_hoverLoadLifetime, "deleting hovered path cancels original request");
 
-        // Fresh leases on both pages are also canceled when leaving the mode.
+        // The Waterfall hover lease is also canceled when leaving the mode.
         Folders();
-        app.m_currentPage = Page::Library;
-        app.m_libraryPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
+        app.m_currentPage = Page::Waterfall;
         app.m_waterfallPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
-        loader.LoadAnimatedAsync(L"hover.gif", [&](auto) { ++callbacks; }, app.m_libraryPage.m_hoverLoadLifetime);
         loader.LoadAnimatedAsync(L"hover.gif", [&](auto) { ++callbacks; }, app.m_waterfallPage.m_hoverLoadLifetime);
         app.SetPage(Page::Viewer);
         loader.CancelObsoleteRequests();
-        Check(loader.m_taskQueue.empty() && callbacks == 0, "mode change cancels both hover generations");
+        Check(loader.m_taskQueue.empty() && callbacks == 0, "mode change cancels Waterfall hover generation");
 
         app.m_boardPage.Initialize(&app);
         app.m_boardPage.m_items.clear();
@@ -1441,8 +1404,7 @@ public:
         StripSuccess();
         StripRebuildEquivalence();
         StripVisibilityEquivalence();
-        PreviewMutations(false);
-        PreviewMutations(true);
+        PreviewMutations();
         SharedPreviews();
         LayoutCacheRegressions();
         TextFormatRegressions();

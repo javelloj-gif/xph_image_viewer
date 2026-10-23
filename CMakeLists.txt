@@ -47,7 +47,6 @@ set(SOURCES
     src/metadata/wic_metadata_reader_writer.cpp
     src/metadata/async_directory_scanner.cpp
     src/core/folder_data_manager.cpp
-    src/library/library_page.cpp
     src/board/board_page.cpp
     src/board/board_canvas.cpp
     src/board/board_item_renderer.cpp
@@ -89,7 +88,6 @@ set(HEADERS
     src/metadata/wic_metadata_reader_writer.h
     src/metadata/async_directory_scanner.h
     src/core/folder_data_manager.h
-    src/library/library_page.h
     src/board/board_page.h
     src/board/board_canvas.h
     src/board/board_item.h

@@ -78,7 +78,6 @@ public:
         };
         app.m_folderData.Initialize(&app);
         app.m_thumbnailStrip.Initialize(&app);
-        app.m_libraryPage.Initialize(&app);
         app.m_waterfallPage.Initialize(&app);
         app.m_viewerPage.Initialize(&app);
         Check(app.m_imageLoader.Initialize(0), "WIC receiver");
@@ -386,7 +385,7 @@ public:
         std::cout << "FAILURES missing_recovered=1 missing_timeout=explicit busy_forward_failed=1 failed_post=1\n";
     }
 
-    // Launches only an isolated extracted product EXE, switches its four modes and checks graceful process exit.
+    // Launches only an isolated extracted product EXE, switches the remaining modes and checks graceful process exit.
     static int PackagedCases(const std::filesystem::path& executable, const std::filesystem::path& image) {
         const auto root = executable.parent_path();
         Check(executable.filename() == L"lenteuv.exe" && image.parent_path() == root / L"test" &&
@@ -434,7 +433,7 @@ public:
             Check(WaitForSingleObject(child.hProcess, 5000) == WAIT_OBJECT_0, "packaged product graceful shutdown");
             DWORD code = 99; GetExitCodeProcess(child.hProcess, &code);
             Check(code == 0, "packaged product exit zero");
-            std::wcout << L"PACKAGE " << flag << L" modes=4 graceful_exit=0\n";
+            std::wcout << L"PACKAGE " << flag << L" modes=3 reserved_num2=sent graceful_exit=0\n";
         }
         return 0;
     }
@@ -607,7 +606,7 @@ private:
                     "retained path overrides initial file only after startup");
                 Check(primary.m_ipc.m_running.load() == !bypass, "bypass or primary server");
                 Check(!primary.m_folders.empty(), "folder/session/current-directory restored");
-                for (const auto page : {Page::Viewer, Page::Library, Page::Waterfall, Page::Board}) {
+                for (const auto page : {Page::Viewer, Page::Waterfall, Page::Board}) {
                     primary.SetPage(page);
                     primary.RenderFrame(); // Native device/presentation smoke, not a visual assertion.
                 }

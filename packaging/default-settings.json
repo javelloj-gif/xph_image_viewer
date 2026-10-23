@@ -2,9 +2,9 @@
  "settings": {
   "---general": "General",
   "ui_lang": ["en","UI language"],
-  "page_on_app_launch_from_explorer": [2,[[2,"VIEWER"],[3,"BOARD"],[4,"LIBRARY"],[5,"WATERFALL"]],"Page on App Launch (when opened from Explorer)"],
-  "page_to_open_on_drag_and_drop": [2,[[2,"VIEWER"],[3,"BOARD"],[4,"LIBRARY"],[5,"WATERFALL"]],"Page to open on Drag&Drop"],
-  "debug_page": [1,[[1,"START"],[2,"VIEWER"],[3,"BOARD"],[4,"LIBRARY"],[5,"WATERFALL"]],"Page to open when run debug mode"],
+  "page_on_app_launch_from_explorer": [2,[[2,"VIEWER"],[3,"BOARD"],[5,"WATERFALL"]],"Page on App Launch (when opened from Explorer)"],
+  "page_to_open_on_drag_and_drop": [2,[[2,"VIEWER"],[3,"BOARD"],[5,"WATERFALL"]],"Page to open on Drag&Drop"],
+  "debug_page": [1,[[1,"START"],[2,"VIEWER"],[3,"BOARD"],[5,"WATERFALL"]],"Page to open when run debug mode"],
   "run_on_windows_startup": [false,"Run on Windows Startup"],
   "do_not_show_start_dialog": [true,"Supress start dialog and run lite mode"],
   "show_fullscreen": [true,"Full-screen mode on application start"],

@@ -30,13 +30,13 @@ std::wstring FolderDataManager::GetFavoritesFilePath() const {
     return (GetExecutableUserDataRoot() / "fav.txt").wstring();
 }
 
-void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLoading, bool loadImage) {
+void FolderDataManager::AddFolder(const std::wstring& folderPath, bool restoringSession, bool loadImage) {
     namespace fs = std::filesystem;
     
     auto normPath = NormalizeFolderPath(folderPath);
     for (size_t i = 0; i < m_folders.size(); ++i) {
         if (PathEquals(m_folders[i].folderPath, normPath)) {
-            if (!libraryLoading) {
+            if (!restoringSession) {
                 SetCurrentFolderIndex(static_cast<int>(i), loadImage);
             }
             return;
@@ -57,11 +57,11 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
             }
         }
     } catch (...) {
-        LogError(std::format(L"Failed to scan library directory: {}", normPath));
+        LogError(std::format(L"Failed to scan directory: {}", normPath));
     }
 
     if (folder.filePaths.empty()) {
-        LogInfo(std::format(L"Library directory contains no supported images: {}", normPath));
+        LogInfo(std::format(L"Directory contains no supported images: {}", normPath));
         return;
     }
 
@@ -79,7 +79,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
     int currentSortMode = m_app ? m_app->m_settings.sort_mode : 0;
     SortFolder(static_cast<int>(m_folders.size() - 1), static_cast<SortMode>(currentSortMode));
 
-    if (!libraryLoading) {
+    if (!restoringSession) {
         SetCurrentFolderIndex(static_cast<int>(m_folders.size() - 1), loadImage);
         SaveSession();
     }

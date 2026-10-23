@@ -11,14 +11,24 @@
 
 namespace kv {
 
+// Names persisted mode IDs for option labels; retired/unknown IDs have no active mode.
 static std::wstring GetPageName(int pageVal) {
     switch (pageVal) {
         case 1: return L"Start";
         case 2: return L"Viewer";
         case 3: return L"Board";
-        case 4: return L"Library";
         case 5: return L"Waterfall";
         default: return L"Unknown";
+    }
+}
+
+// Cycles existing persisted IDs without compacting them or offering the reserved value 4.
+static int NextPageValue(int value) {
+    switch (value) {
+        case 1: return 2;
+        case 2: return 3;
+        case 3: return 5;
+        default: return 1;
     }
 }
 
@@ -166,8 +176,7 @@ void OptionsMenu::BuildControls() {
         launchBtn.label = _(L"Launch Page") + L": " + GetPageName(s.page_on_app_launch_from_explorer);
         launchBtn.rect = RectF::FromXYWH(contentLeft, currentY, 350.0f, 30.0f);
         launchBtn.onClick = [this, &s]() {
-            s.page_on_app_launch_from_explorer++;
-            if (s.page_on_app_launch_from_explorer > 5) s.page_on_app_launch_from_explorer = 1;
+            s.page_on_app_launch_from_explorer = NextPageValue(s.page_on_app_launch_from_explorer);
             s.Save();
             BuildControls();
         };
@@ -180,8 +189,7 @@ void OptionsMenu::BuildControls() {
         dndBtn.label = _(L"Drag & Drop Page") + L": " + GetPageName(s.page_to_open_on_drag_and_drop);
         dndBtn.rect = RectF::FromXYWH(contentLeft, currentY, 350.0f, 30.0f);
         dndBtn.onClick = [this, &s]() {
-            s.page_to_open_on_drag_and_drop++;
-            if (s.page_to_open_on_drag_and_drop > 5) s.page_to_open_on_drag_and_drop = 1;
+            s.page_to_open_on_drag_and_drop = NextPageValue(s.page_to_open_on_drag_and_drop);
             s.Save();
             BuildControls();
         };
@@ -194,8 +202,7 @@ void OptionsMenu::BuildControls() {
         debugBtn.label = _(L"Default Debug Page") + L": " + GetPageName(s.debug_page);
         debugBtn.rect = RectF::FromXYWH(contentLeft, currentY, 350.0f, 30.0f);
         debugBtn.onClick = [this, &s]() {
-            s.debug_page++;
-            if (s.debug_page > 5) s.debug_page = 1;
+            s.debug_page = NextPageValue(s.debug_page);
             s.Save();
             BuildControls();
         };

@@ -7,7 +7,7 @@
 //           multi-language support and Windows shell integration.
 // Description: App is the central coordinator for the LenteUV application,
 //              managing the main event loop, routing system messages, and
-//              page navigation across Viewer, Board, Library and Waterfall pages.
+//              page navigation across Viewer, Board and Waterfall pages.
 // Responsibility: Orchestrate the Win32 window message loop and delegate
 //                 actions to page components.
 // ============================================================================
@@ -23,7 +23,6 @@
 #include "rendering/animation_controller.h"
 #include "viewer/viewer_page.h"
 #include "ui/thumbnail_strip.h"
-#include "library/library_page.h"
 #include "board/board_page.h"
 #include "waterfall/waterfall_page.h"
 #include "core/single_instance_ipc.h"
@@ -34,11 +33,11 @@
 
 namespace kv {
 
+// Persisted mode IDs: leave the retired value 4 unassigned; never compact remaining IDs.
 enum class Page {
     Start = 1,
     Viewer = 2,
     Board = 3,
-    Library = 4,
     Waterfall = 5
 };
 
@@ -97,18 +96,27 @@ private:
     // ── Event Handlers ────────────────────────────────────────────────────
     void OnPaint();
     void OnResize(uint32_t width, uint32_t height);
+    // UI: tracks radial hover/tooltip, then delegates movement to the active page.
     void OnMouseMove(float x, float y, KeyModifiers mods);
+    // UI: dispatches overlays/radial/page clicks; the reserved radial slot consumes without action.
     void OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
+    // UI: consumes radial releases and routes remaining releases to the active page.
     void OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
+    // UI: routes scroll through overlays and the active page.
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
+    // UI: delegates double-click gestures to the active page and viewer strip.
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
+    // UI: offers keys to editors/pages before global shortcuts; NUM2/2 have no navigation action.
     void OnKeyDown(uint32_t vk, KeyModifiers mods);
     void OnChar(wchar_t ch);
+    // UI: loads dropped content using the existing preference; Board retains its own drop path.
     void OnFileDrop(std::vector<std::wstring> files);
     void OnMouseLeave();
 
     // ── Rendering ─────────────────────────────────────────────────────────
+    // UI: updates active consumers, delivers pending textures, draws overlays and presents.
     void RenderFrame();
+    // UI: draws Viewer, Board or Waterfall using renderer-owned resources.
     void DrawViewerContent();
     void DrawImageFitted(ID2D1Bitmap1* bitmap);
     void DrawCheckerboard(const RectF& rect);
@@ -132,14 +140,13 @@ private:
     void ResetView();
     // UI: switches mode, cancels departing consumers' work and preserves ready caches/gestures.
     void SetPage(Page page);
-    // UI: drops both hover leases/results on folder/page changes, preventing late same-path animation reuse.
+    // UI: drops Waterfall hover lease/results on folder/page changes, preventing late same-path animation reuse.
     void CancelHoverLoads();
     RectF CalculateImageRect() const;
 
     // ── Subsystems ────────────────────────────────────────────────────────
     friend class ViewerPage;
     friend class ThumbnailStrip;
-    friend class LibraryPage;
     friend class BoardPage;
     friend class BoardSearchManager;
     friend class BoardTagScanner;
@@ -158,7 +165,6 @@ private:
     FolderDataManager   m_folderData;
     ViewerPage          m_viewerPage;
     ThumbnailStrip      m_thumbnailStrip;
-    LibraryPage         m_libraryPage;
     BoardPage           m_boardPage;
     WaterfallPage       m_waterfallPage;
     SingleInstanceIpc   m_ipc;
@@ -196,6 +202,7 @@ private:
     bool    m_radialMenuVisible = false;
     float   m_radialMenuProgress = 0.0f; // Animated 0.0 to 1.0
     int     m_radialMenuHoveredIdx = -1;  // -1 if none, 0 to 3
+    // UI: draws three mode targets and a gray reserved slot with an informational tooltip.
     void    DrawRadialMenu();
     PointF  GetRadialButtonCenter(int idx, float progress);
 

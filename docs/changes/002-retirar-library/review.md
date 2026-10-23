@@ -73,7 +73,7 @@ La revisión del diff de implementación sigue pendiente; aún no existe ese dif
 - Coste: medio. Release/CTest y revisión del diff de tests; checks cambiarán de cantidad,
   por lo que no exigir conteos históricos como aceptación. Necesario AC-04/05.
 
-## Diseño y decisiones pendientes
+## Diseño inicial y decisión posterior
 
 Conservar Start=1, Viewer=2, Board=3, Waterfall=5, con hueco 4 sin enumerador.
 No cambiar Start, rutas, sesión/favoritos, KTAG/KBRD ni propiedad/hilos/cancelación.
@@ -81,13 +81,33 @@ OnChar debe seguir entregando 2 a tags/Board; reservar teclas globales no exige
 filtrar caracteres. El placeholder debe poder mostrar tooltip sin target, resaltado
 activo o propagación del clic a la página. Waterfall mantiene índice radial 2.
 
-La consulta conjunta de preferencias y texto está enviada; ver spec. El momento
-preciso de validación, cancelar y guardar se fijará según respuesta antes de código.
-La validación nativa de 002 debe omitir reproducción del fallo IPC conocido, y las
-suites aisladas nunca se presentarán como aceptación funcional completa de IPC.
+La consulta inicial recibió elección de selector y texto — / Unavailable. Después
+el propietario detuvo el trabajo ampliado y ordenó eliminar Library sin diálogos
+ni opciones nuevas. El selector provisional fue retirado íntegramente; R002-01
+queda fuera del alcance final por esa instrucción. No se afirma compatibilidad con
+preferencias antiguas 4 ni se añade fallback/migración. El texto reservado permanece.
 
-## Estado
+## Revisión del diff final
 
-Inventario/diseño inicial completo dentro de la cobertura declarada. Sin fuentes
-modificadas, build, CTest ni recorridos visuales de 002. Revisión del diff y aceptación
-pendientes. No hay recomendación de extracción ni de reabrir AR-002/AR-005.
+Evidencia de código, sobre b1681c0 más diff local simplificado:
+
+- LibraryPage y sus dos fuentes eliminados, igual que include/friend/miembro/enum,
+  CMake, inicialización/update/draw y ramas exclusivas de entrada/sync/hover.
+- NUM2/2 no seleccionan modo. OnChar y editores sin cambios. Placeholder gris y
+  sin target/activación; clic y doble clic no llegan al contenido de fondo.
+- Save/defaults/GetPageName/ciclo de opciones ya no ofrecen Library/4; no se añadieron
+  opciones ni diálogos. Sin cambios finales en main, loader o serializadores.
+- Gestor/modelos core conservados; solo nombres/logs/comentarios heredados ajustados.
+  Waterfall conserva tokens/rutas, revisión de layout y leases de cancelación.
+- R002-02 atendido: regresiones de Waterfall/tira/Board conservadas; casos exclusivos
+  retirados. Los snapshots de layout actuales generan 12 frames, frente a 24 históricos.
+- Único cambio de OnIpcOpenPath: retirar SetPage(Library) al abrir una carpeta.
+  Ninguna investigación o corrección de IPC-014-01.
+- Búsqueda final en src/tests/CMake/defaults: sin referencias al modo Library;
+  C++ Standard Library en pch es una coincidencia ajena y se conserva.
+
+Sin otros hallazgos accionables dentro de este diff por inspección. No se revisa
+el repositorio completo ni se atribuye mejora de rendimiento. La eliminación de
+compatibilidad específica del 4 es una decisión de alcance del propietario, no
+una corrección demostrada de datos antiguos. Validación final en result.md;
+observación visual final pendiente tras detener la campaña ampliada.

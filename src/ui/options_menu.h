@@ -47,6 +47,7 @@ private:
         std::function<void()> onClick;
     };
 
+    // UI: rebuilds bound controls; mode buttons cycle persisted IDs while skipping reserved 4.
     void BuildControls();
     RectF GetBounds() const;
 

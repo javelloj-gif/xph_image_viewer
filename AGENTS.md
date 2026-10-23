@@ -1,7 +1,7 @@
 # LenteUV: entrada para agentes
 
-Visor de imágenes nativo de Windows en C++20. Cuatro modos: Viewer, Library,
-Waterfall y Board. Conserva la atribución a Sergei Krumas y xPhang y la licencia
+Visor de imágenes nativo de Windows en C++20. Tres modos: Viewer, Waterfall
+y Board. Conserva la atribución a Sergei Krumas y xPhang y la licencia
 del repositorio. No confundir carpetas/muestras heredadas con dependencias activas.
 
 ## Leer según la tarea
