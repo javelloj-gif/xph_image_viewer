@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "waterfall_page.h"
 #include "core/app.h"
+#include "common/performance_trace.h"
 #include <algorithm>
 #include <filesystem>
 
@@ -174,6 +175,7 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
     ComPtr<ID2D1Factory> factory;
     renderer.GetD2DContext()->GetFactory(&factory);
 
+    bool allReady=true; size_t visible=0;
     // Draw normal previews (using virtual scrolling)
     for (size_t i = 0; i < folder.previews.size(); ++i) {
         if (static_cast<int>(i) == activeIdx) {
@@ -192,6 +194,7 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
             continue;
         }
 
+        ++visible; allReady &= item.texture && item.texture->HasGpuBitmap();
         if (item.texture && item.texture->HasGpuBitmap()) {
             bool rounded = (m_cornerRadius > 0.0f);
             ComPtr<ID2D1Layer> layer;
@@ -228,6 +231,7 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
         }
     }
 
+    m_app->m_waterfallReadyDrawnThisFrame=allReady && visible;
     // Draw enlarged hovered preview on top of other cells (with shadow)
     if (activeIdx >= 0 && activeIdx < static_cast<int>(folder.previews.size()) && !m_viewerModal) {
         auto& item = folder.previews[activeIdx];
@@ -376,13 +380,14 @@ void WaterfallPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
     if (item.texture || item.isLoading || item.loadFailed) return;
 
     const auto request = std::make_shared<const std::wstring>(item.filePath);
+    PerformanceTrace::Event("waterfall.request",m_app->m_imageGeneration,previewIdx);
     item.pendingRequest = request;
     item.loadLifetime = std::make_shared<const bool>(true);
     item.isLoading = true;
     m_app->m_imageLoader.LoadAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
         const bool hasImage = img != nullptr;
         if (m_app->m_folderData.CompletePreview(request, std::move(img))) {
-            if (hasImage) CalculateLayout();
+            if (hasImage) { CalculateLayout(); PerformanceTrace::Event("waterfall.ready",m_app->m_imageGeneration); }
             m_app->m_window.RequestRedraw();
         }
     }, 200, 200, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }, item.loadLifetime); // 200px width previews

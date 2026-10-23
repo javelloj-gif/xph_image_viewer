@@ -172,6 +172,7 @@ void ViewerPage::DrawImageFitted(Renderer& renderer, ID2D1Bitmap1* bitmap) {
         : BitmapInterpolation::HighQuality;
 
     renderer.DrawBitmap(bitmap, imageRect, 1.0f, interp);
+    m_app->m_originalDrawnThisFrame=true;
 
     if (m_rotation != 0.0f) renderer.PopTransform();
     renderer.PopTransform();

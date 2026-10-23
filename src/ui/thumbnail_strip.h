@@ -26,6 +26,7 @@ struct ThumbnailInfo {
 };
 
 class ThumbnailStrip {
+    friend class App;
     friend class AsyncPreviewTests; // Exercises real requests and callbacks without visible UI.
 public:
     ThumbnailStrip() = default;

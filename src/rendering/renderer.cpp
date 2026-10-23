@@ -248,7 +248,15 @@ void Renderer::BeginFrame() {
     m_clipDepth = 0;
 }
 
-void Renderer::EndFrame() {
+UINT Renderer::GetLastPresentId() const {
+    UINT count=0;
+    if (m_swapChain) m_swapChain->GetLastPresentCount(&count);
+    return count;
+}
+bool Renderer::GetPresentationStatistics(DXGI_FRAME_STATISTICS& stats) const {
+    return m_swapChain && m_swapChain->GetFrameStatistics(&stats)==S_OK;
+}
+HRESULT Renderer::EndFrame() {
     while (m_clipDepth > 0) {
         m_d2dContext->PopAxisAlignedClip();
         --m_clipDepth;
@@ -258,8 +266,9 @@ void Renderer::EndFrame() {
 
     if (hr == D2DERR_RECREATE_TARGET) {
         HandleDeviceLost(m_hwnd, m_translucent);
-        return;
+        return hr;
     }
+    if (FAILED(hr)) return hr;
 
     DXGI_PRESENT_PARAMETERS params = {};
     hr = m_swapChain->Present1(1, 0, &params);
@@ -267,6 +276,7 @@ void Renderer::EndFrame() {
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
         HandleDeviceLost(m_hwnd, m_translucent);
     }
+    return hr;
 }
 
 void Renderer::Clear(const Color& color) {

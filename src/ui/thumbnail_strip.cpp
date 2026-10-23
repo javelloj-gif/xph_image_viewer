@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "thumbnail_strip.h"
 #include "core/app.h"
+#include "common/performance_trace.h"
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -158,6 +159,7 @@ void ThumbnailStrip::LoadThumbnail(int index) {
 
     if (!info.texture && !info.isLoading && !info.loadFailed) {
         const auto request = std::make_shared<const std::wstring>(info.path);
+        PerformanceTrace::Event("strip.request",m_app->m_imageGeneration,index);
         info.pendingRequest = request;
         info.loadLifetime = std::make_shared<const bool>(true);
         info.isLoading = true;
@@ -187,6 +189,7 @@ void ThumbnailStrip::CompleteThumbnail(const ImageRequestToken& request, std::sh
     it->isLoading = false;
     if (image && image->gpuBitmap) {
         it->texture = image->gpuBitmap;
+        PerformanceTrace::Event("strip.ready",m_app->m_imageGeneration);
     } else {
         it->loadFailed = true;
     }
@@ -279,6 +282,7 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     renderer.PushClip(RectF::FromXYWH(0, windowHeight - HEIGHT + 30, windowWidth, HEIGHT - 30));
 
     const auto [first, end] = GetVisibleRange(windowWidth);
+    m_app->m_stripReadyDrawnThisFrame=first<end && std::abs(m_scrollX-m_targetScrollX)<0.1f && std::all_of(m_thumbnails.begin()+first,m_thumbnails.begin()+end,[](const ThumbnailInfo& item) {return item.texture!=nullptr;});
     for (size_t i = first; i < end; ++i) {
         RectF rect = GetThumbnailRect(static_cast<int>(i), windowWidth, windowHeight);
         if (rect.right < 0 || rect.left > windowWidth) continue;

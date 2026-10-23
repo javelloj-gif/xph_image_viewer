@@ -5,6 +5,7 @@
 // ============================================================================
 #include "common/pch.h"
 #include "app.h"
+#include "common/performance_trace.h"
 #include <algorithm>
 #include <ranges>
 #include "shell/shell_integrator.h"
@@ -73,6 +74,7 @@ AppConfig App::ParseCommandLine(int argc, wchar_t* argv[]) {
 // ─── Initialize ──────────────────────────────────────────────────────────────
 
 InitResult App::Initialize(const AppConfig& config) {
+    PerformanceSpan startupSpan("initialize.begin", "initialize.end");
     auto trace = [](std::string_view msg) {
         if (detail::g_enableDebugIpc) {
             std::ofstream dbg("debug_ipc.txt", std::ios::app);
@@ -200,6 +202,7 @@ InitResult App::Initialize(const AppConfig& config) {
         int cmdShow = SW_SHOW;
         if (config.startMaximized) cmdShow = SW_SHOWMAXIMIZED;
         m_window.Show(cmdShow);
+        PerformanceTrace::Event("window.show");
     }
 
     if (config.startFullscreen || m_settings.show_fullscreen) {
@@ -375,6 +378,7 @@ void App::RenderFrame() {
     m_renderer.BeginFrame();
     m_renderer.Clear(Color::Black(m_settings.window_opacity));
 
+    m_originalDrawnThisFrame=false; m_stripReadyDrawnThisFrame=false; m_waterfallReadyDrawnThisFrame=false;
     // Draw content based on current state
     DrawViewerContent();
     DrawCloseButton();
@@ -388,7 +392,33 @@ void App::RenderFrame() {
         DrawRadialMenu();
     }
 
-    m_renderer.EndFrame();
+    const auto present=m_renderer.EndFrame();
+    if (present==S_OK) {
+        if (m_stripReadyDrawnThisFrame) PerformanceTrace::Event("strip.viewport.submitted",m_imageGeneration);
+        if (m_waterfallReadyDrawnThisFrame) PerformanceTrace::Event("waterfall.viewport.submitted",m_imageGeneration);
+    }
+    static bool firstContent = true;
+    if (present==S_OK && firstContent && m_originalDrawnThisFrame) {
+        PerformanceTrace::Event("frame.original.submitted",m_imageGeneration);
+        m_originalPresentId=m_renderer.GetLastPresentId();
+        firstContent = false;
+        if (PerformanceTrace::Get().Enabled()) {
+            const auto scenario=PerformanceTrace::Environment(L"LENTEUV_PERF_SCENARIO");
+            if (scenario==L"strip") m_thumbnailStrip.m_mouseMoveTimer=10.0;
+            if (scenario==L"waterfall") { SetPage(Page::Waterfall); PerformanceTrace::Event("waterfall.demand",m_imageGeneration); }
+        }
+    }
+    if (PerformanceTrace::Get().Enabled()) {
+        DXGI_FRAME_STATISTICS stats{};
+        if (m_originalPresentId && m_renderer.GetPresentationStatistics(stats) && stats.PresentCount==m_originalPresentId) {
+            PerformanceTrace::Event("frame.original.display_confirmed",m_imageGeneration,stats.PresentCount); m_originalPresentId=0;
+        }
+        const auto limit = PerformanceTrace::Environment(L"LENTEUV_PERF_EXIT_MS");
+        static const ULONGLONG started = GetTickCount64();
+        if (!limit.empty() && GetTickCount64() - started >= wcstoull(limit.c_str(), nullptr, 10)) {
+            m_isQuitting = true; m_window.Close();
+        }
+    }
 }
 
 // ─── Draw Viewer Content ─────────────────────────────────────────────────────
@@ -590,6 +620,8 @@ void App::DrawCloseButton() {
 void App::LoadImage(const std::wstring& path) {
     namespace fs = std::filesystem;
 
+    ++m_imageGeneration; PerformanceTrace::Event("image.request",m_imageGeneration);
+    PerformanceSpan imageSpan("image.load.begin", "image.load.end");
     LogInfo(std::format(L"Loading image: {}", path));
 
     const auto loaded = m_imageLoader.LoadForViewerSync(path);

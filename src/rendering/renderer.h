@@ -25,6 +25,7 @@ enum class BitmapInterpolation {
 // ─── Renderer Class ──────────────────────────────────────────────────────────
 
 class Renderer {
+    friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
     friend class IpcDiagnosticTests; // Supplies a software D2D context, never a visible swapchain.
     friend class AsyncPreviewTests; // Compares production drawing on an offscreen WARP target.
 public:
@@ -52,7 +53,10 @@ public:
     void BeginFrame();
 
     /// End the frame and present to screen. Calls IDXGISwapChain::Present.
-    void EndFrame();
+    HRESULT EndFrame();
+    // UI diagnostics: exact DXGI present IDs/statistics; unsupported/occluded observations remain unconfirmed.
+    UINT GetLastPresentId() const;
+    bool GetPresentationStatistics(DXGI_FRAME_STATISTICS& stats) const;
 
     /// Clear the render target with the given color.
     /// For translucent windows, use Color::Transparent() or Color::Black(alpha).

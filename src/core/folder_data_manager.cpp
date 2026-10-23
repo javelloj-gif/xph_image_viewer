@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "folder_data_manager.h"
 #include "core/app.h"
+#include "common/performance_trace.h"
 #include "common/user_data_paths.h"
 #include <algorithm>
 #include <fstream>
@@ -50,6 +51,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool restoring
         folder.folderName = normPath;
     }
 
+    PerformanceSpan scanSpan("folder.scan.begin", "folder.scan.end");
     try {
         for (const auto& entry : fs::directory_iterator(normPath)) {
             if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
@@ -356,6 +358,7 @@ void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
     if (folderIdx < 0 || folderIdx >= static_cast<int>(m_folders.size())) return;
     if (m_app && folderIdx == m_currentFolderIdx) m_app->CancelHoverLoads();
     auto& folder = m_folders[folderIdx];
+    PerformanceSpan sortSpan("folder.sort.begin", "folder.sort.end");
     if (folder.filePaths.empty()) return;
 
     // Keeps file sort keys and its existing preview together during reordering.

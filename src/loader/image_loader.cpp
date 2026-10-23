@@ -5,6 +5,7 @@
 // ============================================================================
 #include "common/pch.h"
 #include "image_loader.h"
+#include "common/performance_trace.h"
 
 namespace kv {
 
@@ -214,6 +215,7 @@ std::shared_ptr<ImageData> ImageLoader::LoadSync(const std::wstring& path, uint3
 
 std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight, ImageCancellation cancel) {
     if (cancel.IsCancelled()) return nullptr;
+    PerformanceSpan decodeSpan("decode.begin", "decode.end");
     auto decoder = CreateDecoder(path);
     if (!decoder || cancel.IsCancelled()) return nullptr;
     return DecodeImage(decoder.Get(), path, targetWidth, targetHeight, cancel);
@@ -555,6 +557,7 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
 
 void ImageLoader::UploadToGpu(ImageData& image, Renderer& renderer) {
     if (!image.IsValid()) return;
+    PerformanceSpan uploadSpan("upload.begin", "upload.end");
 
     image.gpuBitmap = renderer.CreateBitmapFromMemory(
         image.pixels.data(),

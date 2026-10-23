@@ -5,6 +5,7 @@
 // ============================================================================
 #include "common/pch.h"
 #include "core/app.h"
+#include "common/performance_trace.h"
 #include <fstream>
 #include <cstdio>
 
@@ -44,6 +45,8 @@ int wWinMainImpl(
     LPWSTR    lpCmdLine,
     int       nCmdShow)
 {
+    kv::PerformanceTrace::Event("main.entry");
+    struct TraceExport { ~TraceExport() { kv::PerformanceTrace::Get().Export(); } } traceExport;
     // ── Enable Per-Monitor DPI Awareness v2 ───────────────────────────────
     // This is also declared in the manifest, but calling the API ensures
     // it takes effect even if the manifest fails to load.

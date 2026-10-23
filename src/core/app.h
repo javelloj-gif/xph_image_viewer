@@ -126,6 +126,9 @@ private:
     // ── Image Management ──────────────────────────────────────────────────
     // UI thread: consumes the shared-decoder CPU result, uploads and preserves animated/static state/selection effects.
     void LoadImage(const std::wstring& path);
+    bool m_originalDrawnThisFrame=false,m_stripReadyDrawnThisFrame=false,m_waterfallReadyDrawnThisFrame=false;
+    uint64_t m_imageGeneration=0;
+    UINT m_originalPresentId=0;
     // Adds/selects a shared folder and synchronizes page/strip state; optionally loads its image.
     void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
