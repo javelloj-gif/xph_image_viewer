@@ -167,6 +167,9 @@ InitResult App::Initialize(const AppConfig& config) {
         // WM_CLOSE destroys the HWND before WM_QUIT; stop posts and release its payloads while it is alive.
         m_window.events.onIpcOpenPath = {};
         m_ipc.Shutdown();
+        // Scanners can still invalidate this HWND; join them before Window handles WM_CLOSE destruction.
+        m_boardPage.m_tagScanner->CancelScan();
+        m_tagManager.CancelSearch();
         return true;
     };
     m_window.events.onTrayIconEvent = [this](LPARAM lp) {
@@ -710,6 +713,7 @@ void App::ApplySortMode(int mode) {
 }
 
 void App::DeleteImage(const std::wstring& path) {
+    if (m_libraryPage.m_hoveredOriginalPath == path || m_waterfallPage.m_hoveredOriginalPath == path) CancelHoverLoads();
     for (auto& folder : m_folders) {
         auto itPath = std::find(folder.filePaths.begin(), folder.filePaths.end(), path);
         if (itPath != folder.filePaths.end()) {
@@ -883,7 +887,37 @@ void App::ResetView() {
     m_viewerPage.ResetView();
 }
 
+void App::CancelHoverLoads() {
+    m_libraryPage.m_hoverLoadLifetime.reset();
+    m_libraryPage.m_hoveredOriginalPath.clear();
+    m_libraryPage.m_hoveredPreviewIdx = -1;
+    m_libraryPage.m_hoveredOriginalImage.reset();
+    m_libraryPage.m_hoveredOriginalAnim.reset();
+    m_libraryPage.m_hoveredOriginalLoading = false;
+    m_waterfallPage.m_hoverLoadLifetime.reset();
+    m_waterfallPage.m_hoveredOriginalPath.clear();
+    m_waterfallPage.m_hoveredPreviewIdx = -1;
+    m_waterfallPage.m_hoveredOriginalAnim.reset();
+    m_waterfallPage.m_hoveredOriginalLoading = false;
+}
+
 void App::SetPage(Page page) {
+    if (page != m_currentPage) {
+        CancelHoverLoads();
+        if (page != Page::Library && page != Page::Waterfall) m_folderData.CancelPreviewLoads();
+        if (page != Page::Viewer) {
+            m_thumbnailStrip.CancelPendingLoads();
+        }
+        if (m_currentPage == Page::Board) {
+            for (auto& item : m_boardPage.m_items) {
+                item.loadLifetime.reset();
+                item.pendingRequest.reset();
+                item.isLoading = false;
+            }
+            m_boardPage.m_tagScanner->CancelScan();
+            m_tagManager.CancelSearch();
+        }
+    }
     m_currentPage = page;
     if (page == Page::Viewer) {
         m_thumbnailStrip.SetFileList(m_fileList);

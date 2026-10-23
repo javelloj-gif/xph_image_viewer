@@ -386,10 +386,64 @@ public:
         std::cout << "FAILURES missing_recovered=1 missing_timeout=explicit busy_forward_failed=1 failed_post=1\n";
     }
 
+    // Launches only an isolated extracted product EXE, switches its four modes and checks graceful process exit.
+    static int PackagedCases(const std::filesystem::path& executable, const std::filesystem::path& image) {
+        const auto root = executable.parent_path();
+        Check(executable.filename() == L"lenteuv.exe" && image.parent_path() == root / L"test" &&
+            std::filesystem::is_directory(root / L"user_data"), "package smoke requires owned EXE/test/user_data staging");
+        for (const auto* flag : {L"--multiple", L"--lite"}) {
+            std::wstring command = L"\"" + executable.wstring() + L"\" " + flag + L" --windowed \"" + image.wstring() + L"\"";
+            STARTUPINFOW startup = {};
+            startup.cb = sizeof(startup);
+            startup.dwFlags = STARTF_USESHOWWINDOW;
+            startup.wShowWindow = SW_HIDE;
+            PROCESS_INFORMATION child = {};
+            Check(CreateProcessW(executable.c_str(), command.data(), nullptr, nullptr, FALSE, 0, nullptr,
+                root.c_str(), &startup, &child) != FALSE, "packaged product launch");
+            // Owns only this launched child; failure cleanup never targets another app instance.
+            struct OwnedChild {
+                PROCESS_INFORMATION process;
+                // Reaps the private child on failed assertions; successful cases already exited normally.
+                ~OwnedChild() {
+                    if (WaitForSingleObject(process.hProcess, 0) == WAIT_TIMEOUT) {
+                        TerminateProcess(process.hProcess, 99);
+                        WaitForSingleObject(process.hProcess, 1000);
+                    }
+                    CloseHandle(process.hThread); CloseHandle(process.hProcess);
+                }
+            } owned{child};
+            Check(WaitForInputIdle(child.hProcess, 5000) == 0, "packaged product reaches message loop");
+            struct WindowSearch { DWORD pid; HWND hwnd; } search{child.dwProcessId, nullptr};
+            // Finds the application class for this child PID, never an existing personal window.
+            EnumWindows([](HWND window, LPARAM parameter) -> BOOL {
+                auto& target = *reinterpret_cast<WindowSearch*>(parameter);
+                DWORD pid = 0; GetWindowThreadProcessId(window, &pid);
+                wchar_t name[64] = {};
+                if (pid == target.pid && GetClassNameW(window, name, 64) && std::wstring_view(name) == L"LenteUVWindow") {
+                    target.hwnd = window; return FALSE;
+                }
+                return TRUE;
+            }, reinterpret_cast<LPARAM>(&search));
+            Check(search.hwnd != nullptr, "packaged product main HWND");
+            for (UINT key : {VK_NUMPAD1, VK_NUMPAD2, VK_NUMPAD3, VK_NUMPAD4, VK_NUMPAD1}) {
+                PostMessageW(search.hwnd, WM_KEYDOWN, key, 0);
+                Sleep(100);
+                Check(WaitForSingleObject(child.hProcess, 0) == WAIT_TIMEOUT, "packaged product survives mode transition");
+            }
+            Check(PostMessageW(search.hwnd, WM_CLOSE, 0, 0) != FALSE, "packaged product close");
+            Check(WaitForSingleObject(child.hProcess, 5000) == WAIT_OBJECT_0, "packaged product graceful shutdown");
+            DWORD code = 99; GetExitCodeProcess(child.hProcess, &code);
+            Check(code == 0, "packaged product exit zero");
+            std::wcout << L"PACKAGE " << flag << L" modes=4 graceful_exit=0\n";
+        }
+        return 0;
+    }
+
     // Child role uses the production transport/Initialize; failure exits preserve Win32 error numbers.
     static int Client(int argc, wchar_t** argv) {
         Check(argc == 4, "sender arguments");
         const std::wstring mode = argv[1];
+        if (mode == L"--ipc-package") return PackagedCases(argv[2], argv[3]);
         if (mode == L"--ipc-startup") return StartupCases(argv[2], std::filesystem::path(argv[3]).lexically_normal().wstring());
         if (mode == L"--ipc-app-client" || mode == L"--ipc-app-reference") {
             App secondary;

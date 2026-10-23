@@ -21,11 +21,7 @@ lista de gestos ni una matriz por flags; no atribuirle comprobaciones más espec
 ## Disposición de hallazgos y cobertura
 
 - AR-001/004: resueltos por R2/R1. AR-002: 004/011. AR-003: 005 en su alcance.
-- AR-005: 012 cancela cola no iniciada y servidor IPC; 013 detiene productores
-  Board/búsqueda antes del loader y de destruir sus dependencias. Se cierra esta
-  entrega de base con esos contratos. **El hallazgo global no se declara corregido**:
-  cancelación por consumidor, interrupción de WIC, latencia de escáneres y envío/flush
-  síncronos quedan diferidos explícitamente a robustez futura. No hay plazo universal.
+- AR-005: 012/013 implementaron cierre inicial y ownership. [014](../014-cancelacion-ar005/result.md) completa los cuatro faltantes: cancelación por consumidor, WIC cooperativo/caracterizado, ambos escáneres y cliente IPC con presupuesto total. Hallazgo completado con regresiones y portable final; sin tareas de implementación diferidas. El contrato espera que retorne una llamada WIC/E/S activa, sin forzar hilos ni prometer un plazo universal.
 - AR-006: corregido en 013 y comprobado con caché sintética corrupta/válida.
 - AR-007: satisfecho para las porciones modificadas. Se conserva deuda documental
   preexistente por componente; no obliga a una campaña global de comentarios.
@@ -39,4 +35,4 @@ lista de gestos ni una matriz por flags; no atribuirle comprobaciones más espec
 
 No quedan tareas de ejecución del lote base abiertas. Esto no cierra 002 ni las
 investigaciones de 003, ni convierte riesgos diferidos en fallos solucionados.
-Continuidad vigente: [013/resume.md](../013-cierre-base/resume.md).
+Continuidad vigente: [014/resume.md](../014-cancelacion-ar005/resume.md).

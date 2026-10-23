@@ -1,3 +1,5 @@
+> Continuidad histórica sustituida por [014](../014-cancelacion-ar005/resume.md): AR-005 ya implementado y cerrado; no ejecutar los pendientes antiguos.
+
 # Prompt para continuar en una nueva sesión
 
 ```text

@@ -273,6 +273,14 @@ get_target_property(LENTEUV_TEST_LINK_LIBRARIES ${PROJECT_NAME} LINK_LIBRARIES)
 target_link_libraries(async_preview_tests PRIVATE ${LENTEUV_TEST_LINK_LIBRARIES})
 add_test(NAME ui.async_previews COMMAND async_preview_tests)
 set_tests_properties(ui.async_previews PROPERTIES TIMEOUT 60)
+add_test(NAME lifecycle.cancellation
+    COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/scripts/run_cancellation_tests.ps1"
+        -Executable "$<TARGET_FILE:async_preview_tests>"
+        -Fixtures "${CMAKE_SOURCE_DIR}/tests/fixtures"
+        -RunRoot "${CMAKE_BINARY_DIR}/test-runs"
+)
+set_tests_properties(lifecycle.cancellation PROPERTIES TIMEOUT 60)
 add_test(NAME lifecycle.shutdown COMMAND async_preview_tests --shutdown-tests)
 set_tests_properties(lifecycle.shutdown PROPERTIES TIMEOUT 60)
 add_test(NAME ipc.delivery_diagnostics

@@ -16,98 +16,122 @@ BoardTagScanner::~BoardTagScanner() {
 }
 
 void BoardTagScanner::CancelScan() {
-    if (m_scanThread.joinable()) {
-        m_scanThread.join();
+    {
+        std::lock_guard lock(m_publishMutex);
+        m_cancelled = true;
     }
+    if (m_scanThread.joinable()) m_scanThread.join();
+    m_scanningTags = false;
 }
 
 void BoardTagScanner::StartScan(const std::filesystem::path& activeDir) {
+    CancelScan();
+    m_cancelled = false;
     m_scanningTags = true;
     m_scanCurrent = 0;
     m_scanTotal = 0;
     m_scanDir = activeDir.wstring();
-    
-    if (m_scanThread.joinable()) {
-        m_scanThread.join();
-    }
-    
-    m_scanThread = std::thread([this, activeDir]() {
-        HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-        bool comInitialized = SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
-        
-        std::vector<std::filesystem::path> files;
-        try {
-            for (const auto& entry : std::filesystem::directory_iterator(activeDir)) {
-                if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) {
-                    files.push_back(entry.path());
-                }
+    try {
+        m_scanThread = std::thread([this, activeDir]() {
+            ScopedComInit com;
+            try {
+                if (com.IsValid()) Scan(activeDir);
+            } catch (const std::exception&) {
+                LogError(L"BoardTagScanner: scan failed; existing catalog retained");
             }
-        } catch (...) {}
-        
-        m_scanTotal = files.size();
-        m_scanCurrent = 0;
-        
-        std::set<std::wstring> uniqueTags;
-        
-        for (const auto& filePath : files) {
-            std::vector<std::wstring> fileTags;
-            if (m_page->m_app->m_tagManager.ReadTags(filePath.wstring(), fileTags)) {
-                for (const auto& tag : fileTags) {
-                    if (!tag.empty()) {
-                        uniqueTags.insert(tag);
-                    }
-                }
-            }
-            m_scanCurrent++;
+            m_scanningTags = false;
             m_page->m_app->m_window.RequestRedraw();
-        }
-        
-        if (!files.empty()) {
-            std::filesystem::path jsonPath = activeDir / "xmpTags.json";
-            
-            std::wstring jsonW = L"[\n";
-            bool first = true;
-            for (const auto& tag : uniqueTags) {
-                if (!first) {
-                    jsonW += L",\n";
-                }
-                first = false;
-                
-                std::wstring escaped = L"";
-                for (wchar_t ch : tag) {
-                    if (ch == L'\\' || ch == L'"') {
-                        escaped += L'\\';
-                    }
-                    escaped += ch;
-                }
-                jsonW += L"  \"" + escaped + L"\"";
-            }
-            jsonW += L"\n]\n";
-            
-            std::string jsonUtf8;
-            int lenLen = WideCharToMultiByte(CP_UTF8, 0, jsonW.c_str(), static_cast<int>(jsonW.size()), nullptr, 0, nullptr, nullptr);
-            if (lenLen > 0) {
-                jsonUtf8.resize(lenLen);
-                WideCharToMultiByte(CP_UTF8, 0, jsonW.c_str(), static_cast<int>(jsonW.size()), &jsonUtf8[0], lenLen, nullptr, nullptr);
-            }
-            
-            std::ofstream file(jsonPath, std::ios::binary);
-            if (file) {
-                file.write(jsonUtf8.data(), jsonUtf8.size());
-                file.close();
-            }
-        }
-        
-        m_page->m_app->m_tagManager.SaveCache();
+        });
+    } catch (...) {
         m_scanningTags = false;
-        m_page->m_app->m_window.RequestRedraw();
-        
-        if (comInitialized) {
-            CoUninitialize();
-        }
-    });
+        throw;
+    }
 }
 
+void BoardTagScanner::Scan(const std::filesystem::path& activeDir) {
+    std::vector<std::filesystem::path> files;
+    if (m_cancelled) return;
+    for (const auto& entry : std::filesystem::directory_iterator(activeDir)) {
+        if (m_cancelled) return;
+        if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) files.push_back(entry.path());
+    }
+    m_scanTotal = files.size();
+    std::set<std::wstring> uniqueTags;
+    for (const auto& filePath : files) {
+        if (m_cancelled) return;
+        std::vector<std::wstring> fileTags;
+        const bool read = m_page->m_app->m_tagManager.ReadTags(filePath.wstring(), fileTags);
+        if (m_cancelled) return;
+        if (read) {
+            for (const auto& tag : fileTags) {
+                if (m_cancelled) return;
+                if (!tag.empty()) uniqueTags.insert(tag);
+            }
+        }
+        ++m_scanCurrent;
+        m_page->m_app->m_window.RequestRedraw();
+    }
+    if (files.empty() || m_cancelled) return;
+
+    std::wstring json = L"[\n";
+    bool first = true;
+    for (const auto& tag : uniqueTags) {
+        if (m_cancelled) return;
+        if (!first) json += L",\n";
+        first = false;
+        json += L"  \"";
+        for (wchar_t ch : tag) {
+            if (m_cancelled) return;
+            if (ch == L'\\' || ch == L'"') json += L'\\';
+            json += ch;
+        }
+        json += L'"';
+    }
+    json += L"\n]\n";
+    if (m_cancelled) return;
+    const int length = WideCharToMultiByte(CP_UTF8, 0, json.data(), static_cast<int>(json.size()), nullptr, 0, nullptr, nullptr);
+    if (length <= 0 || m_cancelled) return;
+    std::string utf8(static_cast<size_t>(length), '\0');
+    if (!WideCharToMultiByte(CP_UTF8, 0, json.data(), static_cast<int>(json.size()), utf8.data(), length, nullptr, nullptr)) return;
+    PublishCatalog(activeDir, utf8);
+    if (!m_cancelled) m_page->m_app->m_tagManager.SaveCache();
+}
+
+void BoardTagScanner::PublishCatalog(const std::filesystem::path& activeDir, const std::string& json) {
+    if (m_cancelled) return;
+    static std::atomic<uint64_t> sequence{0};
+    const auto path = activeDir / (L"xmpTags.json.tmp-" + std::to_wstring(GetCurrentProcessId()) +
+        L"-" + std::to_wstring(GetTickCount64()) + L"-" + std::to_wstring(++sequence));
+    // Owns only this CREATE_NEW temporary; cancellation never removes or truncates the existing catalog.
+    struct CatalogTemporary {
+        HANDLE file;
+        std::filesystem::path path;
+        // Closes the owned file and removes its private name after success, cancellation or exception.
+        ~CatalogTemporary() {
+            if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+            if (owned) {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        }
+        bool owned = file != INVALID_HANDLE_VALUE;
+    } temporary{CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr), path};
+    if (temporary.file == INVALID_HANDLE_VALUE) return;
+    size_t offset = 0;
+    while (offset < json.size()) {
+        if (m_cancelled) return;
+        const DWORD chunk = static_cast<DWORD>(std::min<size_t>(65536, json.size() - offset));
+        DWORD written = 0;
+        if (!WriteFile(temporary.file, json.data() + offset, chunk, &written, nullptr) || written != chunk) return;
+        offset += written;
+    }
+    CloseHandle(temporary.file);
+    temporary.file = INVALID_HANDLE_VALUE;
+    std::lock_guard lock(m_publishMutex);
+    if (!m_cancelled && !MoveFileExW(path.c_str(), (activeDir / L"xmpTags.json").c_str(), MOVEFILE_REPLACE_EXISTING)) {
+        LogError(L"BoardTagScanner: catalog replacement failed; existing catalog retained");
+    }
+}
 void BoardTagScanner::DrawProgressBar(Renderer& renderer) {
     if (!m_scanningTags) return;
     

@@ -1,4 +1,4 @@
-> Actualización 2026-10-23: base cerrada según [013](changes/013-cierre-base/result.md). LoadCache valida KTAG v1 antes de publicar y conserva estado ante fallo. App une BoardTagScanner y búsqueda de tags antes de apagar loader/destruir dependencias, tanto en Run como destructor; WIC/E/S activa y cliente síncrono conservan sus límites. Aceptación funcional base reportada por el propietario.
+> Actualización 2026-10-23: [014](changes/014-cancelacion-ar005/result.md) completa AR-005 con cancelación cooperativa por consumidor/WIC/escáner y envío IPC con presupuesto total. El hilo conserva sus dependencias hasta completar la operación activa; no se fuerza ni detacha. La base está lista para nuevos cambios funcionales.
 
 # Contexto técnico de LenteUV
 
@@ -76,7 +76,7 @@ y distingue Primary, Forwarded y ForwardFailed; busy ya cuenta como receptor det
 Otros errores del sondeo también retornan fallo, sin iniciar servidor. App retorna
 ForwardFailed y main muestra error Win32 con salida 2; Forwarded lleva a AlreadyRunning
 y salida 0, sin ACK de aplicación. La ruta vacía sigue sin provocar apertura. El timeout
-limita conexión, no WriteFile/FlushFileBuffers ni cierre. PostMessage transfiere propiedad
+desde 014 cubre conexión y escritura overlapped en el mismo presupuesto; no hay FlushFileBuffers síncrono. Al expirar una escritura pendiente se cancela y observa completion antes de liberar almacenamiento. Se conservan errores busy/missing de conexión y ERROR_TIMEOUT en escritura. PostMessage transfiere propiedad
 solo al tener éxito; ante fallo el payload se destruye por RAII y se registra error.
 La pipe privada de tests no se expone como opción de producto.
 
@@ -102,8 +102,7 @@ Conserva aceptación del centinela histórico. Une hilo y libera payloads ya pos
 al HWND vivo sin aplicar rutas, conservando WM_QUIT. Lifecycle en hilo dueño, serializado.
 El loader deja de admitir tareas, descarta la cola aún no tomada y espera solo activas;
 libera pendientes/WIC sin callbacks ni uploads. No interrumpe WIC en curso y no ofrece
-plazo universal. Otros escáneres conservan hilos/destructores propios. Cancelación por
-consumidor durante navegación y escritura/flush síncronos del cliente siguen pendientes.
+plazo universal para una llamada ya iniciada. Desde 014, stop_token y lease débil cancelan CPU entre etapas/frames/filas y suprimen entregas. Ambos escáneres cancelan cooperativamente; Board publica catálogo desde temporal propio solo al completar. Progreso Board atómico, callback de búsqueda puede solicitar stop sin join circular. WM_CLOSE une escáneres antes de destruir HWND; destructor/WM_QUIT preservan sus dependencias.
 
 ## Modos y controles
 
@@ -130,7 +129,7 @@ y guardan resultados bajo mutex. `ProcessPendingTextures` intercambia colas, com
 el predicado opcional de vigencia fuera del mutex, sube texturas si procede y ejecuta
 callbacks EN EL HILO PRINCIPAL. Un predicado false solo omite upload: entrega el mismo
 resultado CPU, incluso nullptr por fallo. Excepción terminal desde 012: Shutdown
-cancela entregas pendientes sin callbacks; no se reutilizan sus modelos en App.
+cancela entregas pendientes sin callbacks; desde 014 también una cancelación explícita por consumidor omite predicado/upload/callback, independientemente de la vigencia 011.
 Predicado de solo lectura, sin excepciones
 ni bombeo; consumidor/modelo deben vivir durante la entrega. Los callbacks de
 `AsyncDirectoryScanner` proceden de sus hilos; no extrapolar el contrato del loader.
@@ -142,12 +141,10 @@ Desde 004, sus callbacks y los de la tira llevan un token único por solicitud y
 se aplica el resultado una sola vez al elemento actual, localizado sin índices capturados.
 Ordenar/desplazar conserva el token; borrar o reemplazar lo descarta, incluso al volver
 a añadir la misma ruta. Las entradas retenidas de la tira conservan caché y solicitudes;
-ocurrencias duplicadas no comparten solicitudes pendientes. Los callbacks de hover
-mantienen sus comprobaciones de ruta y no fueron rediseñados. Esto descarta resultados,
-no cancela trabajo del loader. Desde [011](changes/011-vigencia-antes-upload/result.md),
+ocurrencias duplicadas no comparten solicitudes pendientes. Desde 014, tira/previews/hover y Board poseen leases transitorios que solo se prestan débilmente al loader. Borrar/reemplazar o salir de carpeta/página cancela solicitudes; ordenar conserva previews pero cancela hover cuyo índice puede cambiar. Board identifica cada solicitud por ítem, incluso con rutas duplicadas. El loader poda la cola y detiene trabajo activo en límites cooperativos. Desde [011](changes/011-vigencia-antes-upload/result.md),
 tira/previews añaden el mismo contraste token/ruta antes del upload, sin consumir token
 ni invalidar layout. Comprobación final de 004 y revisión 007 permanecen. Otros
-consumidores y cargas animadas conservan su camino sin predicado. No hay presupuesto global de RAM/VRAM ni límite general
+consumidores y cargas animadas conservan su camino sin predicado de upload, pero admiten cancelación por lease. No hay presupuesto global de RAM/VRAM ni límite general
 de tareas pendientes. El tablero solicita texturas de hasta 400x400 y expulsa las más
 lejanas cuando supera `MAX_BOARD_TEXTURES=150`; ese límite cuenta objetos con textura,
 no bytes ni toda la memoria del proceso.

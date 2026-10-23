@@ -13,6 +13,18 @@
 #include <algorithm>
 
 namespace kv {
+namespace {
+thread_local const AsyncDirectoryScanner* callbackScanner = nullptr;
+// Marks callbacks on both manager and nested workers so cancellation never joins a thread waiting on itself.
+class ScannerCallbackScope {
+public:
+    // Restores an outer callback marker when scopes unwind, including exceptional exit.
+    explicit ScannerCallbackScope(const AsyncDirectoryScanner* scanner) : previous(callbackScanner) { callbackScanner = scanner; }
+    ~ScannerCallbackScope() { callbackScanner = previous; }
+private:
+    const AsyncDirectoryScanner* previous;
+};
+}
 
 AsyncDirectoryScanner::~AsyncDirectoryScanner() {
     CancelSearch();
@@ -41,6 +53,7 @@ void AsyncDirectoryScanner::SearchTagsAsync(
     SearchMatchCallback onMatchFound,
     SearchFinishedCallback onSearchFinished
 ) {
+    if (callbackScanner == this) return; // Lifecycle/restart is owner-only, not reentrant from callbacks.
     std::wstring rootDir = MetadataCache::NormalizePath(rootDirectory);
     std::lock_guard<std::mutex> lock(m_searchMutex);
     
@@ -78,6 +91,7 @@ void AsyncDirectoryScanner::SearchTagsAsync(
         if (m_searchCancelled.load()) {
             m_searchRunning.store(false);
             if (onSearchFinished) {
+                ScannerCallbackScope scope(this);
                 onSearchFinished(0, 0);
             }
             return;
@@ -90,6 +104,7 @@ void AsyncDirectoryScanner::SearchTagsAsync(
             if (m_searchCancelled.load()) break;
             
             int64_t currentWriteTime = cache.GetLastWriteTime(filePath);
+            if (m_searchCancelled.load()) break;
             bool cacheHit = false;
             std::vector<std::wstring> tags;
             
@@ -108,7 +123,10 @@ void AsyncDirectoryScanner::SearchTagsAsync(
                     totalMatches.fetch_add(1);
                     if (onMatchFound) {
                         std::lock_guard<std::mutex> cbLock(m_callbackMutex);
-                        onMatchFound(filePath, tags);
+                        if (!m_searchCancelled.load()) {
+                            ScannerCallbackScope scope(this);
+                            onMatchFound(filePath, tags);
+                        }
                     }
                 }
             } else {
@@ -129,7 +147,7 @@ void AsyncDirectoryScanner::SearchTagsAsync(
             for (size_t t = 0; t < numThreads; ++t) {
                 workers.push_back(std::thread([this, wicFactory, &cache, &cacheMisses, &nextIndex, &queryTags, &totalScanned, &totalMatches, onMatchFound]() {
                     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-                    bool comInitialized = SUCCEEDED(hr) || hr == RPC_E_CHANGED_MODE;
+                    bool comInitialized = SUCCEEDED(hr);
                     
                     while (!m_searchCancelled.load()) {
                         size_t index = nextIndex.fetch_add(1);
@@ -139,10 +157,12 @@ void AsyncDirectoryScanner::SearchTagsAsync(
                         std::vector<std::wstring> tags;
                         
                         if (WicMetadataReaderWriter::ReadTags(wicFactory, filePath, tags)) {
+                            if (m_searchCancelled.load()) break;
                             int64_t writeTime = cache.GetLastWriteTime(filePath);
                             
                             {
                                 std::lock_guard<std::mutex> cacheLock(cache.m_cacheMutex);
+                                if (m_searchCancelled.load()) break;
                                 cache.m_cache[filePath] = MetadataCache::CacheEntry{ writeTime, tags };
                                 cache.m_cacheDirty = true;
                             }
@@ -152,7 +172,10 @@ void AsyncDirectoryScanner::SearchTagsAsync(
                                 totalMatches.fetch_add(1);
                                 if (onMatchFound) {
                                     std::lock_guard<std::mutex> cbLock(m_callbackMutex);
-                                    onMatchFound(filePath, tags);
+                                    if (!m_searchCancelled.load()) {
+                                        ScannerCallbackScope scope(this);
+                                        onMatchFound(filePath, tags);
+                                    }
                                 }
                             }
                         }
@@ -171,12 +194,18 @@ void AsyncDirectoryScanner::SearchTagsAsync(
             }
         }
         
-        if (cache.m_cacheDirty && !m_searchCancelled.load()) {
+        bool save = false;
+        {
+            std::lock_guard lock(cache.m_cacheMutex);
+            save = cache.m_cacheDirty && !m_searchCancelled.load();
+        }
+        if (save && !m_searchCancelled.load()) {
             cache.SaveCache();
         }
         
         m_searchRunning.store(false);
         if (onSearchFinished) {
+            ScannerCallbackScope scope(this);
             onSearchFinished(totalScanned.load(), totalMatches.load());
         }
     });
@@ -184,8 +213,13 @@ void AsyncDirectoryScanner::SearchTagsAsync(
 
 void AsyncDirectoryScanner::CancelSearch() {
     m_searchCancelled.store(true);
+    if (callbackScanner == this) return;
     if (m_searchThread.joinable() && std::this_thread::get_id() != m_searchThread.get_id()) {
         m_searchThread.join();
+    }
+    // A callback-thread request returns without joining itself; the manager finishes its own epilogue.
+    if (!m_searchThread.joinable() || std::this_thread::get_id() != m_searchThread.get_id()) {
+        m_searchRunning.store(false);
     }
 }
 

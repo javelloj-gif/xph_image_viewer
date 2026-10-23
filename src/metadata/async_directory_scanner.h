@@ -25,6 +25,8 @@ public:
     AsyncDirectoryScanner() = default;
     ~AsyncDirectoryScanner();
 
+    // Owner thread: joins previous work, then scans with borrowed factory/cache alive through CancelSearch.
+    // Match/finished callbacks run on scanner threads; finished is notified once even on cancellation.
     void SearchTagsAsync(
         IWICImagingFactory2* wicFactory,
         MetadataCache& cache,
@@ -34,7 +36,10 @@ public:
         SearchFinishedCallback onSearchFinished
     );
 
+    // Requests cooperative stop and joins on owner thread; an already admitted callback/WIC read may finish.
+    // Callback-thread calls only request stop; they must not destroy/restart the scanner from that callback.
     void CancelSearch();
+    // Observes scanner status atomically; join still establishes final callback/owner lifetime completion.
     bool IsSearchRunning() const;
 
 private:

@@ -87,6 +87,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool libraryLo
 
 void FolderDataManager::RemoveFolder(int index) {
     if (index < 0 || index >= static_cast<int>(m_folders.size())) return;
+    if (m_app) m_app->CancelHoverLoads();
     
     m_folders.erase(m_folders.begin() + index);
     NotifyPreviewLayoutChanged();
@@ -106,6 +107,10 @@ void FolderDataManager::RemoveFolder(int index) {
 
 void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
     if (index < -1 || index >= static_cast<int>(m_folders.size())) return;
+    if (index != m_currentFolderIdx) {
+        CancelPreviewLoads();
+        if (m_app) m_app->CancelHoverLoads();
+    }
     
     m_currentFolderIdx = index;
     if (m_app && m_currentFolderIdx >= 0) {
@@ -307,6 +312,16 @@ void FolderDataManager::AddToHistory(const std::wstring& filePath) {
     }
 }
 
+void FolderDataManager::CancelPreviewLoads() {
+    for (auto& folder : m_folders) {
+        for (auto& item : folder.previews) {
+            item.loadLifetime.reset();
+            item.pendingRequest.reset();
+            item.isLoading = false;
+        }
+    }
+}
+
 bool FolderDataManager::IsPreviewRequestCurrent(const ImageRequestToken& request) const {
     if (!request) return false;
     for (const auto& folder : m_folders) {
@@ -323,6 +338,7 @@ bool FolderDataManager::CompletePreview(const ImageRequestToken& request, std::s
         for (auto& item : folder.previews) {
             if (item.pendingRequest != request || item.filePath != *request) continue;
             item.pendingRequest.reset();
+            item.loadLifetime.reset();
             item.isLoading = false;
             if (image) {
                 item.texture = std::move(image);
@@ -338,6 +354,7 @@ bool FolderDataManager::CompletePreview(const ImageRequestToken& request, std::s
 
 void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
     if (folderIdx < 0 || folderIdx >= static_cast<int>(m_folders.size())) return;
+    if (m_app && folderIdx == m_currentFolderIdx) m_app->CancelHoverLoads();
     auto& folder = m_folders[folderIdx];
     if (folder.filePaths.empty()) return;
 

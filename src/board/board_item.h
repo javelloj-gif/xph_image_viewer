@@ -44,6 +44,8 @@ struct BoardItem {
     std::shared_ptr<ImageData> texture = nullptr;
     bool isLoading = false;
     bool loadFailed = false;
+    ImageRequestToken pendingRequest; // Transient identity, independent of path duplicates; excluded from KBRD.
+    ImageLoadLifetime loadLifetime; // Removal/replacement cancels this item's load only.
 
     // Link details
     int fromItemIdx = -1;

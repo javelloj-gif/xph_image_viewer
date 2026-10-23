@@ -245,3 +245,25 @@ versión, cantidades imposibles y compatibilidad; solo sobre user_data del EXE c
 ui.async_previews añade trabajo de Board/búsqueda retenido durante destrucción de
 App para comprobar join antes del cierre del loader. 162025 checks async finales.
 No sustituye UX, agotamiento de memoria ni un plazo universal de cierre.
+
+## AR-005 completado: cancelación 014
+
+CTest tiene ahora siete suites; lifecycle.cancellation copia su EXE y PNG a un
+directorio único con user_data propio mediante scripts/run_cancellation_tests.ps1.
+Cubre los consumidores reales, hover/fallback, sort/delete, Board duplicado,
+cancelación de catálogo y reinicio (42 checks). lifecycle.shutdown conserva los
+casos anteriores y suma cuatro receptores IPC controlados: trece hijos con watchdog.
+loader.viewer_decode suma cancelación en WIC/stream, callback de búsqueda y una
+imagen sintética BMP de 64 MiB; 314 checks. No modificar fixtures ni usar datos personales.
+
+Pruebas y portable final en [014/result](changes/014-cancelacion-ar005/result.md).
+Para comprobar el producto empaquetado en una copia aislada, el harness admite
+--ipc-package <lenteuv.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
+Lanza solo sus hijos con --multiple/--lite, recorre los cuatro modos por mensajes a
+su HWND/PID y solicita cierre normal. El watchdog solo limpia sus propios hijos.
+Conservar otra extracción limpia para el usuario. No certifica UX visual universal.
+
+El contrato de loader distingue predicado 011 (rechaza upload pero entrega CPU)
+de cancelación 014 por lease débil (omite trabajo/entrega). No capturar el lease
+fuerte en callbacks. Los checks WIC son cooperativos; join espera la llamada ya
+iniciada. La base/AR-005 quedan cerrados para implementar el siguiente cambio funcional.

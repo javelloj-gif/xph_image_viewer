@@ -15,6 +15,7 @@
 namespace kv {
 
 class XmpTagManager {
+    friend class AsyncPreviewTests; // Holds cache access to verify cooperative cancellation at a real read boundary.
 public:
     XmpTagManager() = default;
     ~XmpTagManager() = default;

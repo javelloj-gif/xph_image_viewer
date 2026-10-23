@@ -71,6 +71,7 @@ public:
 
 private:
     void ResetView();
+    // UI: loads one item's transient identity/lease; removal cancels it and duplicate paths complete independently.
     void LoadItemTexture(BoardItem& item);
     void DeleteSelectedItems();
     void DeleteItemsByIndices(const std::vector<int>& indicesToDelete);

@@ -123,14 +123,17 @@ private:
     void NavigateImage(int direction); // +1 = next, -1 = previous
     // Persists the sort mode, reorders shared folders and restores the active image's selection.
     void ApplySortMode(int mode);
-    // Removes a path from shared lists, invalidates affected preview layouts and updates the active image/selection.
+    // Removes a path from shared lists, cancels its hover, invalidates preview layouts and updates image/selection.
     void DeleteImage(const std::wstring& path);
     void AdjustWindowToImage();
 
     // ── Zoom / Pan ────────────────────────────────────────────────────────
     void ZoomToPoint(float factor, float screenX, float screenY);
     void ResetView();
+    // UI: switches mode, cancels departing consumers' work and preserves ready caches/gestures.
     void SetPage(Page page);
+    // UI: drops both hover leases/results on folder/page changes, preventing late same-path animation reuse.
+    void CancelHoverLoads();
     RectF CalculateImageRect() const;
 
     // ── Subsystems ────────────────────────────────────────────────────────

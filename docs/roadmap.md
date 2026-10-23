@@ -1,12 +1,12 @@
 # Hoja de ruta
 
-Actualización: 2026-10-23. **Refactorización base cerrada.** El propietario reportó
+Actualización: 2026-10-23. **Refactorización base y AR-005 completados.** El propietario reportó
 que probó el ejecutable temporal y que todas las funcionalidades base están intactas.
 Se registra como aceptación funcional del usuario; no aportó hash ni una matriz
 por escenario. [013](changes/013-cierre-base/result.md) registra la revisión final,
 la lectura transaccional KTAG y el orden de cierre de productores.
 
-No continuar la refactorización por inercia. Las propuestas opcionales y los límites
+014 implementa los cuatro faltantes de AR-005 y entrega un portable final comprobado. La aplicación queda preparada para nuevos cambios funcionales del usuario. No continuar la refactorización por inercia. Las propuestas opcionales y los límites
 de cobertura quedan identificados abajo; no son tareas restantes del lote base ni
 defectos declarados corregidos. El próximo cambio de producto se elige por separado.
 
@@ -25,6 +25,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | 011 | [Vigencia antes del upload](changes/011-vigencia-antes-upload/result.md) | Completado en alcance: 321 checks nuevos WARP; sin mejora global afirmada |
 | 012 | [Cierre de colas y servidor IPC](changes/012-cierre-colas-ipc/result.md) | Completado en alcance y aceptación funcional base reportada; ampliado el orden de productores en 013 |
 | 013 | [Cierre de la base](changes/013-cierre-base/spec.md) | Completado: AR-006 y join de productores; Release/CTest 6/6, documentación y continuidad |
+| 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Completado: Release/CTest 7/7, 42 checks específicos, 314 WIC, 13 cierres por proceso, diez nativos y producto empaquetado; portable final listo para prueba funcional |
 
 ## Disposición final de la base
 
@@ -34,13 +35,12 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | AR-002 | Resuelto en 004, ampliado en 011: identidad/vigencia; no equivale a cancelar CPU |
 | AR-003 | Resuelto en 005 en transporte/error/propiedad; no añade ACK ni elección atómica |
 | AR-004 | Resuelto en R1: resolución común de datos preservando algoritmo |
-| AR-005 | Cierre de loader/servidor implementado en 012; 013 une Board/búsqueda antes de sus dependencias. Cancelación por consumidor, WIC activo y límite total del cliente síncrono quedan diferidos explícitamente como robustez futura |
+| AR-005 | Completado en 014 sobre 012/013: cancelación por consumidor, stop cooperativo WIC y caracterización de llamada activa, escáneres y cliente IPC con presupuesto total. Sin faltantes de implementación diferidos; una llamada WIC/E/S activa debe retornar antes del join |
 | AR-006 | Resuelto en 013 para lectura KTAG: comprobación de longitudes/lecturas y publicación transaccional |
 | AR-007 | Cumplido en porciones modificadas; cobertura documental preexistente restante continúa progresiva al tocar componentes |
 
 [El cierre de 001](changes/001-refactorizacion-base/closure.md) relaciona cada
-criterio con evidencia y dispone la cobertura no exhaustiva. No se declara AR-005
-resuelto globalmente ni se certifica todo el código por la prueba funcional.
+criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está completado según el contrato cooperativo y la evidencia de 014; no se certifica todo el código ni un plazo universal de códecs con estas pruebas.
 
 ## Trabajo futuro separado, sin ejecución automática
 
@@ -50,9 +50,6 @@ resuelto globalmente ni se certifica todo el código por la prueba funcional.
   [Explorer/reposo](changes/003-diagnostico-rendimiento/explorer-validation.md) y
   [presentación/errores](changes/003-diagnostico-rendimiento/real-validation.md)
   tienen evidencia acotada; no demuestran una mejora causal global.
-- **AR-005:** cancelación cooperativa por consumidor, latencia de códecs/E/S,
-  escáneres y escritura/flush del cliente. Board espera su escaneo completo.
-  Requiere especificación y regresión propias; sin terminar hilos a la fuerza.
 - **Optimización:** índice de visibles masonry, última medida del overlay y
   presentación por cambios OPT-007; [revisión de oportunidades](changes/003-diagnostico-rendimiento/source-optimization-review.md).
   No reducir FPS/calidad ni cambiar efectos incidentalmente.
@@ -66,13 +63,16 @@ resuelto globalmente ni se certifica todo el código por la prueba funcional.
 
 ## Entrega y continuidad
 
-El portable probado por el propietario no se identifica por hash en su reporte.
-Se conservan los candidatos 010/011/012. El candidato posterior de esta sesión es
-**dist/lenteuv_qa_013_20261023.zip**, creado desde staging limpio, con runtime,
-locales y defaults propios. Incluye KTAG y orden de cierre adicionales; no se atribuye
-a ese binario la prueba manual anterior. Hashes/evidencia en
-[resultado 013](changes/013-cierre-base/result.md).
+Candidato vigente: **dist/lenteuv_qa_014_20261023_final/lenteuv.exe** y ZIP homónimo.
+Runtime, locales y defaults limpios; SHA256/evidencia en
+[resultado 014](changes/014-cancelacion-ar005/result.md). Release y CTest 7/7, diez
+escenarios nativos y EXE empaquetado con --multiple/--lite, cuatro modos y cierre 0.
+No quedan pendientes de implementación de AR-005; su límite de WIC/E/S activa está
+caracterizado y documentado. La aceptación manual del candidato corresponde a la
+[prueba funcional del usuario](changes/014-cancelacion-ar005/functional-test.md).
 
-[Prompt para la nueva sesión](changes/013-cierre-base/resume.md).
-No publicar datos, build, dist ni estado de herramientas. Los IDs identifican cambios,
-no prioridad; seguir [workflow](workflow.md) para el siguiente objetivo.
+Los candidatos 010–013 y el preliminar 014 se conservaron. Usar el sufijo **final**.
+No se atribuye al candidato nuevo la aceptación funcional histórica de la base.
+[Continuidad vigente](changes/014-cancelacion-ar005/resume.md): atender el siguiente
+objetivo funcional que indique el propietario, sin iniciar otra campaña general.
+No publicar datos, build, dist ni estado de herramientas.

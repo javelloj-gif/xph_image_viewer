@@ -342,6 +342,7 @@ void LibraryPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
 
     const auto request = std::make_shared<const std::wstring>(item.filePath);
     item.pendingRequest = request;
+    item.loadLifetime = std::make_shared<const bool>(true);
     item.isLoading = true;
     m_app->m_imageLoader.LoadAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
         const bool hasImage = img != nullptr;
@@ -349,7 +350,7 @@ void LibraryPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
             if (hasImage) CalculateLayout();
             m_app->m_window.RequestRedraw();
         }
-    }, 180, 180, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); });
+    }, 180, 180, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }, item.loadLifetime);
 }
 
 void LibraryPage::AddFolder(const std::wstring& path) {
@@ -419,6 +420,10 @@ void LibraryPage::SyncCurrentFolderWithApp() {
             foundIdx = static_cast<int>(m_app->m_folders.size()) - 1;
         }
 
+        if (m_app->m_currentFolderIdx != foundIdx) {
+            m_app->m_folderData.CancelPreviewLoads();
+            m_app->CancelHoverLoads();
+        }
         m_app->m_currentFolderIdx = foundIdx;
         m_app->m_folders[foundIdx].currentIndex = m_app->m_currentIndex;
         CalculateLayout();
@@ -554,6 +559,7 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     if (newHoveredPreviewIdx != m_hoveredPreviewIdx) {
+        m_hoverLoadLifetime.reset();
         m_hoveredPreviewIdx = newHoveredPreviewIdx;
         changed = true;
 
@@ -561,6 +567,7 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
             auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
             std::wstring path = folder.previews[m_hoveredPreviewIdx].filePath;
             m_hoveredOriginalPath = path;
+            m_hoverLoadLifetime = std::make_shared<const bool>(true);
             m_hoveredOriginalImage = nullptr;
             m_hoveredOriginalAnim = nullptr;
             m_hoveredOriginalLoading = true;
@@ -583,10 +590,10 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
                                     m_hoveredOriginalLoading = false;
                                     m_app->m_window.RequestRedraw();
                                 }
-                            });
+                            }, 0, 0, {}, m_hoverLoadLifetime);
                         }
                     }
-                });
+                }, m_hoverLoadLifetime);
             } else {
                 m_app->m_imageLoader.LoadAsync(path, [this, path](std::shared_ptr<ImageData> img) {
                     if (m_hoveredOriginalPath == path) {
@@ -594,7 +601,7 @@ bool LibraryPage::OnMouseMove(float x, float y, KeyModifiers mods) {
                         m_hoveredOriginalLoading = false;
                         m_app->m_window.RequestRedraw();
                     }
-                });
+                }, 0, 0, {}, m_hoverLoadLifetime);
             }
         } else {
             m_hoveredOriginalPath = L"";

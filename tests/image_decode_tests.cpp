@@ -1,5 +1,6 @@
 #include "common/pch.h"
 #include "loader/image_loader.h"
+#include "metadata/async_directory_scanner.h"
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -11,9 +12,12 @@ enum class DecodeFault { None, Open, Count, ZeroCount, FrameZero, AllFrames, Lat
 // Owned by proxy factory/decoders; records WIC attempts and decoder lifetime overlap, never product state.
 struct DecodeControl {
     DecodeFault fault = DecodeFault::None;
-    int opens = 0;
-    int active = 0;
-    bool overlap = false;
+    std::atomic<int> opens{0};
+    std::atomic<int> active{0};
+    std::atomic<bool> overlap{false};
+    std::atomic<int> frameCalls{0};
+    std::function<void()> onOpen;
+    std::function<void(UINT)> onFrame;
 };
 
 // Test-only COM forwarding family: identity/lifetime stay on the wrapper and other methods delegate unchanged.
@@ -54,6 +58,8 @@ public:
     }
     // Fails selected frame retrieval; successful frames remain real WIC objects.
     HRESULT STDMETHODCALLTYPE GetFrame(UINT index, IWICBitmapFrameDecode** frame) override {
+        ++control->frameCalls;
+        if (control->onFrame) control->onFrame(index);
         if (fault == DecodeFault::AllFrames || (fault == DecodeFault::FrameZero && index == 0) ||
             (fault == DecodeFault::LaterFrames && index > 0)) { *frame = nullptr; return E_FAIL; }
         return inner->GetFrame(index, frame);
@@ -84,7 +90,7 @@ public:
     // Counts actual WIC filename attempts, injects first-open failure or delegates and wraps the result.
     HRESULT STDMETHODCALLTYPE CreateDecoderFromFilename(LPCWSTR p, const GUID* v, DWORD a, WICDecodeOptions o, IWICBitmapDecoder** out) override {
         ++control->opens;
-        control->overlap |= control->active != 0;
+        if (control->active != 0) control->overlap = true;
         *out = nullptr;
         const auto fault = control->opens == 1 ? control->fault : DecodeFault::None;
         if (fault == DecodeFault::Open) return E_FAIL;
@@ -92,10 +98,21 @@ public:
         const HRESULT hr = inner->CreateDecoderFromFilename(p,v,a,o,&decoder);
         if (FAILED(hr)) return hr;
         *out = new ControlledDecoder(std::move(decoder), control, fault);
+        if (control->onOpen) control->onOpen();
         return hr;
     }
     // Remaining factory methods forward exactly, including the real converters/scalers/encoders used by tests.
-    TEST_WIC_FORWARD(CreateDecoderFromStream, (IStream* s,const GUID* v,WICDecodeOptions o,IWICBitmapDecoder** p), (s,v,o,p))
+    // Metadata readers prefer streams; retain the same boundary controls on that actual path too.
+    HRESULT STDMETHODCALLTYPE CreateDecoderFromStream(IStream* stream, const GUID* vendor, WICDecodeOptions options, IWICBitmapDecoder** out) override {
+        ++control->opens;
+        *out = nullptr;
+        ComPtr<IWICBitmapDecoder> decoder;
+        const HRESULT hr = inner->CreateDecoderFromStream(stream, vendor, options, &decoder);
+        if (FAILED(hr)) return hr;
+        *out = new ControlledDecoder(std::move(decoder), control, DecodeFault::None);
+        if (control->onOpen) control->onOpen();
+        return hr;
+    }
     TEST_WIC_FORWARD(CreateDecoderFromFileHandle, (ULONG_PTR f,const GUID* v,WICDecodeOptions o,IWICBitmapDecoder** p), (f,v,o,p))
     TEST_WIC_FORWARD(CreateComponentInfo, (REFCLSID c,IWICComponentInfo** p), (c,p))
     TEST_WIC_FORWARD(CreateDecoder, (REFGUID g,const GUID* v,IWICBitmapDecoder** p), (g,v,p))
@@ -154,7 +171,13 @@ public:
     // Resets one controlled run, requiring all decoders from the previous run to have released.
     void Reset(DecodeFault fault = DecodeFault::None) {
         Check(control->active == 0, "no decoder retained between loads");
-        *control = {fault, 0, 0, false};
+        control->fault = fault;
+        control->opens = 0;
+        control->active = 0;
+        control->overlap = false;
+        control->frameCalls = 0;
+        control->onOpen = {};
+        control->onFrame = {};
     }
 
     // Reproduces the old App decision using the unchanged public loader APIs.
@@ -328,11 +351,133 @@ public:
         std::cout << "PNG64x32 CPU median us old/new=" << oldTimes[2] << '/' << newTimes[2] << '\n';
     }
 
-    // Covers normal paths and controlled recovery, then bounded optional codecs and an informational benchmark.
+    // Retains a WIC proxy call while canceling/shutting down; checks precise boundaries without unsafe thread interruption.
+    void CancellationBoundaries(const std::filesystem::path& png, const std::filesystem::path& gif) {
+        Reset();
+        int callbacks = 0;
+        auto owner = std::make_shared<const bool>(true);
+        control->onOpen = [&] { owner.reset(); };
+        loader.LoadAsync(png.wstring(), [&](auto) { ++callbacks; }, 0, 0, {}, owner);
+        auto task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        Check(control->opens == 1 && control->frameCalls == 0 && control->active == 0,
+            "cancel during decoder open stops before frame acquisition and releases decoder");
+        Check(loader.m_pendingTextures.empty() && callbacks == 0, "canceled open never publishes result");
+
+        Reset(); owner = std::make_shared<const bool>(true);
+        control->onFrame = [&](UINT) { owner.reset(); };
+        loader.LoadAnimatedAsync(gif.wstring(), [&](auto) { ++callbacks; }, owner);
+        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        Check(control->frameCalls == 1 && control->active == 0 && loader.m_pendingAnimatedTextures.empty(),
+            "animation cancels inside frame acquisition, never composes or publishes partial animation");
+
+        Reset();
+        loader.Shutdown();
+        Check(loader.Initialize(1), "active WIC test worker");
+        real = loader.m_wicFactory;
+        loader.m_wicFactory.Attach(new CountingFactory(real, control));
+        HANDLE entered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        HANDLE release = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        Check(entered && release, "WIC boundary events");
+        control->onOpen = [&] { SetEvent(entered); WaitForSingleObject(release, 3000); };
+        loader.LoadAsync(png.wstring(), [&](auto) { ++callbacks; });
+        const bool ready = WaitForSingleObject(entered, 3000) == WAIT_OBJECT_0;
+        const auto stop = loader.m_stopSource.get_token();
+        std::jthread releaser([&] {
+            const auto deadline = GetTickCount64() + 3000;
+            while (!stop.stop_requested() && GetTickCount64() < deadline) Sleep(1);
+            Sleep(40); // Represents a codec still executing; no product timeout pretends to abort it.
+            SetEvent(release);
+        });
+        const auto start = GetTickCount64();
+        loader.Shutdown();
+        const auto elapsed = GetTickCount64() - start;
+        releaser.join();
+        CloseHandle(entered); CloseHandle(release);
+        Check(ready && elapsed >= 30 && control->frameCalls == 0 && control->active == 0 && callbacks == 0,
+            "Shutdown waits active WIC call, then skips later stages and callbacks");
+        std::cout << "WIC held-open shutdown_ms=" << elapsed << " next_frame_calls=" << control->frameCalls << '\n';
+        Check(loader.Initialize(0), "restart after cooperative WIC shutdown");
+        real = loader.m_wicFactory;
+        loader.m_wicFactory.Attach(new CountingFactory(real, control));
+        Reset();
+    }
+
+    // Checks cancellation after a real metadata read and from a nested-worker callback, then owner join and restart.
+    void SearchCancellation(const std::filesystem::path& png) {
+        const auto directory = cases / L"search";
+        std::filesystem::create_directory(directory);
+        std::filesystem::copy_file(png, directory / L"only.png");
+        AsyncDirectoryScanner scanner;
+        MetadataCache cache;
+        HANDLE entered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        HANDLE release = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        Check(entered && release, "search boundary events");
+        Reset();
+        control->onOpen = [&] { SetEvent(entered); WaitForSingleObject(release, 3000); };
+        std::atomic<int> matches{0}, finished{0};
+        scanner.SearchTagsAsync(loader.GetWicFactory(), cache, directory.wstring(), {},
+            [&](const auto&, const auto&) { ++matches; }, [&](size_t, size_t) { ++finished; });
+        const bool ready = WaitForSingleObject(entered, 3000) == WAIT_OBJECT_0;
+        std::jthread releaser([&] { Sleep(40); SetEvent(release); });
+        scanner.CancelSearch();
+        releaser.join();
+        CloseHandle(entered); CloseHandle(release);
+        Check(ready && matches == 0 && finished == 1 && !scanner.IsSearchRunning() && cache.m_cache.empty(),
+            "search canceled in WIC discards match/cache result and notifies completion once");
+        Reset(); finished = 0;
+        scanner.SearchTagsAsync(loader.GetWicFactory(), cache, directory.wstring(), {},
+            [&](const auto&, const auto&) { ++matches; scanner.CancelSearch(); },
+            [&](size_t, size_t) { ++finished; });
+        const auto deadline = GetTickCount64() + 3000;
+        while (finished == 0 && GetTickCount64() < deadline) Sleep(1);
+        const bool completed = finished == 1;
+        scanner.CancelSearch();
+        Check(completed && matches == 1 && !scanner.IsSearchRunning(), "nested worker callback can request cancellation without self-join deadlock");
+        finished = 0;
+        scanner.SearchTagsAsync(loader.GetWicFactory(), cache, directory.wstring(), {},
+            [&](const auto&, const auto&) { ++matches; scanner.CancelSearch(); }, [&](size_t, size_t) { ++finished; });
+        const auto cachedDeadline = GetTickCount64() + 3000;
+        while (finished == 0 && GetTickCount64() < cachedDeadline) Sleep(1);
+        const bool cachedComplete = finished == 1;
+        scanner.CancelSearch();
+        Check(cachedComplete && matches == 2, "cache-hit callback cancellation and scanner restart");
+        Reset();
+    }
+
+    // Measures a real 4096-square WIC decode in this isolated suite; records cost without claiming a universal bound.
+    void LargeDecodeCharacterization() {
+        const auto path = cases / L"large.bmp";
+        constexpr LONG side = 4096;
+        BITMAPFILEHEADER fileHeader = {};
+        fileHeader.bfType = 0x4d42;
+        fileHeader.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+        fileHeader.bfSize = fileHeader.bfOffBits + side * side * 4;
+        BITMAPINFOHEADER info = {};
+        info.biSize = sizeof(info); info.biWidth = side; info.biHeight = side;
+        info.biPlanes = 1; info.biBitCount = 32; info.biCompression = BI_RGB;
+        {
+            std::ofstream file(path, std::ios::binary);
+            file.write(reinterpret_cast<const char*>(&fileHeader), sizeof(fileHeader));
+            file.write(reinterpret_cast<const char*>(&info), sizeof(info));
+            const std::vector<char> row(side * 4, static_cast<char>(127));
+            for (LONG y = 0; y < side; ++y) file.write(row.data(), static_cast<std::streamsize>(row.size()));
+            Check(file.good(), "large synthetic BMP written");
+        }
+        const auto start = GetTickCount64();
+        const auto image = loader.LoadSync(path.wstring());
+        Check(image && image->width == side && image->height == side && image->pixels.size() == 64 * 1024 * 1024,
+            "real 64 MiB static WIC decode");
+        std::cout << "WIC BMP4096 bytes=" << image->pixels.size() << " decode_ms=" << GetTickCount64() - start << '\n';
+    }
+
+    // Covers normal paths and controlled recovery, then cancellation boundaries, real large decode and bounded optional codecs.
     int Run() {
         const auto png = cases / L"imagen Ω.PNG";
         const auto gif = cases / L"animated.gif";
         Png(png); Gif(gif, true); Gif(cases / L"single.gif", false);
+        CancellationBoundaries(png, gif);
+        SearchCancellation(png);
+        LargeDecodeCharacterization();
         Check(Compare(png,2,1).image->IsValid(), "native alpha PNG required");
         const auto scaled = loader.LoadSync(png.wstring(), 32, 16);
         Check(scaled && scaled->width == 32 && scaled->height == 16 && scaled->pixels.size() == 32 * 16 * 4 && !scaled->gpuBitmap,

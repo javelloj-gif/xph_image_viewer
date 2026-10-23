@@ -35,3 +35,5 @@ Consultar la hoja de ruta para prioridad y estado. Un requisito registrado no si
 que esté implementado ni que sus decisiones pendientes se hayan resuelto.
 
 - [013: Cierre de la refactorización base](013-cierre-base/spec.md).
+
+- [014: Completar cancelación AR-005](014-cancelacion-ar005/spec.md).

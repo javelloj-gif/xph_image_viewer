@@ -624,10 +624,15 @@ void BoardPage::LoadItemTexture(BoardItem& item) {
 
     item.isLoading = true;
     std::wstring path = item.filePath;
+    const auto request = std::make_shared<const std::wstring>(path);
+    item.pendingRequest = request;
+    item.loadLifetime = std::make_shared<const bool>(true);
     
-    m_app->m_imageLoader.LoadAsync(path, [this, path](std::shared_ptr<ImageData> img) {
+    m_app->m_imageLoader.LoadAsync(path, [this, path, request](std::shared_ptr<ImageData> img) {
         for (auto& it : m_items) {
-            if (it.filePath == path) {
+            if (it.filePath == path && it.pendingRequest == request) {
+                it.pendingRequest.reset();
+                it.loadLifetime.reset();
                 it.isLoading = false;
                 if (img) {
                     it.texture = img;
@@ -643,7 +648,7 @@ void BoardPage::LoadItemTexture(BoardItem& item) {
             }
         }
         m_app->m_window.RequestRedraw();
-    }, 400, 400);
+    }, 400, 400, {}, item.loadLifetime);
 }
 
 void BoardPage::ListCurrentDirectoryImages() {

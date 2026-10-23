@@ -36,6 +36,7 @@ public:
     void Draw(Renderer& renderer);
 
     // ── Input Event Routing ────────────────────────────────────────────────
+    // Routes scrolling/hover on UI; changing the hovered item cancels the previous original/animation request.
     bool OnMouseMove(float x, float y, KeyModifiers mods);
     // Handles folder/preview selection and context actions, including removal from the shared service.
     bool OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
@@ -49,6 +50,7 @@ public:
     void AddFolder(const std::wstring& path);
     // Selects through App's shared folder service, loads the image and updates Library layout.
     void SetCurrentFolder(int index);
+    // Synchronizes the active folder from App's file list, canceling previous preview/hover work if selection changes.
     void SyncCurrentFolderWithApp();
 
 private:
@@ -81,6 +83,7 @@ private:
 
     // Hovered full-size preview
     std::wstring m_hoveredOriginalPath;
+    ImageLoadLifetime m_hoverLoadLifetime; // Changed on hover/folder/page exit; loader holds only a weak lease.
     std::shared_ptr<ImageData> m_hoveredOriginalImage;
     std::shared_ptr<AnimatedImageData> m_hoveredOriginalAnim;
     FrameSequencer m_hoveredAnimSequencer;

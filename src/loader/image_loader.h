@@ -6,6 +6,7 @@
 #pragma once
 
 #include "common/types.h"
+#include "common/image_request.h"
 #include "rendering/renderer.h"
 
 namespace kv {
@@ -76,7 +77,8 @@ public:
     bool Initialize(uint32_t threadCount = 4);
 
     // Owner/UI thread, non-reentrant: rejects new work, discards queued tasks, joins active decodes,
-    // then releases pending results without callbacks. Idempotent; WIC in progress is not interrupted.
+    // then releases pending results without callbacks. Active tasks stop at the next cooperative boundary.
+    // WIC already executing must return before join; codecs are never forcibly terminated.
     void Shutdown();
 
     // ── Synchronous Loading ────────────────────────────────────────────────
@@ -104,10 +106,15 @@ public:
     // While running, carries UI validity to delivery; callback receives the original CPU result, including failure.
     // Before initialization/after stop, submissions are ignored; shutdown cancels undelivered callbacks.
     // Captured consumers must outlive delivery, just as for the completion callback.
-    void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0, ImageUploadPredicate isCurrent = {});
-    void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback);
+    // Optional weak lease cancels CPU work and delivery when its UI owner is removed; never capture the lease in callback.
+    void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0, ImageUploadPredicate isCurrent = {}, std::weak_ptr<const bool> lifetime = {});
+    // Same lease contract for animation; cancellation discards partial frames without callback.
+    void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback, std::weak_ptr<const bool> lifetime = {});
 
-    /// Checks optional validity outside locks, uploads if current, then delivers every callback on the main thread.
+    // UI thread: removes obsolete queued requests and frees their captures outside locks; active calls observe cancellation.
+    void CancelObsoleteRequests();
+
+    /// UI: prunes obsolete tasks; canceled leases skip predicate/upload/callback. Validity-only rejection still delivers CPU result.
     /// Call this once per frame from the main/render thread.
     void ProcessPendingTextures(Renderer& renderer);
 
@@ -137,17 +144,18 @@ public:
 private:
     // ── WIC Decoding (runs on any thread) ─────────────────────────────────
     // Opens one decoder and reads static frame 0 at the requested CPU size; no GPU work.
-    std::shared_ptr<ImageData> DecodeImage(const std::wstring& path, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
+    std::shared_ptr<ImageData> DecodeImage(const std::wstring& path, uint32_t targetWidth = 0, uint32_t targetHeight = 0, ImageCancellation cancel = {});
     // Borrows a caller-owned decoder for frame 0; preserves the same scaling/conversion/error path.
-    std::shared_ptr<ImageData> DecodeImage(IWICBitmapDecoder* decoder, const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight);
+    std::shared_ptr<ImageData> DecodeImage(IWICBitmapDecoder* decoder, const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight, ImageCancellation cancel = {});
     // Opens a decoder and attempts animation only; preserves legacy invalid/empty-result behavior.
-    std::shared_ptr<AnimatedImageData> DecodeAnimatedImage(const std::wstring& path);
+    std::shared_ptr<AnimatedImageData> DecodeAnimatedImage(const std::wstring& path, ImageCancellation cancel = {});
     // Borrows a decoder with count >1 and composes CPU frames using the existing GIF-oriented metadata/disposal rules.
-    std::shared_ptr<AnimatedImageData> DecodeAnimatedFrames(IWICBitmapDecoder* decoder, const std::wstring& path, UINT frameCount);
+    std::shared_ptr<AnimatedImageData> DecodeAnimatedFrames(IWICBitmapDecoder* decoder, const std::wstring& path, UINT frameCount, ImageCancellation cancel = {});
 
     // ── WIC Helpers ───────────────────────────────────────────────────────
     ComPtr<IWICBitmapDecoder> CreateDecoder(const std::wstring& path);
-    bool DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth = 0, uint32_t targetHeight = 0);
+    // Converts one frame with checks between WIC stages; no partial result escapes after cancellation.
+    bool DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth = 0, uint32_t targetHeight = 0, ImageCancellation cancel = {});
 
     // ── Pending Texture Queue ─────────────────────────────────────────────
     // Owns CPU result and UI functions across worker-to-UI delivery; validity never runs on workers.
@@ -155,11 +163,13 @@ private:
         std::shared_ptr<ImageData> image;
         ImageLoadCallback callback;
         ImageUploadPredicate isCurrent;
+        ImageCancellation cancel;
     };
 
     struct PendingAnimatedTexture {
         std::shared_ptr<AnimatedImageData> anim;
         AnimatedImageLoadCallback callback;
+        ImageCancellation cancel;
     };
 
     std::mutex                     m_pendingMutex;
@@ -168,15 +178,23 @@ private:
 
     // ── Thread Pool ───────────────────────────────────────────────────────
     std::vector<std::thread>       m_workers;
-    std::queue<std::function<void()>> m_taskQueue;
+    // Retains CPU work and its cancellation snapshot, allowing physical queue removal without calling UI predicates.
+    struct DecodeTask {
+        std::function<void()> work;
+        ImageCancellation cancel;
+        // Allows controlled delivery tests and workers to execute only still-current work.
+        void operator()() const { if (!cancel.IsCancelled()) work(); }
+    };
+    std::queue<DecodeTask> m_taskQueue;
     std::mutex                     m_queueMutex;
     std::condition_variable        m_queueCV;
     std::atomic<bool>              m_shutdown = true;
+    std::stop_source m_stopSource; // Replaced only after all workers join; task snapshots retain old stop state.
 
     // Worker-only: takes tasks until stopped; completes a task already taken, never drains queued work after stop.
     void WorkerLoop();
     // Serializes admission with shutdown; rejected/canceled tasks never invoke completion callbacks.
-    void EnqueueTask(std::function<void()> task);
+    void EnqueueTask(std::function<void()> task, ImageCancellation cancel = {});
 
     // ── WIC Factory ───────────────────────────────────────────────────────
     ComPtr<IWICImagingFactory2>    m_wicFactory;

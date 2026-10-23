@@ -53,6 +53,7 @@ bool ImageLoader::Initialize(uint32_t threadCount) {
     );
     KV_HR_RETURN(hr, L"CoCreateInstance(WICImagingFactory2)");
 
+    m_stopSource = std::stop_source{};
     m_shutdown = false;
     m_workers.reserve(threadCount);
     for (uint32_t i = 0; i < threadCount; ++i) {
@@ -68,10 +69,11 @@ ImageLoader::~ImageLoader() {
 }
 
 void ImageLoader::Shutdown() {
-    std::queue<std::function<void()>> discarded;
+    std::queue<DecodeTask> discarded;
     {
         std::lock_guard lock(m_queueMutex);
         m_shutdown = true;
+        m_stopSource.request_stop();
         discarded.swap(m_taskQueue);
     }
     m_queueCV.notify_all();
@@ -97,7 +99,7 @@ void ImageLoader::WorkerLoop() {
     ScopedComInit com;
 
     while (true) {
-        std::function<void()> task;
+        DecodeTask task;
         {
             std::unique_lock lock(m_queueMutex);
             m_queueCV.wait(lock, [this] { return m_shutdown || !m_taskQueue.empty(); });
@@ -111,11 +113,11 @@ void ImageLoader::WorkerLoop() {
     }
 }
 
-void ImageLoader::EnqueueTask(std::function<void()> task) {
+void ImageLoader::EnqueueTask(std::function<void()> task, ImageCancellation cancel) {
     {
         std::lock_guard lock(m_queueMutex);
         if (m_shutdown) return;
-        m_taskQueue.push(std::move(task));
+        m_taskQueue.push({std::move(task), std::move(cancel)});
     }
     m_queueCV.notify_one();
 }
@@ -143,9 +145,11 @@ ComPtr<IWICBitmapDecoder> ImageLoader::CreateDecoder(const std::wstring& path) {
 
 // ─── Decode Single Frame ─────────────────────────────────────────────────────
 
-bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth, uint32_t targetHeight) {
+bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint32_t targetWidth, uint32_t targetHeight, ImageCancellation cancel) {
+    if (cancel.IsCancelled()) return false;
     UINT width = 0, height = 0;
     KV_HR_RETURN(frame->GetSize(&width, &height), L"GetSize");
+    if (cancel.IsCancelled()) return false;
 
     UINT actualWidth = width;
     UINT actualHeight = height;
@@ -162,13 +166,16 @@ bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint
 
         ComPtr<IWICBitmapScaler> scaler;
         KV_HR_RETURN(m_wicFactory->CreateBitmapScaler(&scaler), L"CreateBitmapScaler");
+        if (cancel.IsCancelled()) return false;
         HRESULT hr = scaler->Initialize(frame, actualWidth, actualHeight, WICBitmapInterpolationModeFant);
         KV_HR_RETURN(hr, L"BitmapScaler::Initialize");
+        if (cancel.IsCancelled()) return false;
         source = scaler;
     }
 
     ComPtr<IWICFormatConverter> converter;
     KV_HR_RETURN(m_wicFactory->CreateFormatConverter(&converter), L"CreateFormatConverter");
+    if (cancel.IsCancelled()) return false;
 
     HRESULT hr = converter->Initialize(
         source.Get(),
@@ -178,9 +185,11 @@ bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint
         WICBitmapPaletteTypeMedianCut
     );
     KV_HR_RETURN(hr, L"FormatConverter::Initialize");
+    if (cancel.IsCancelled()) return false;
 
     WICPixelFormatGUID sourceFormat;
     frame->GetPixelFormat(&sourceFormat);
+    if (cancel.IsCancelled()) return false;
     out.hasAlpha = (sourceFormat != GUID_WICPixelFormat24bppBGR &&
                     sourceFormat != GUID_WICPixelFormat24bppRGB &&
                     sourceFormat != GUID_WICPixelFormat8bppGray);
@@ -189,11 +198,12 @@ bool ImageLoader::DecodeFrame(IWICBitmapFrameDecode* frame, ImageData& out, uint
     out.width  = actualWidth;
     out.height = actualHeight;
     out.pixels.resize(static_cast<size_t>(stride) * actualHeight);
+    if (cancel.IsCancelled()) return false;
 
     hr = converter->CopyPixels(nullptr, stride, static_cast<UINT>(out.pixels.size()), out.pixels.data());
     KV_HR_RETURN(hr, L"CopyPixels");
 
-    return true;
+    return !cancel.IsCancelled();
 }
 
 // ─── Synchronous Loading ─────────────────────────────────────────────────────
@@ -202,17 +212,20 @@ std::shared_ptr<ImageData> ImageLoader::LoadSync(const std::wstring& path, uint3
     return DecodeImage(path, targetWidth, targetHeight);
 }
 
-std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
+std::shared_ptr<ImageData> ImageLoader::DecodeImage(const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight, ImageCancellation cancel) {
+    if (cancel.IsCancelled()) return nullptr;
     auto decoder = CreateDecoder(path);
-    if (!decoder) return nullptr;
-    return DecodeImage(decoder.Get(), path, targetWidth, targetHeight);
+    if (!decoder || cancel.IsCancelled()) return nullptr;
+    return DecodeImage(decoder.Get(), path, targetWidth, targetHeight, cancel);
 }
 
 std::shared_ptr<ImageData> ImageLoader::DecodeImage(
-    IWICBitmapDecoder* decoder, const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight) {
+    IWICBitmapDecoder* decoder, const std::wstring& path, uint32_t targetWidth, uint32_t targetHeight, ImageCancellation cancel) {
+    if (cancel.IsCancelled()) return nullptr;
 
     ComPtr<IWICBitmapFrameDecode> frame;
     HRESULT hr = decoder->GetFrame(0, &frame);
+    if (cancel.IsCancelled()) return nullptr;
     if (FAILED(hr)) {
         LogError(std::format(L"GetFrame(0) failed for '{}': 0x{:08X}",
             path, static_cast<unsigned>(hr)));
@@ -222,7 +235,7 @@ std::shared_ptr<ImageData> ImageLoader::DecodeImage(
     auto image = std::make_shared<ImageData>();
     image->filePath = path;
 
-    if (!DecodeFrame(frame.Get(), *image, targetWidth, targetHeight)) {
+    if (!DecodeFrame(frame.Get(), *image, targetWidth, targetHeight, cancel)) {
         return nullptr;
     }
 
@@ -238,16 +251,17 @@ std::shared_ptr<AnimatedImageData> ImageLoader::LoadAnimatedSync(const std::wstr
     return DecodeAnimatedImage(path);
 }
 
-std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::wstring& path) {
+std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::wstring& path, ImageCancellation cancel) {
+    if (cancel.IsCancelled()) return nullptr;
     auto decoder = CreateDecoder(path);
-    if (!decoder) return nullptr;
+    if (!decoder || cancel.IsCancelled()) return nullptr;
 
     UINT frameCount = 0;
     HRESULT hr = decoder->GetFrameCount(&frameCount);
-    if (FAILED(hr) || frameCount <= 1) {
+    if (FAILED(hr) || frameCount <= 1 || cancel.IsCancelled()) {
         return nullptr;
     }
-    return DecodeAnimatedFrames(decoder.Get(), path, frameCount);
+    return DecodeAnimatedFrames(decoder.Get(), path, frameCount, cancel);
 }
 
 ViewerLoadResult ImageLoader::LoadForViewerSync(const std::wstring& path) {
@@ -271,7 +285,8 @@ ViewerLoadResult ImageLoader::LoadForViewerSync(const std::wstring& path) {
 }
 
 std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
-    IWICBitmapDecoder* decoder, const std::wstring& path, UINT frameCount) {
+    IWICBitmapDecoder* decoder, const std::wstring& path, UINT frameCount, ImageCancellation cancel) {
+    if (cancel.IsCancelled()) return nullptr;
     HRESULT hr = S_OK;
 
     auto anim = std::make_shared<AnimatedImageData>();
@@ -313,6 +328,7 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
         globalH = 1;
     }
 
+    if (cancel.IsCancelled()) return nullptr;
     std::vector<uint32_t> canvas(static_cast<size_t>(globalW) * globalH, 0);
     std::vector<uint32_t> prevCanvas = canvas;
 
@@ -320,25 +336,31 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
     UINT prevLeft = 0, prevTop = 0, prevW = 0, prevH = 0;
 
     for (UINT i = 0; i < frameCount; ++i) {
+        if (cancel.IsCancelled()) return nullptr;
         ComPtr<IWICBitmapFrameDecode> frame;
         hr = decoder->GetFrame(i, &frame);
+        if (cancel.IsCancelled()) return nullptr;
         if (FAILED(hr)) continue;
 
         UINT localW = 0, localH = 0;
         frame->GetSize(&localW, &localH);
+        if (cancel.IsCancelled()) return nullptr;
 
         ComPtr<IWICFormatConverter> converter;
         if (FAILED(m_wicFactory->CreateFormatConverter(&converter))) continue;
+        if (cancel.IsCancelled()) return nullptr;
         if (FAILED(converter->Initialize(frame.Get(), GUID_WICPixelFormat32bppPBGRA,
                 WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeMedianCut)))
             continue;
 
+        if (cancel.IsCancelled()) return nullptr;
         uint32_t stride = localW * 4;
         std::vector<uint8_t> localPixels(static_cast<size_t>(stride) * localH);
         if (FAILED(converter->CopyPixels(nullptr, stride, static_cast<UINT>(localPixels.size()),
                 localPixels.data())))
             continue;
 
+        if (cancel.IsCancelled()) return nullptr;
         UINT left = 0, top = 0;
         uint8_t disposal = 0;
         double delayMs = 100.0;
@@ -376,6 +398,7 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
         if (i > 0) {
             if (prevDisposal == 2) {
                 for (UINT dy = 0; dy < prevH; ++dy) {
+                    if (cancel.IsCancelled()) return nullptr;
                     for (UINT dx = 0; dx < prevW; ++dx) {
                         UINT tx = prevLeft + dx;
                         UINT ty = prevTop + dy;
@@ -392,6 +415,7 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
         prevCanvas = canvas;
 
         for (UINT dy = 0; dy < localH; ++dy) {
+            if (cancel.IsCancelled()) return nullptr;
             for (UINT dx = 0; dx < localW; ++dx) {
                 UINT tx = left + dx;
                 UINT ty = top + dy;
@@ -446,40 +470,58 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
     LogInfo(std::format(L"Loaded animated: {} ({} frames, {:.0f}ms total)",
         path, anim->frames.size(), anim->totalDurationMs));
 
-    return anim;
+    return cancel.IsCancelled() ? nullptr : anim;
 }
 
 // ─── Asynchronous Loading ────────────────────────────────────────────────────
 
-void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth, uint32_t targetHeight, ImageUploadPredicate isCurrent) {
-    EnqueueTask([this, path, callback, targetWidth, targetHeight, isCurrent]() {
-        auto image = DecodeImage(path, targetWidth, targetHeight);
+void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth, uint32_t targetHeight, ImageUploadPredicate isCurrent, std::weak_ptr<const bool> lifetime) {
+    const ImageCancellation cancel(lifetime, m_stopSource.get_token());
+    EnqueueTask([this, path, callback, targetWidth, targetHeight, isCurrent, cancel]() {
+        auto image = DecodeImage(path, targetWidth, targetHeight, cancel);
+        if (cancel.IsCancelled()) return;
 
         if (image) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingTextures.push_back({ image, callback, isCurrent });
+            m_pendingTextures.push_back({ image, callback, isCurrent, cancel });
         } else if (callback) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingTextures.push_back({ nullptr, callback, isCurrent });
+            m_pendingTextures.push_back({ nullptr, callback, isCurrent, cancel });
         }
-    });
+    }, cancel);
 }
 
-void ImageLoader::LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback) {
-    EnqueueTask([this, path, callback]() {
-        auto anim = DecodeAnimatedImage(path);
+void ImageLoader::LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback, std::weak_ptr<const bool> lifetime) {
+    const ImageCancellation cancel(lifetime, m_stopSource.get_token());
+    EnqueueTask([this, path, callback, cancel]() {
+        auto anim = DecodeAnimatedImage(path, cancel);
+        if (cancel.IsCancelled()) return;
 
         if (anim) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingAnimatedTextures.push_back({ anim, callback });
+            m_pendingAnimatedTextures.push_back({ anim, callback, cancel });
         } else if (callback) {
             std::lock_guard lock(m_pendingMutex);
-            m_pendingAnimatedTextures.push_back({ nullptr, callback });
+            m_pendingAnimatedTextures.push_back({ nullptr, callback, cancel });
         }
-    });
+    }, cancel);
+}
+
+void ImageLoader::CancelObsoleteRequests() {
+    std::unique_lock lock(m_queueMutex);
+    if (m_taskQueue.empty()) return; // No temporary queue allocation on the idle render path.
+    std::queue<DecodeTask> retained, discarded;
+    while (!m_taskQueue.empty()) {
+        auto& target = m_taskQueue.front().cancel.IsCancelled() ? discarded : retained;
+        target.push(std::move(m_taskQueue.front()));
+        m_taskQueue.pop();
+    }
+    m_taskQueue.swap(retained);
+    lock.unlock(); // Release canceled captures only after unlocking, on the owner/UI thread.
 }
 
 void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
+    CancelObsoleteRequests();
     std::vector<PendingTexture> pending;
     std::vector<PendingAnimatedTexture> pendingAnimated;
     {
@@ -489,7 +531,9 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     }
 
     for (auto& pt : pending) {
+        if (pt.cancel.IsCancelled()) continue;
         const bool isCurrent = !pt.isCurrent || pt.isCurrent();
+        if (pt.cancel.IsCancelled()) continue;
         if (isCurrent && pt.image && pt.image->IsValid() && !pt.image->HasGpuBitmap()) {
             UploadToGpu(*pt.image, renderer);
         }
@@ -499,6 +543,7 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     }
 
     for (auto& pa : pendingAnimated) {
+        if (pa.cancel.IsCancelled()) continue;
         if (pa.anim && pa.anim->IsValid()) {
             UploadAnimationToGpu(*pa.anim, renderer);
         }

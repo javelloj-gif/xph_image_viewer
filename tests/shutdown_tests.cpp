@@ -138,12 +138,71 @@ public:
         DestroyWindow(hwnd);
     }
 
+    // Exercises a real private pipe with no reader, disconnection, late drain and connection+write sharing one budget.
+    static void ClientBudget(int mode) {
+        const auto name = L"\\\\.\\pipe\\lenteuv-client-budget-" + std::to_wstring(GetCurrentProcessId());
+        const auto create = [&] {
+            return CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                1, 0, 64, 0, nullptr);
+        };
+        HANDLE initial = create();
+        Check(initial != INVALID_HANDLE_VALUE, "client budget server");
+        HANDLE occupied = INVALID_HANDLE_VALUE;
+        if (mode == 3) {
+            occupied = CreateFileW(name.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+            Check(occupied != INVALID_HANDLE_VALUE, "connection initially busy");
+        }
+        ShutdownTestHandle release(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        Check(release.value != nullptr, "client budget release event");
+        std::atomic<bool> connected{false};
+        std::atomic<size_t> received{0};
+        const std::string payload(1024 * 1024, 'z');
+        std::jthread receiver([&, initial, occupied] {
+            HANDLE server = initial;
+            if (mode == 3) {
+                Sleep(200); // Leaves only 100 ms of the 300 ms total budget for the write.
+                CloseHandle(occupied);
+                DisconnectNamedPipe(server);
+                CloseHandle(server);
+                server = create();
+            }
+            if (server == INVALID_HANDLE_VALUE) return;
+            connected = ConnectNamedPipe(server, nullptr) || GetLastError() == ERROR_PIPE_CONNECTED;
+            if (connected) {
+                if (mode == 1) Sleep(30); // Disconnect while the oversized write is pending.
+                else if (mode == 2) {
+                    Sleep(30);
+                    char bytes[16384];
+                    DWORD count = 0;
+                    while (received < payload.size() && ReadFile(server, bytes, sizeof(bytes), &count, nullptr) && count) {
+                        received += count;
+                    }
+                } else WaitForSingleObject(release.value, 3000); // Connected, deliberately never consumes data.
+                DisconnectNamedPipe(server);
+            }
+            CloseHandle(server);
+        });
+        DWORD error = 0;
+        const auto start = GetTickCount64();
+        const bool sent = SingleInstanceIpc::SendMessage(name, payload, mode == 3 ? 300 : 150, &error);
+        const auto elapsed = GetTickCount64() - start;
+        SetEvent(release.value);
+        receiver.join();
+        Check(connected, "client connected to controlled receiver");
+        if (mode == 2) Check(sent && error == ERROR_SUCCESS && received == payload.size(), "late reader receives complete payload");
+        else if (mode == 1) Check(!sent && error != ERROR_SUCCESS && error != ERROR_TIMEOUT, "disconnected writer reports explicit failure");
+        else Check(!sent && error == ERROR_TIMEOUT, "non-reading receiver times out pending write");
+        Check(elapsed < (mode == 3 ? 450u : 700u), "connection/write do not each receive a full timeout");
+        std::cout << "IPC client mode=" << mode << " elapsed_ms=" << elapsed << " error=" << error
+            << " received=" << received << std::endl;
+    }
+
     // Starts only this harness, kills only its own timed-out child, and checks actual process exit.
     static int Parent() {
         wchar_t exe[MAX_PATH] = {};
         GetModuleFileNameW(nullptr, exe, MAX_PATH);
         int failed = 0;
-        for (int scenario = 0; scenario < 9; ++scenario) {
+        for (int scenario = 0; scenario < 13; ++scenario) {
             std::wstring command = L"\"" + std::wstring(exe) + L"\" --shutdown-child " + std::to_wstring(scenario);
             STARTUPINFOW startup = {};
             startup.cb = sizeof(startup);
@@ -176,7 +235,8 @@ int RunShutdownTests(int argc, char* argv[]) {
         kv::ShutdownTests::Check(argc == 3, "shutdown child arguments");
         const int scenario = std::stoi(argv[2]);
         if (scenario == 0) kv::ShutdownTests::Loader();
-        else kv::ShutdownTests::Ipc(scenario - 1);
+        else if (scenario < 9) kv::ShutdownTests::Ipc(scenario - 1);
+        else kv::ShutdownTests::ClientBudget(scenario - 9);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Shutdown failure: " << e.what() << std::endl;

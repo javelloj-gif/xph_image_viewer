@@ -40,6 +40,7 @@ public:
     void Draw(Renderer& renderer);
 
     // ── Input Event Routing ────────────────────────────────────────────────
+    // Routes modal/scroll/hover on UI; replacing hover cancels the preceding animation lease.
     bool OnMouseMove(float x, float y, KeyModifiers mods);
     bool OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
@@ -89,6 +90,7 @@ private:
 
     // Hovered animated file caching (same as library page)
     std::wstring m_hoveredOriginalPath;
+    ImageLoadLifetime m_hoverLoadLifetime; // Changed on hover/folder/page exit; loader holds only a weak lease.
     std::shared_ptr<AnimatedImageData> m_hoveredOriginalAnim;
     FrameSequencer m_hoveredAnimSequencer;
     bool m_hoveredOriginalLoading = false;

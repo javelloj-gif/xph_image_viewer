@@ -377,6 +377,7 @@ void WaterfallPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
 
     const auto request = std::make_shared<const std::wstring>(item.filePath);
     item.pendingRequest = request;
+    item.loadLifetime = std::make_shared<const bool>(true);
     item.isLoading = true;
     m_app->m_imageLoader.LoadAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
         const bool hasImage = img != nullptr;
@@ -384,7 +385,7 @@ void WaterfallPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
             if (hasImage) CalculateLayout();
             m_app->m_window.RequestRedraw();
         }
-    }, 200, 200, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }); // 200px width previews
+    }, 200, 200, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }, item.loadLifetime); // 200px width previews
 }
 
 void WaterfallPage::DrawCheckerboard(Renderer& renderer, const RectF& rect) {
@@ -481,6 +482,7 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 
     if (newHoveredPreviewIdx != m_hoveredPreviewIdx && !m_waterfallBlockActiveItem) {
+        m_hoverLoadLifetime.reset();
         m_hoveredPreviewIdx = newHoveredPreviewIdx;
         m_app->m_window.RequestRedraw();
 
@@ -489,6 +491,7 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
             auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
             std::wstring path = folder.previews[m_hoveredPreviewIdx].filePath;
             m_hoveredOriginalPath = path;
+            m_hoverLoadLifetime = std::make_shared<const bool>(true);
             if (ImageLoader::IsAnimatedFormat(path)) {
                 m_hoveredOriginalAnim = nullptr;
                 m_hoveredOriginalLoading = true;
@@ -505,7 +508,7 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
                         }
                         m_app->m_window.RequestRedraw();
                     }
-                });
+                }, m_hoverLoadLifetime);
             } else {
                 m_hoveredOriginalAnim = nullptr;
                 m_hoveredOriginalLoading = false;

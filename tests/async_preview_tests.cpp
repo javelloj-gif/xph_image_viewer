@@ -1251,6 +1251,188 @@ public:
         Check(ready && boardAlive && searchAlive, "App joins both producers before loader shutdown");
     }
 
+    // Exercises real consumers before tasks run, independent cancellation, same-path retry and delivery cancellation.
+    void ConsumerCancellation() {
+        auto& loader = app.m_imageLoader;
+        auto& strip = app.m_thumbnailStrip;
+        strip.SetFileList({L"missing-a.png", L"missing-b.png"});
+        strip.LoadThumbnail(0);
+        strip.LoadThumbnail(1);
+        std::weak_ptr<const bool> removed = strip.m_thumbnails[0].loadLifetime;
+        strip.SetFileList({L"missing-b.png"});
+        loader.CancelObsoleteRequests();
+        Check(removed.expired() && loader.m_taskQueue.size() == 1, "removed strip task physically pruned, retained task alive");
+        Deliver(TakeRequest());
+        Check(strip.m_thumbnails[0].loadFailed, "retained strip task completes");
+        strip.SetFileList({L"missing-a.png"});
+        strip.LoadThumbnail(0);
+        strip.CancelPendingLoads();
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.empty() && !strip.m_thumbnails[0].isLoading, "page exit cancels strip and permits retry");
+        strip.LoadThumbnail(0);
+        Deliver(TakeRequest());
+        Check(strip.m_thumbnails[0].loadFailed, "same path can be requested after cancellation");
+
+        Folders();
+        app.m_libraryPage.LoadPreviewTexture(0, 0);
+        app.m_waterfallPage.LoadPreviewTexture(0, 1);
+        app.m_folders[0].previews.erase(app.m_folders[0].previews.begin());
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.size() == 1, "removed preview cancels only its own lease");
+        Deliver(TakeRequest());
+        Check(app.m_folders[0].previews[0].loadFailed, "other preview survives removal");
+        Folders();
+        app.m_waterfallPage.LoadPreviewTexture(0, 0);
+        app.m_folderData.SetCurrentFolderIndex(1, false);
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.empty() && !app.m_folders[0].previews[0].isLoading, "folder change cancels previous shared previews");
+
+        int callbacks = 0, predicates = 0;
+        auto owner = std::make_shared<const bool>(true);
+        loader.LoadAsync(L"missing-cancel.png", [&](std::shared_ptr<ImageData>) { ++callbacks; }, 0, 0,
+            [&] { ++predicates; return true; }, owner);
+        auto task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        Check(loader.m_pendingTextures.size() == 1, "static completion awaiting UI");
+        owner.reset();
+        loader.ProcessPendingTextures(app.m_renderer);
+        Check(callbacks == 0 && predicates == 0, "canceled completion invokes neither UI predicate, upload nor callback");
+        owner = std::make_shared<const bool>(true);
+        loader.LoadAnimatedAsync(L"missing-cancel.gif", [&](std::shared_ptr<AnimatedImageData>) { ++callbacks; }, owner);
+        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        owner.reset();
+        loader.ProcessPendingTextures(app.m_renderer);
+        Check(callbacks == 0 && loader.m_pendingAnimatedTextures.empty(), "animation delivery cancellation");
+
+        // Exercise hover handlers with fixed geometry, including A->leave->A before decode and animation fallback.
+        Folders();
+        app.m_renderer.m_width = 1000;
+        app.m_renderer.m_height = 700;
+        app.m_folders[0].previews[0].rect = RectF::FromXYWH(600, 100, 100, 100);
+        app.m_libraryPage.m_hoveredPreviewIdx = -1;
+        app.m_libraryPage.OnMouseMove(650, 150, {});
+        std::weak_ptr<const bool> oldHover = app.m_libraryPage.m_hoverLoadLifetime;
+        app.m_libraryPage.OnMouseMove(500, 600, {});
+        app.m_libraryPage.OnMouseMove(650, 150, {});
+        loader.CancelObsoleteRequests();
+        Check(oldHover.expired() && loader.m_taskQueue.size() == 1, "Library hover leave/re-enter cancels only prior same-path generation");
+        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        loader.ProcessPendingTextures(app.m_renderer); // Missing PNG animation invokes the existing static fallback.
+        Check(loader.m_taskQueue.size() == 1, "Library animation failure retains its static fallback");
+        task = std::move(loader.m_taskQueue.front()); loader.m_taskQueue.pop(); task();
+        loader.ProcessPendingTextures(app.m_renderer);
+        Check(!app.m_libraryPage.m_hoveredOriginalLoading, "Library static fallback completes under same lease");
+        app.CancelHoverLoads();
+        app.m_waterfallPage.m_previewRects = {RectF::FromXYWH(100, 100, 100, 100), RectF::FromXYWH(300, 100, 100, 100)};
+        app.m_waterfallPage.OnMouseMove(150, 150, {});
+        oldHover = app.m_waterfallPage.m_hoverLoadLifetime;
+        app.m_waterfallPage.OnMouseMove(900, 600, {});
+        loader.CancelObsoleteRequests();
+        Check(oldHover.expired() && loader.m_taskQueue.empty(), "Waterfall hover exit cancels queued animation");
+        app.m_waterfallPage.OnMouseMove(150, 150, {});
+        oldHover = app.m_waterfallPage.m_hoverLoadLifetime;
+        app.m_folderData.SortFolder(0, FolderDataManager::SortMode::NameDesc);
+        loader.CancelObsoleteRequests();
+        Check(oldHover.expired() && loader.m_taskQueue.empty(), "sorting retains previews but cancels index-dependent hover");
+        app.m_libraryPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
+        app.m_libraryPage.m_hoveredOriginalPath = L"missing-a.png";
+        loader.LoadAnimatedAsync(L"missing-a.png", [&](auto) { ++callbacks; }, app.m_libraryPage.m_hoverLoadLifetime);
+        app.DeleteImage(L"missing-a.png");
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.empty() && !app.m_libraryPage.m_hoverLoadLifetime, "deleting hovered path cancels original request");
+
+        // Fresh leases on both pages are also canceled when leaving the mode.
+        Folders();
+        app.m_currentPage = Page::Library;
+        app.m_libraryPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
+        app.m_waterfallPage.m_hoverLoadLifetime = std::make_shared<const bool>(true);
+        loader.LoadAnimatedAsync(L"hover.gif", [&](auto) { ++callbacks; }, app.m_libraryPage.m_hoverLoadLifetime);
+        loader.LoadAnimatedAsync(L"hover.gif", [&](auto) { ++callbacks; }, app.m_waterfallPage.m_hoverLoadLifetime);
+        app.SetPage(Page::Viewer);
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.empty() && callbacks == 0, "mode change cancels both hover generations");
+
+        app.m_boardPage.Initialize(&app);
+        app.m_boardPage.m_items.clear();
+        BoardItem item; item.type = BoardItemType::Image; item.filePath = L"same-board.png";
+        app.m_boardPage.m_items.push_back(item);
+        app.m_boardPage.m_items.push_back(item);
+        app.m_boardPage.LoadItemTexture(app.m_boardPage.m_items[0]);
+        app.m_boardPage.LoadItemTexture(app.m_boardPage.m_items[1]);
+        app.m_boardPage.DeleteItemsByIndices({0});
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.size() == 1, "Board removal cancels one duplicate path only");
+        Deliver(TakeRequest());
+        Check(app.m_boardPage.m_items[0].loadFailed, "Board result applies by identity to surviving item");
+        app.m_boardPage.m_items[0].loadFailed = false;
+        app.m_boardPage.LoadItemTexture(app.m_boardPage.m_items[0]);
+        app.m_currentPage = Page::Board;
+        app.SetPage(Page::Viewer);
+        loader.CancelObsoleteRequests();
+        Check(loader.m_taskQueue.empty() && !app.m_boardPage.m_items[0].isLoading, "Board page departure cancels pending work");
+    }
+
+    // Holds a real Board metadata read at the cache mutex while canceling, then checks restart and catalog ownership.
+    void BoardScanCancellation() {
+        const auto root = std::filesystem::current_path();
+        Check(std::filesystem::is_directory(root / L"user_data") && std::filesystem::is_regular_file(root / L"test/seed.png"), "isolated cancellation staging required");
+        const auto directory = root / L"board-scan";
+        std::filesystem::create_directory(directory);
+        std::filesystem::copy_file(root / L"test/seed.png", directory / L"copy.png");
+        const auto catalog = directory / L"xmpTags.json";
+        { std::ofstream file(catalog); file << "sentinel"; }
+        // Reads only the synthetic catalog owned by this copied harness.
+        const auto readCatalog = [&] {
+            std::ifstream file(catalog, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(file), {});
+        };
+        app.m_tagManager.Initialize(app.m_imageLoader.GetWicFactory());
+        auto& scanner = *app.m_boardPage.m_tagScanner;
+        // Board's ReadTags will block before WIC, with all dependencies still alive.
+        std::unique_lock cacheLock(app.m_tagManager.m_cache.m_cacheMutex);
+        scanner.StartScan(directory);
+        const auto readyDeadline = GetTickCount64() + 3000;
+        while (scanner.m_scanTotal.load() == 0 && scanner.IsScanning() && GetTickCount64() < readyDeadline) Sleep(1);
+        const bool ready = scanner.m_scanTotal.load() == 1;
+        std::jthread cancel([&] { scanner.CancelScan(); });
+        const auto stopDeadline = GetTickCount64() + 3000;
+        while (!scanner.m_cancelled && GetTickCount64() < stopDeadline) Sleep(1);
+        const bool requested = scanner.m_cancelled;
+        cacheLock.unlock();
+        cancel.join();
+        Check(ready && requested && !scanner.IsScanning() && scanner.m_scanCurrent == 0, "Board cancel stops after current read and joins");
+        Check(readCatalog() == "sentinel", "canceled Board scan preserves catalog bytes");
+        scanner.CancelScan();
+        scanner.StartScan(directory);
+        const auto finishDeadline = GetTickCount64() + 3000;
+        while (scanner.IsScanning() && GetTickCount64() < finishDeadline) Sleep(1);
+        const bool finished = !scanner.IsScanning();
+        scanner.CancelScan();
+        Check(finished && scanner.m_scanCurrent == 1 && readCatalog() == "[\n\n]\n", "restart scans normally and atomically publishes full catalog");
+        scanner.PublishCatalog(directory, "must-not-publish");
+        Check(readCatalog() == "[\n\n]\n", "publication rejected after cancellation");
+        // A destination held without delete sharing must remain intact if replacement fails.
+        HANDLE locked = CreateFileW(catalog.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+        Check(locked != INVALID_HANDLE_VALUE, "catalog replacement failure setup");
+        scanner.m_cancelled = false;
+        scanner.PublishCatalog(directory, "replacement");
+        CloseHandle(locked);
+        scanner.CancelScan();
+        Check(readCatalog() == "[\n\n]\n", "failed replacement preserves previous catalog");
+        for (const auto& file : std::filesystem::directory_iterator(directory)) {
+            Check(file.path().filename().wstring().find(L".tmp-") == std::wstring::npos, "catalog temporaries released");
+        }
+    }
+
+    // Runs the separate cancellation suite only from the staging prepared by its wrapper.
+    int RunCancellation() {
+        app.m_folderData.Initialize(&app);
+        ConsumerCancellation();
+        BoardScanCancellation();
+        ProducerShutdownOrder();
+        std::cout << "Passed " << checks << " consumer/scanner cancellation checks\n";
+        return 0;
+    }
+
     // Runs original regressions and the optional pre-upload validity contract with checks active in Release.
     int Run() {
         ProducerShutdownOrder();
@@ -1290,6 +1472,7 @@ int main(int argc, char* argv[]) {
     try {
         kv::ScopedComInit com;
         kv::AsyncPreviewTests tests;
+        if (argc == 2 && std::string_view(argv[1]) == "--cancellation-tests") return tests.RunCancellation();
         if (argc == 3 && std::string_view(argv[1]) == "--optimization-snapshot")
             return tests.VisualSnapshot(std::filesystem::path(argv[2]));
         if (argc == 3 && std::string_view(argv[1]) == "--layout-snapshot")

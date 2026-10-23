@@ -1,4 +1,4 @@
-> Disposición vigente 2026-10-23: base cerrada en [013](changes/013-cierre-base/result.md). AR-006 corregido con lectura transaccional; AR-005 ampliado con join de productores, pero cancelación por consumidor/WIC/cliente y latencia de scanners siguen diferidos. AR-007 preexistente progresivo. Aceptación funcional base reportada; los pendientes históricos de abajo no son tareas abiertas del lote base.
+> Estado vigente 2026-10-23: [014](changes/014-cancelacion-ar005/result.md) completa AR-005 (consumidores, WIC cooperativo caracterizado, escáneres y cliente IPC). AR-006 corregido en 013. AR-007 preexistente sigue progresivo. Las campañas históricas citadas abajo no sustituyen estos estados actuales.
 
 # Problemas conocidos y asuntos pendientes
 
@@ -15,7 +15,7 @@ completo ni una lista de fallos reproducidos visualmente.
 | Compacto fuera de Viewer | **Usuario/Código:** tamaño depende de imagen global o queda previo si no existe; mínimo 512 | Definir criterio de producto por modo antes de cambiarlo |
 | Estado y callbacks | **Código/ejecución:** 004 corrige los índices capturados en tira/previews con tokens; quedan otras áreas de estado/hover sin auditoría completa | Conservar regresiones de entrega diferida; revisar otros consumidores por su propio alcance |
 | Animaciones/memoria | **Código:** frames y bytes CPU permanecen al subir a GPU; tablero limita número de texturas, no bytes | Medir animaciones grandes y revisar presupuesto/expulsión |
-| Cierre | **012:** loader descarta cola no iniciada al parar; servidor IPC cancela espera de conexión/lectura. Cliente silencioso bloqueaba baseline; candidato termina en procesos aislados | AR-005 parcial: WIC activo, cancelación por consumidor, scanners y cliente síncrono pendientes; sin plazo universal |
+| Cierre / AR-005 | **014 completado:** leases por consumidor, parada cooperativa WIC/escáneres, catálogo transaccional, cliente overlapped sin flush bloqueante y join antes de HWND/dependencias. CTest 7/7 y trece procesos de cierre | Una llamada WIC/E/S ya iniciada debe retornar; límite caracterizado, sin interrupción forzada ni plazo universal. No quedan implementaciones de AR-005 diferidas |
 | Formatos opcionales | **Código:** lista por extensión depende de decodificadores WIC | Probar SVG/WebP/AVIF/HEIF/APNG en equipos con/sin códecs |
 | Escritura de metadatos | **Código:** temporal, borrado y rename; fallos/interrupciones pueden afectar originales | Diseñar reemplazo seguro y preservación de metadatos no editados, con tests sobre copias |
 | Catálogo de tags | **Código:** Ctrl+L omite escaneo si existe `xmpTags.json` | Definir actualización e invalidación; no asumir índice siempre vigente |

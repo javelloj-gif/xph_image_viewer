@@ -122,50 +122,76 @@ void SingleInstanceIpc::Shutdown() {
                                                DWORD timeoutMs, DWORD* writeError)
 {
     if (writeError) *writeError = ERROR_SUCCESS;
-    HANDLE hPipe = INVALID_HANDLE_VALUE;
-    DWORD startMs = GetTickCount();
-
-    while (true) {
-        hPipe = CreateFileW(
-            pipeName.c_str(),
-            GENERIC_WRITE,
-            0,
-            nullptr,
-            OPEN_EXISTING,
-            0,
-            nullptr
-        );
-
-        if (hPipe != INVALID_HANDLE_VALUE) break;
-
-        DWORD err = GetLastError();
-        DWORD elapsed = GetTickCount() - startMs;
-
-        if ((err == ERROR_PIPE_BUSY || err == ERROR_FILE_NOT_FOUND) && elapsed < timeoutMs) {
-            const DWORD slice = (std::min)(timeoutMs - elapsed, DWORD{10});
-            // WaitNamedPipe returns immediately when no instance exists: avoid spinning in the recreation gap.
-            if (err == ERROR_PIPE_BUSY) WaitNamedPipeW(pipeName.c_str(), slice);
-            else Sleep(slice);
-            continue;
-        }
-
-        if (writeError) *writeError = err;
+    if (utf8Message.size() > MAXDWORD) {
+        if (writeError) *writeError = ERROR_INVALID_PARAMETER;
         return false;
     }
-
+    const ULONGLONG start = GetTickCount64();
+    // One budget covers all retries and the final write; no second full timeout after connecting.
+    const auto remaining = [&]() -> DWORD {
+        const auto elapsed = GetTickCount64() - start;
+        return elapsed < timeoutMs ? timeoutMs - static_cast<DWORD>(elapsed) : 0;
+    };
+    HANDLE pipe = INVALID_HANDLE_VALUE;
+    while (true) {
+        pipe = CreateFileW(pipeName.c_str(), GENERIC_WRITE, 0, nullptr, OPEN_EXISTING,
+            FILE_FLAG_OVERLAPPED, nullptr);
+        if (pipe != INVALID_HANDLE_VALUE) break;
+        const DWORD error = GetLastError();
+        const DWORD left = remaining();
+        if ((error != ERROR_PIPE_BUSY && error != ERROR_FILE_NOT_FOUND) || left == 0) {
+            // Preserve the original busy/missing errors for connection failures (005).
+            if (writeError) *writeError = error;
+            return false;
+        }
+        const DWORD slice = (std::min)(left, DWORD{10});
+        if (error == ERROR_PIPE_BUSY) WaitNamedPipeW(pipeName.c_str(), slice);
+        else Sleep(slice);
+    }
+    HANDLE event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!event) {
+        const DWORD error = GetLastError();
+        CloseHandle(pipe);
+        if (writeError) *writeError = error;
+        return false;
+    }
+    OVERLAPPED operation = {};
+    operation.hEvent = event;
     DWORD written = 0;
-    BOOL ok = WriteFile(hPipe, utf8Message.c_str(),
-                        static_cast<DWORD>(utf8Message.size()),
-                        &written, nullptr);
-    const DWORD error = ok ? ERROR_SUCCESS : GetLastError();
-    FlushFileBuffers(hPipe);
-    CloseHandle(hPipe);
-
-    const bool success = ok && written == static_cast<DWORD>(utf8Message.size());
-    if (writeError) *writeError = success ? ERROR_SUCCESS : (ok ? ERROR_WRITE_FAULT : error);
+    DWORD error = ERROR_SUCCESS;
+    bool success = false;
+    if (remaining() == 0) {
+        error = ERROR_TIMEOUT;
+    } else {
+        const BOOL completed = WriteFile(pipe, utf8Message.data(), static_cast<DWORD>(utf8Message.size()),
+            &written, &operation);
+        if (completed) {
+            success = true;
+        } else if (GetLastError() == ERROR_IO_PENDING) {
+            const DWORD wait = WaitForSingleObject(event, remaining());
+            if (wait == WAIT_OBJECT_0) {
+                success = GetOverlappedResult(pipe, &operation, &written, FALSE) != FALSE;
+                if (!success) error = GetLastError();
+            } else {
+                error = wait == WAIT_TIMEOUT ? ERROR_TIMEOUT : GetLastError();
+                CancelIoEx(pipe, &operation);
+                // Cancellation races successful completion; always observe it before releasing stack/buffer.
+                GetOverlappedResult(pipe, &operation, &written, TRUE);
+            }
+        } else {
+            error = GetLastError();
+        }
+    }
+    if (success && written != static_cast<DWORD>(utf8Message.size())) {
+        success = false;
+        error = ERROR_WRITE_FAULT;
+    }
+    // Write completion means bytes accepted by the pipe, just as Forwarded means transport, never UI ACK.
+    CloseHandle(event);
+    CloseHandle(pipe);
+    if (writeError) *writeError = success ? ERROR_SUCCESS : error;
     return success;
 }
-
 IpcDiagnosticSnapshot SingleInstanceIpc::GetDiagnostics() const {
     return {m_detected.load(), m_sendAttempted.load(), m_writeSucceeded.load(),
         m_sendError.load(), m_received.load(), m_posted.load(), m_postFailures.load(), m_listening.load()};

@@ -67,6 +67,14 @@ void ThumbnailStrip::SetFileList(const std::vector<std::wstring>& fileList) {
     m_selected.assign(m_thumbnails.size(), false);
 }
 
+void ThumbnailStrip::CancelPendingLoads() {
+    for (auto& item : m_thumbnails) {
+        item.loadLifetime.reset();
+        item.pendingRequest.reset();
+        item.isLoading = false;
+    }
+}
+
 void ThumbnailStrip::SyncSelection(int currentIndex) {
     if (m_draggingThumbnails || m_groupSelecting) return;
 
@@ -151,11 +159,12 @@ void ThumbnailStrip::LoadThumbnail(int index) {
     if (!info.texture && !info.isLoading && !info.loadFailed) {
         const auto request = std::make_shared<const std::wstring>(info.path);
         info.pendingRequest = request;
+        info.loadLifetime = std::make_shared<const bool>(true);
         info.isLoading = true;
         
         m_app->m_imageLoader.LoadAsync(info.path, [this, request](std::shared_ptr<ImageData> data) {
             CompleteThumbnail(request, std::move(data));
-        }, 100, 100, [this, request]() { return IsThumbnailRequestCurrent(request); }); // decimate/scale to 100x100
+        }, 100, 100, [this, request]() { return IsThumbnailRequestCurrent(request); }, info.loadLifetime); // decimate/scale to 100x100
     }
 }
 
@@ -174,6 +183,7 @@ void ThumbnailStrip::CompleteThumbnail(const ImageRequestToken& request, std::sh
         });
     if (it == m_thumbnails.end()) return;
     it->pendingRequest.reset();
+    it->loadLifetime.reset();
     it->isLoading = false;
     if (image && image->gpuBitmap) {
         it->texture = image->gpuBitmap;

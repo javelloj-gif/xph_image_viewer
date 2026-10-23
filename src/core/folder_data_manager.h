@@ -25,6 +25,7 @@ struct PreviewItem {
     bool isLoading = false;
     bool loadFailed = false;
     ImageRequestToken pendingRequest; // Transient identity, moved with this preview; never persisted.
+    ImageLoadLifetime loadLifetime; // Weakly borrowed by the loader; never persisted.
 };
 
 // Owns one folder's file list and preview/layout state, shared with pages through App.
@@ -63,12 +64,13 @@ public:
     // libraryLoading suppresses selection/session save. Otherwise selects (also for duplicates),
     // optionally loads an image through App, and saves the session only for a new folder.
     void AddFolder(const std::wstring& folderPath, bool libraryLoading = false, bool loadImage = true);
-    // Erases a valid folder, clamps selection, saves session and requests redraw; does not reload App's file list.
+    // Erases a valid folder (canceling its leases/hover), clamps selection, saves and redraws; does not reload App's file list.
     void RemoveFolder(int index);
     // Returns the shared folder index, or -1 when no folder is selected.
     int GetCurrentFolderIndex() const { return m_currentFolderIdx; }
     // Selects a valid index or -1; with App, copies files/selection, updates the strip and optionally loads.
     // Requests redraw without saving; selecting -1 leaves App's existing file list untouched.
+    // A different selection cancels outstanding shared preview/hover requests before replacing the active list.
     void SetCurrentFolderIndex(int index, bool loadImage = true);
 
     // Borrows the owned folder vector on the UI thread; structural/order/dimension mutations must notify below.
@@ -79,6 +81,9 @@ public:
     uint64_t GetPreviewLayoutRevision() const { return m_previewLayoutRevision; }
     // UI thread: call after changing folders, preview order/structure or effective texture dimensions (not scroll/hover).
     void NotifyPreviewLayoutChanged() { ++m_previewLayoutRevision; }
+
+    // UI: cancels all in-flight previews, preserving textures/failure state and allowing fresh requests.
+    void CancelPreviewLoads();
 
     // ─── Session Management ──────────────────────────────────────────────────
     // Appends missing folders from UTF-8 four-line records, skipping invalid entries without saving.
@@ -108,7 +113,7 @@ public:
     // ─── Sorting ─────────────────────────────────────────────────────────────
     // Values are shared with persisted settings.sort_mode; preserve their order.
     enum class SortMode { NameAsc, NameDesc, DateAsc, DateDesc, SizeAsc, SizeDesc };
-    // Reorders files and matching preview state synchronously; does not remap indices, save or redraw.
+    // Reorders files and matching preview state; cancels active hover whose index may change. Does not save or redraw.
     void SortFolder(int folderIdx, SortMode mode);
 
     // UI-only read: matches token and exact path across current folders; no loading/layout mutation or borrowed address.

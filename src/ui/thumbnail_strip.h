@@ -22,6 +22,7 @@ struct ThumbnailInfo {
     bool                 isLoading = false;
     bool                 loadFailed = false;
     ImageRequestToken    pendingRequest;
+    ImageLoadLifetime loadLifetime; // UI-only lease; removal cancels CPU and delivery without owning callbacks.
 };
 
 class ThumbnailStrip {
@@ -45,6 +46,8 @@ public:
 
     /// UI thread: rebuilds via a temporary occurrence index; retains each old entry/request once and resets selection.
     void SetFileList(const std::vector<std::wstring>& fileList);
+    // UI: cancels requests on page exit while retaining ready textures and allowing later retries.
+    void CancelPendingLoads();
 
     /// Sync the selection to the active index when not dragging/multi-selecting
     void SyncSelection(int currentIndex);

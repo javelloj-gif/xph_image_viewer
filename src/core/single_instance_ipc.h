@@ -44,7 +44,7 @@ public:
     SingleInstanceIpc(const SingleInstanceIpc&) = delete;
     SingleInstanceIpc& operator=(const SingleInstanceIpc&) = delete;
 
-    // UI thread: probes and forwards with bounded connection retries; failure is in GetDiagnostics.
+    // UI thread: probes and forwards with a total connection/write budget; failure is in GetDiagnostics.
     // Only an absent receiver starts the owned server; this does not atomically elect an owner.
     IpcInitResult Initialize(HWND hwnd, const std::wstring& pathArg);
 
@@ -63,9 +63,9 @@ private:
     // Borrows pipe/OVERLAPPED/buffer; cancellation never releases them while the kernel still uses them.
     bool CompleteServerIo(HANDLE pipe, OVERLAPPED& operation, DWORD& transferred);
 
-    // Sends one path over the pipe from a second instance. Optional writeError
-    // reports open/write failure, not FlushFileBuffers, receipt or UI application.
-    // Retries busy/missing connections within timeoutMs, never retries a write; synchronous IO is unbounded.
+    // Sends one UTF-8 path within timeoutMs for connection plus overlapped write, never retries a write.
+    // Timeout cancels and observes completion before freeing storage; no blocking flush or application ACK.
+    // writeError reports transport status (ERROR_TIMEOUT on exhausted budget), not UI receipt/application.
     static bool SendMessage(const std::wstring& pipeName, const std::string& utf8Message,
                             DWORD timeoutMs = 2000, DWORD* writeError = nullptr);
 
