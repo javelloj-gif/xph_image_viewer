@@ -20,7 +20,7 @@ sustituye la exclusión histórica de optimizaciones de spec.md.
   Firma ruta/identidad/tamaño/mtime/pipeline antes/después; errores son misses.
 - [x] P6: tests de píxeles, invalidación, corrupción, presupuesto, concurrencia,
   generaciones, sesión pendiente y cierre; Release/CTest y revisión de arquitectura.
-- [ ] P7: comparación nativa, 30 aperturas por posición/base/candidato, caché vacía,
+- [x] P7: comparación nativa, 30 aperturas por posición/base/candidato, caché vacía,
   preparada y reutilización; candidato portable desde staging nuevo y evidencia.
 
 ## Presupuestos y medición
@@ -29,7 +29,8 @@ Caché: min(1 GiB, 1% del espacio libre), expulsión LRU, protección bajo 1 GiB
 colas/transacciones acotadas y escrituras prescindibles al cerrar. Conservar tamaños
 100x100 y 200x200 sin derivarlos entre sí. No precalcular toda la carpeta.
 
-Caso autorizado: F:\Pictures\FotosTEMP, solo lectura: 7749 elementos, 6694 JPEG.
+Colección real autorizada, solo lectura: 7749 elementos, 6694 JPEG. Ruta y nombres
+privados en manifests locales, no en Git.
 500 ms de apertura y 1–5 s de miniaturas son estimaciones del propietario.
 Objetivo: original utilizable en 100 ms, sin vista reducida ni proceso residente.
 Separar invocación, inicio, UI, original, navegación y miniaturas. QPC/Present enviado
@@ -39,14 +40,19 @@ Primera sesión real requiere coordinación; no reiniciar ni borrar cachés del 
 
 ## Continuidad
 
-Implementación y Release/CTest 8/8 correctos; smoke nativo de diez escenarios
-pasado en la porción anterior, se repite sobre el candidato final. La serie inicial
-fue exploratoria; no se utiliza para afirmar una mejora. La base instrumentada se
-guarda en commits reproducibles anteriores a la implementación. P7 en curso.
+P1..P7 implementados y comprobados en sus porciones automatizadas. Fuentes b0e98f8;
+Release/CTest 8/8 (94 checks startup/cache), diez escenarios nativos y smoke del
+portable sin diagnóstico correctos. Las series anteriores son exploratorias cuando
+su hash no coincide con el final. Base 5d1f67f preservada en referencia Git propia.
 
-La selección real encontró JPEG cercanos a 5 MB de unos 10–12,6 MP; el ejecutor
-elige tres de resolución comparable y registra dimensiones, sin atribuirles 24 MP.
-Conservar el reporte inicial del propietario como estimación, separado de esta evidencia.
+Matriz posterior: n=30 por posición/versión/escenario, 003 preparada y vacía;
+120 ciclos comparables de reutilización. [Resultado de rendimiento](performance-result.md)
+explica primera generación, recursos y censuras. EXE/ZIP limpios y hashes en result.md.
+La selección efectiva fue de unos 12,5 MP, sin atribuirle 24 MP.
 
-Registrar implementación, comandos y resultados en result.md;
-no cerrar criterios pendientes ni atribuir mediciones de otra revisión.
+- [ ] Aceptación funcional del propietario sobre el candidato 003.
+- [ ] Primera apertura real de una nueva sesión Windows, coordinada y sin reinicio automático.
+- [ ] Disposición explícita de límites: 100 ms no acreditados, Waterfall vacío más lento,
+  intermitencia concurrente del harness IPC sin causa confirmada.
+
+No se declara cierre global ni se reabre IPC-014-01. Continuar con resume.md.

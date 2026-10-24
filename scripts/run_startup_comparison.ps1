@@ -3,20 +3,21 @@ param(
     [Parameter(Mandatory)][string]$ReferenceExecutable,
     [Parameter(Mandatory)][string]$ReferenceRevision,
     [Parameter(Mandatory)][string]$CandidateExecutable,
+    [string]$CandidateRevision,
     [Parameter(Mandatory)][string]$Images,
     [Parameter(Mandatory)][string]$RunRoot,
     [ValidateRange(1,100)][int]$Repetitions=30,
-    [ValidateRange(1,30)][int]$ColdRepetitions=3
+    [ValidateRange(1,30)][int]$ColdRepetitions=30
 )
 $ErrorActionPreference='Stop'
 $project=Split-Path $PSScriptRoot -Parent
 $root=[IO.Path]::GetFullPath($RunRoot)
 if (!$root.StartsWith("$project\build\",[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $root)) { throw 'RunRoot must be a new directory inside build.' }
 New-Item -ItemType Directory -Path $root | Out-Null
-$candidateRevision=(& git -C $project rev-parse HEAD)
+$candidateSource=if ($CandidateRevision) { $CandidateRevision } else { & git -C $project rev-parse HEAD }
 $variants=@{
     base=@{Executable=$ReferenceExecutable;SourceRevision=$ReferenceRevision}
-    candidate=@{Executable=$CandidateExecutable;SourceRevision=$candidateRevision}
+    candidate=@{Executable=$CandidateExecutable;SourceRevision=$candidateSource}
 }
 $scenarioIndex=0
 foreach ($scenario in @('viewer','strip','waterfall')) {
@@ -28,7 +29,7 @@ foreach ($scenario in @('viewer','strip','waterfall')) {
     }
     ++$scenarioIndex
 }
-foreach ($scenario in @('strip','waterfall')) {
+foreach ($scenario in @('viewer','strip','waterfall')) {
     Write-Host "Starting candidate/$scenario with a fresh cache namespace per trial"
     $candidateOptions=$variants.candidate
     & "$PSScriptRoot\run_startup_benchmark.ps1" @candidateOptions -Images $Images -RunRoot "$root\candidate-$scenario-empty" -Scenario $scenario -Cache empty -Repetitions $ColdRepetitions

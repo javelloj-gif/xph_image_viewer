@@ -1,4 +1,4 @@
-# Revisión de la porción diagnóstica IPC de 003
+# Revisión de 003: arranque asíncrono y caché
 
 ## Revisión de implementación asíncrona y caché — 2026-10-23
 
@@ -45,13 +45,14 @@ en UI; servicios CPU no toman direcciones de previews. La preparación del desti
 no cambia la animación ni deriva la variante 100 desde la 200. Waterfall invalida
 geometría por lote y mide readiness tras dos frames con la misma revisión.
 
-Evidencia automatizada: Release/CTest 8/8. El smoke nativo anterior pasó diez
-escenarios; se repite sobre la versión final, incluido IPC con receptor ya arrancado.
+Evidencia automatizada final: Release/CTest 8/8 (18,27 s, 94 checks startup/cache)
+y diez escenarios nativos sobre b0e98f8, incluido IPC con receptor ya arrancado.
 El harness de cierre ahora drena mensajes como App::Run: no interpreta un Peek filtrado
 inmediato como prueba suficiente de WM_QUIT. Es adaptación de validación, sin cambio
 del protocolo IPC ni investigación del reporte histórico cerrado.
 
-Medición/entrega en curso. No certificar UX completa, primera sesión nueva ni
+Medición/portable entregados: [resultado](result.md) y [series](performance-result.md).
+La aceptación funcional permanece pendiente. No certificar UX completa, primera sesión nueva ni
 cumplimiento p95 <=100 ms por compilar o por el retorno de Present. DXGI correlaciona
 un ID de frame; la observación produce una cota superior, no una medición óptica.
 La evidencia anterior y sus límites permanecen abajo como historial.
@@ -81,8 +82,8 @@ registradas en result.md):
   La recencia pasa al writer en lotes acotados de 128 registros con ventana de
   250 ms; un nuevo write drena la recencia antes de expulsar por LRU. Se preserva
   el tiempo de acceso, se descartan pendientes al cerrar y se omite recencia
-  bajo 1 GiB libre. La mejora efectiva requiere contraste de la serie final;
-  el diseño por sí solo no demuestra su magnitud.
+  bajo 1 GiB libre. La serie final confirma el beneficio preparado; la
+  generación inicial conserva un coste mayor que la base, documentado en las tablas.
 - **R003-07, robustez, atendido:** COMMIT puede fallar ante un lector de otra
   conexión después de un INSERT correcto. Se hace ROLLBACK explícito para no
   conservar una transacción que impida los siguientes BEGIN. La regresión mantiene
@@ -249,3 +250,22 @@ No hallazgos nuevos confirmados de código en este alcance. Quedan sin certifica
 Explorer/asociaciones, presentación inicial lite, primera real/posteriores medidos,
 GPU/VRAM, reposo sin logging y rendimiento. El usuario confirmó uso previo de la
 aplicación en esta sesión; no fabricar primera ejecución reiniciando/cerrando sesión.
+
+## Cierre de esta revisión — 2026-10-24
+
+No hubo cambios productivos después de b0e98f8. Se contrastaron hashes de EXE,
+configuración y originales entre versiones/condiciones. El portable contiene el
+mismo EXE medido; imports/runtime/locales/defaults comprobados. Un smoke normal sin
+diagnóstico en otra copia respondió a entradas de modos y cerró con salida 0.
+
+Las series tienen n=30 por posición y escenario/condición, y 120 observaciones
+comparables de reutilización. El intento no preparado de base C queda registrado;
+se repitió con 60 s y no se mezcló con el resto como caché caliente.
+
+**Tradeoff que requiere disposición del propietario:** el original no acredita
+100 ms; Waterfall vacío tiene p95 1,22–1,95 s frente a unos 0,68 s de base, aunque
+preparado baje a 67–72 ms. Las tablas registran el coste CPU/E/S/memoria/GPU inicial.
+No se declara optimización uniforme ni cierre funcional sin la aceptación pendiente.
+La revisión no certifica todos los gestos, formatos opcionales ni escritores de
+metadatos/Board; esos límites no se convierten en una campaña nueva por iniciativa
+propia. La base/AR-005 y el reporte manual IPC-014-01 siguen cerrados.

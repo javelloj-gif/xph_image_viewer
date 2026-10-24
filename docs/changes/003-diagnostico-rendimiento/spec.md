@@ -1,4 +1,4 @@
-# 003: Diagnóstico de arranque, IPC y consumo en reposo
+# 003: arranque asíncrono, miniaturas persistentes y métricas reales
 
 **Alcance vigente aprobado, 2026-10-23:** implementar arranque asíncrono completo,
 prioridad de miniaturas, caché persistente sin pérdidas y medición real según

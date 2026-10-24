@@ -1,6 +1,7 @@
 # 003: aceptación del candidato asíncrono
 
-Estado: pendiente del propietario sobre el candidato 003 identificado en result.md.
+Estado: pendiente del propietario sobre `dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe`.
+SHA256 y ZIP en result.md; fuentes b0e98f8.
 La aceptación de 002 no se traslada a este binario. No cambiar asociaciones para
 estas pruebas: abrir el EXE candidato con el archivo como argumento o arrastrarlo.
 Conservar sus datos y los de 002; no borrar fotografías para probar cancelación.

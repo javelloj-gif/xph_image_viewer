@@ -66,6 +66,14 @@ No ejecutar builds u otras pruebas intensivas simultáneamente con la medición.
 No confundir E/S lógica del proceso con lecturas físicas de disco ni caché de
 aplicación vacía con una primera sesión de Windows. Véase la evidencia de 003.
 
+`run_startup_comparison.ps1` permite indicar `CandidateRevision` cuando se mide un
+EXE ya construido; usa 30 repeticiones también para cada namespace vacío por defecto.
+`run_startup_reuse_benchmark.ps1` prepara ambos viewports antes de ciclos de modos,
+verifica readiness anterior y conserva casos no preparados. `Variants`/`Positions`
+permiten repetir un caso concreto; fracciona esperas largas en tramos de 30 s.
+Identificar un build diferente con su revisión/hash real, aunque la documentación
+del repositorio haya avanzado después del código del ejecutable.
+
 `ipc.delivery_diagnostics` usa `run_ipc_diagnostics.ps1`: copia el harness de 004,
 fixtures y user_data a un run nuevo. El mismo EXE ejecuta roles sender en procesos
 propios; el receptor usa pipe exclusiva, Window/App/WIC reales y D2D software WARP,

@@ -1,11 +1,12 @@
-# Plan: 003 Diagnóstico de rendimiento
+# Plan: 003 arranque asíncrono y miniaturas persistentes
 
-**Estado vigente 2026-10-23:** el propietario aprobó [implementation-plan.md](implementation-plan.md):
-arranque asíncrono completo, prioridad/cancelación visible, caché persistente exacta
-y medición reproducible. P1..P6 implementados/verificados; P7 (comparación/portable)
-en curso. Las recomendaciones y pendientes inferiores son históricos; no reabrir
-la base ni repetir 010/AR-002/AR-005. Cualquier aceptación restante se registra con
-sus límites en result.md; la meta de 100 ms no se presume cumplida.
+**Estado 2026-10-24:** [implementation-plan.md](implementation-plan.md) implementado
+y validado en sus porciones automatizadas P1..P7; fuentes b0e98f8 y candidato limpio
+identificado en [result.md](result.md). [Métricas](performance-result.md) y revisión
+actualizadas. La meta principal de 100 ms no está acreditada; Waterfall vacío tiene
+un coste mayor que la base. No cerrar 003 hasta aceptación del propietario y primera
+sesión real coordinada, con disposición de los límites. Continuidad en [resume.md](resume.md).
+La base, Library y AR-005 permanecen cerrados; no iniciar campañas por inercia.
 
 ## Plan histórico
 

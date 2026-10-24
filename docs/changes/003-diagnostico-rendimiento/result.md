@@ -1,10 +1,80 @@
-# Resultado: 003 Diagnóstico de arranque, IPC y reposo
+# Resultado: 003 arranque asíncrono y miniaturas persistentes
 
-**Ampliación vigente, 2026-10-23:** implementación del
-[plan autorizado](implementation-plan.md) de arranque asíncrono y miniaturas
-persistentes. Release/CTest 8/8 verificados; comparación y entrega en preparación.
-Esta porción no está cerrada funcionalmente ni certifica 100 ms. El resultado
-histórico inferior conserva su revisión y no describe los nuevos contratos.
+**Entrega 2026-10-24:** implementación del [plan autorizado](implementation-plan.md)
+en fuentes `b0e98f8`, rama `codex/003-arranque-cache`. Código y evidencia automatizada
+entregados; **003 permanece abierto para aceptación del propietario y primera sesión
+real de Windows**. La meta de 100 ms no está acreditada. El diagnóstico histórico
+inferior conserva su revisión y no describe los contratos nuevos.
+
+## Resultado actual
+
+Decodificación original y enumeración/ordenación CPU fuera de UI, generaciones y
+cancelación, publicación GPU/UI en principal y sesión pendiente preservada. Cuatro
+workers con techo de tres miniaturas, incluido Board sin nueva variante de disco.
+Tira/Waterfall comparten caché exacta 100/200 con SQLite de Windows y Compression API,
+cuota adaptativa, LRU y fallos prescindibles. Sin cambios de IDs, formatos KTAG/KBRD,
+asociaciones, protocolo IPC, calidad, escalador, efectos ni proceso residente.
+
+La [comparación completa](performance-result.md) contiene n, mediana, p95, máximo,
+procedimiento, hashes y límites. Original enviado: medianas 297–300 ms, frente a
+369–386 ms de base. El renderer (medianas 218–221 ms) domina el tiempo medido.
+Waterfall preparado: p95 67–72 ms frente a 681–688 ms de base; **vacío empeora**,
+con p95 1,22–1,95 s y medianas próximas a 1 s. Tira conserva su animación; el destino
+preparado no equivale al final del desplazamiento. Se registran CPU/E/S/memoria/GPU
+adicionales de primera generación; no se afirma mejora en toda condición.
+
+## Candidato limpio para el propietario
+
+- EXE: `dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe`.
+- ZIP: `dist/lenteuv_qa_003_20261024_async_cache.zip`.
+- SHA256 EXE: `A8C54E3B42B5811EA17CCF347AA91A7FFF4C2808BF19EE45BD4E6C7F0AF04213`.
+- SHA256 ZIP: `47734AF95ED795C7776A9A39C8407CDF0AC36F77CD182E24A6DA1ECDE9188DB5`.
+
+Mismo EXE medido. Staging nuevo, runtime/imports verificados, locales, licencia y
+atribuciones conservados. user_data contiene defaults y sesión vacía, sin cachés,
+logs ni datos de ensayo. La prueba nativa del portable usó otra copia bajo build;
+la carpeta de entrega permanece sin ejecutar. Guía: [functional-test.md](functional-test.md).
+
+002 permanece aceptado e intacto: EXE SHA256
+`42432671B4BE7602C4F2B4060586CFE5B6EB36AE0D382B84312038CBE60BF23A`, ZIP
+`4F3387DE83D7331C1D044FF7FA677392B3FF6BCA33DAF3E218012FB42956931A`,
+comprobados después del empaquetado. No se reabre su limpieza ni la base/AR-005.
+Los artefactos de medición/build actuales siguen siendo necesarios y se conservan.
+
+## Evidencia y aceptación
+
+| Criterio | Resultado y límite |
+| --- | --- |
+| AC-01 | Ejecutores reproducibles, entorno/configuración/EXE/datos identificados y hashes comparados; CSV/JSON y detalles privados locales |
+| AC-02 | 30 aperturas por posición/escenario de base y 003 preparada/vacía; primera apertura de otra sesión Windows pendiente, sin simular disco frío |
+| AC-03 | Último CTest IPC correcto y diez escenarios nativos, incluido receptor arrancado. IPC-003-CONCURRENT-01 conserva un fallo previo concurrente intermitente; sin causa ni protocolo modificado. IPC-014-01 sigue cerrado por reporte anterior |
+| AC-04 | CPU/peak working set/E/S lógica y GPU por PID; muestras separadas de 15 s de primer uso, n=1 por posición. No certifican reposo habitual sin diagnóstico ni E/S física |
+| AC-05 | Costes, tradeoffs, censuras, revisión y candidatos de medición registrados; no se atribuye toda latencia fría a una sola causa |
+| AC-06 | Generaciones, gating foreground, cancelación, entrega en UI y snapshots comprobados; recorrido visual/interacciones del propietario pendiente |
+| AC-07 | BGRA exacto, variantes independientes, Unicode, invalidación/reemplazo/borrado, corrupción de payload, raíz inválida, LRU con cuota de 4 MiB y locks/conexión/proceso adicionales; sin agotar volumen real |
+| AC-08 | Guardado de sesión pendiente, ordenación tardía y borrados conocidos comprobados. Sin migraciones de datos ni nuevas interacciones; aceptación manual global pendiente |
+| AC-09 | Candidato limpio/hash del mismo EXE medido y comparación documentados; confirmación DXGI separada de envío de frame, sin certificar 100 ms |
+
+Release correcto; último `ctest --preset release --output-on-failure`: **8/8,
+18,27 s**. `loader.startup_cache` incluye 94 checks con WIC/WARP y datos propios.
+Recorrido nativo de diez escenarios correcto sobre b0e98f8. El portable normal,
+sin variables de diagnóstico, respondió a entradas de Viewer/tira/Waterfall/Board
+y cerró con salida 0 en una copia aislada. Eso no certifica calidad visual completa.
+
+Se obtuvieron 120 observaciones comparables de reutilización (10 ciclos por
+posición/modo/versión), sin nuevas decodificaciones ni fallos. El intento inicial
+de base C no estaba preparado tras 30 s; se conserva y excluye de esa comparación.
+Con 60 s quedó preparado antes de los ciclos. No se ocultó como medición caliente.
+
+## Pendiente para cierre
+
+Recoger [aceptación funcional](functional-test.md) de este EXE, coordinar la primera
+sesión real y disponer expresamente los límites restantes, incluida la intermitencia
+del harness IPC y el coste de Waterfall vacío. No se modificaron fotografías ni
+se cambiaron asociaciones; datos/cachés de pruebas permanecen aislados. No declarar
+aceptación por CTest, por el portable previo ni por el retorno de Present.
+
+## Historial previo
 
 **Seguimiento de decoder:** [009](../009-decoder-compartido/result.md) comparte
 apertura en carga normal y preserva fallback fresco; bytes/metadata y llamadas WIC
