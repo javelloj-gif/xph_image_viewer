@@ -6,6 +6,7 @@
 #include "common/pch.h"
 #include "app.h"
 #include "common/performance_trace.h"
+#include "common/user_data_paths.h"
 #include <algorithm>
 #include <ranges>
 #include "shell/shell_integrator.h"
@@ -27,6 +28,8 @@ App::~App() {
     // Join producers while their page, metadata cache, WIC factory and window still exist.
     m_boardPage.m_tagScanner->CancelScan();
     m_tagManager.CancelSearch();
+    m_folderData.StopScanning();
+    m_imageLoadLifetime.reset();
     m_imageLoader.Shutdown();
 }
 
@@ -135,6 +138,18 @@ InitResult App::Initialize(const AppConfig& config) {
     }
     trace("ImageLoader initialized");
 
+    m_asyncLoading = true;
+    m_folderData.EnableAsync();
+    if (!config.initialFilePath.empty()) BeginViewerLoad(config.initialFilePath);
+    try {
+        auto cacheRoot = GetExecutableUserDataRoot() / L"cache" / L"thumbnails-v1";
+        if (PerformanceTrace::Get().Enabled()) {
+            const auto cacheNamespace = PerformanceTrace::Environment(L"LENTEUV_CACHE_NAMESPACE");
+            if (!cacheNamespace.empty() && cacheNamespace.find_first_not_of(L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")==std::wstring::npos)
+                cacheRoot /= cacheNamespace;
+        }
+        m_imageLoader.InitializeThumbnailCache(cacheRoot);
+    } catch (...) { LogWarn(L"Thumbnail cache unavailable; source loading remains enabled"); }
     m_tagManager.Initialize(m_imageLoader.GetWicFactory());
     trace("Tags loaded");
     m_optionsMenu.Initialize(this);
@@ -172,6 +187,8 @@ InitResult App::Initialize(const AppConfig& config) {
         // Scanners can still invalidate this HWND; join them before Window handles WM_CLOSE destruction.
         m_boardPage.m_tagScanner->CancelScan();
         m_tagManager.CancelSearch();
+        m_folderData.StopScanning();
+        m_imageLoadLifetime.reset();
         return true;
     };
     m_window.events.onTrayIconEvent = [this](LPARAM lp) {
@@ -192,11 +209,13 @@ InitResult App::Initialize(const AppConfig& config) {
     };
 
     // ── Initialize Renderer ───────────────────────────────────────────────
+    PerformanceTrace::Event("renderer.initialize.begin");
     if (!m_renderer.Initialize(m_window.GetHwnd(), config.translucent)) {
         LogError(L"Failed to initialize renderer");
         return InitResult::Failed;
     }
 
+    PerformanceTrace::Event("renderer.initialize.end");
     // ── Show Window ───────────────────────────────────────────────────────
     if (!m_settings.hide_on_app_start) {
         int cmdShow = SW_SHOW;
@@ -221,10 +240,10 @@ InitResult App::Initialize(const AppConfig& config) {
     m_folderData.LoadSession(loadSessionImage);
 
     if (!config.initialFilePath.empty()) {
-        LoadImage(config.initialFilePath);
+        PrepareImageFolder(config.initialFilePath);
     } else if (!config.initialFolderPath.empty()) {
         LoadFolder(config.initialFolderPath);
-    } else if (m_folders.empty()) {
+    } else if (m_folders.empty() && !m_folderData.HasPendingFolders()) {
         // Try loading current directory if nothing else is specified or restored by session
         LoadFolder(std::filesystem::current_path().wstring());
     }
@@ -325,6 +344,7 @@ void App::RenderFrame() {
     if (targetSize.width == 0 || targetSize.height == 0) return;
     if (!m_renderer.IsInitialized()) return;
 
+    m_folderData.ProcessPending();
     double dt = m_frameTimer.Tick();
     // Clamp dt to avoid huge jumps after loading stalls
     dt = std::min(dt, 0.1);
@@ -378,8 +398,9 @@ void App::RenderFrame() {
     m_renderer.BeginFrame();
     m_renderer.Clear(Color::Black(m_settings.window_opacity));
 
-    m_originalDrawnThisFrame=false; m_stripReadyDrawnThisFrame=false; m_waterfallReadyDrawnThisFrame=false;
     // Draw content based on current state
+    m_originalDrawnThisFrame=false;
+    m_stripReadyDrawnThisFrame=false; m_waterfallReadyDrawnThisFrame=false;
     DrawViewerContent();
     DrawCloseButton();
     if (m_optionsMenu.IsVisible()) {
@@ -392,16 +413,19 @@ void App::RenderFrame() {
         DrawRadialMenu();
     }
 
-    const auto present=m_renderer.EndFrame();
-    if (present==S_OK) {
+    const auto presentResult=m_renderer.EndFrame();
+    if (presentResult==S_OK) {
         if (m_stripReadyDrawnThisFrame) PerformanceTrace::Event("strip.viewport.submitted",m_imageGeneration);
         if (m_waterfallReadyDrawnThisFrame) PerformanceTrace::Event("waterfall.viewport.submitted",m_imageGeneration);
     }
-    static bool firstContent = true;
-    if (present==S_OK && firstContent && m_originalDrawnThisFrame) {
-        PerformanceTrace::Event("frame.original.submitted",m_imageGeneration);
-        m_originalPresentId=m_renderer.GetLastPresentId();
-        firstContent = false;
+    if (presentResult==S_OK && m_originalFramePending && m_originalDrawnThisFrame) {
+        PerformanceTrace::Event("frame.original.submitted",m_presentedGeneration);
+        if (PerformanceTrace::Get().Enabled()) {
+            m_originalPresentId=m_renderer.GetLastPresentId();
+            m_originalPresentGeneration=m_presentedGeneration;
+            PerformanceTrace::Event("frame.original.present_id",m_presentedGeneration,m_originalPresentId);
+        }
+        m_originalFramePending=false;
         if (PerformanceTrace::Get().Enabled()) {
             const auto scenario=PerformanceTrace::Environment(L"LENTEUV_PERF_SCENARIO");
             if (scenario==L"strip") m_thumbnailStrip.m_mouseMoveTimer=10.0;
@@ -411,9 +435,10 @@ void App::RenderFrame() {
     if (PerformanceTrace::Get().Enabled()) {
         DXGI_FRAME_STATISTICS stats{};
         if (m_originalPresentId && m_renderer.GetPresentationStatistics(stats) && stats.PresentCount==m_originalPresentId) {
-            PerformanceTrace::Event("frame.original.display_confirmed",m_imageGeneration,stats.PresentCount); m_originalPresentId=0;
+            PerformanceTrace::Event("frame.original.display_confirmed",m_originalPresentGeneration,stats.PresentCount);
+            m_originalPresentId=0;
         }
-        if (PerformanceTrace::Get().ShouldExit(m_originalDrawnThisFrame && !firstContent,
+        if (PerformanceTrace::Get().ShouldExit(m_originalDrawnThisFrame && !m_originalFramePending,
             m_stripReadyDrawnThisFrame,m_waterfallReadyDrawnThisFrame)) {
             m_isQuitting = true; m_window.Close();
         }
@@ -619,11 +644,37 @@ void App::DrawCloseButton() {
 void App::LoadImage(const std::wstring& path) {
     namespace fs = std::filesystem;
 
-    ++m_imageGeneration; PerformanceTrace::Event("image.request",m_imageGeneration);
     PerformanceSpan imageSpan("image.load.begin", "image.load.end");
     LogInfo(std::format(L"Loading image: {}", path));
 
-    const auto loaded = m_imageLoader.LoadForViewerSync(path);
+    if (m_asyncLoading) { BeginViewerLoad(path); PrepareImageFolder(path); return; }
+    const auto loaded=m_imageLoader.LoadForViewerSync(path);
+    ApplyLoadedImage(path,loaded);
+}
+
+void App::BeginViewerLoad(const std::wstring& path) {
+    m_imageLoadLifetime=std::make_shared<const bool>(true);
+    m_imageLoader.CancelObsoleteRequests();
+    m_requestedImagePath=path;
+    const auto generation=++m_imageGeneration;
+    PerformanceTrace::Event("image.request",generation);
+    m_imageLoader.LoadForViewerAsync(path,[this,path,generation](ViewerLoadResult result) {
+        if (generation!=m_imageGeneration) return;
+        const bool success=(result.image && result.image->IsValid() && result.image->HasGpuBitmap()) ||
+            (result.animation && result.animation->IsValid() && result.animation->frames.front().gpuBitmap);
+        if (success) { m_presentedGeneration=generation; m_originalFramePending=true; ApplyLoadedImage(path,result); }
+        else PerformanceTrace::Event("image.failed",generation);
+        if (generation==m_imageGeneration) m_imageLoadLifetime.reset();
+    },m_imageLoadLifetime);
+}
+void App::PrepareImageFolder(const std::wstring& path) {
+    if (std::find(m_fileList.begin(),m_fileList.end(),path)==m_fileList.end())
+        LoadFolder(std::filesystem::path(path).parent_path().wstring(),false);
+    else OnFolderReady();
+}
+
+void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loaded) {
+    namespace fs=std::filesystem;
     {
         auto anim = loaded.animation;
         if (anim && anim->IsValid()) {
@@ -652,7 +703,7 @@ void App::LoadImage(const std::wstring& path) {
     // Load as static image
     auto image = loaded.image;
     if (image && image->IsValid()) {
-        ImageLoader::UploadToGpu(*image, m_renderer);
+        if (!image->HasGpuBitmap()) ImageLoader::UploadToGpu(*image, m_renderer);
         m_currentImage = image;
         m_animatedImage = nullptr;
         m_frameSequencer.Reset();
@@ -672,7 +723,7 @@ void App::LoadImage(const std::wstring& path) {
     } else {
         // Build file list from the image's parent folder
         m_fileList.clear();
-        LoadFolder(fs::path(path).parent_path().wstring(), false);
+        if (!m_asyncLoading) LoadFolder(fs::path(path).parent_path().wstring(), false);
         it = std::find(m_fileList.begin(), m_fileList.end(), path);
         if (it != m_fileList.end()) {
             m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
@@ -691,10 +742,21 @@ void App::LoadImage(const std::wstring& path) {
 }
 
 void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
+    if (m_asyncLoading && loadImage) { m_imageLoadLifetime.reset(); ++m_imageGeneration; m_requestedImagePath.clear(); }
     m_folderData.AddFolder(folderPath, false, loadImage);
+    if (!m_asyncLoading) {
+        m_thumbnailStrip.SetFileList(m_fileList);
+        m_thumbnailStrip.SyncSelection(m_currentIndex);
+    }
+}
 
-    m_thumbnailStrip.SetFileList(m_fileList);
+
+void App::OnFolderReady() {
+    auto it=std::find(m_fileList.begin(),m_fileList.end(),m_requestedImagePath);
+    if (it!=m_fileList.end()) m_currentIndex=static_cast<int>(std::distance(m_fileList.begin(),it));
+    if (m_currentFolderIdx>=0 && m_currentFolderIdx<static_cast<int>(m_folders.size())) m_folders[m_currentFolderIdx].currentIndex=m_currentIndex;
     m_thumbnailStrip.SyncSelection(m_currentIndex);
+    if (!m_fileList.empty()) PerformanceTrace::Event("navigation.ready",m_imageGeneration,m_fileList.size());
 }
 
 void App::ApplySortMode(int mode) {
@@ -734,6 +796,8 @@ void App::ApplySortMode(int mode) {
 }
 
 void App::DeleteImage(const std::wstring& path) {
+    m_folderData.NotifyImageRemoved(path);
+    if (m_asyncLoading && m_requestedImagePath==path) { m_imageLoadLifetime.reset(); ++m_imageGeneration; }
     if (m_waterfallPage.m_hoveredOriginalPath == path) CancelHoverLoads();
     for (auto& folder : m_folders) {
         auto itPath = std::find(folder.filePaths.begin(), folder.filePaths.end(), path);

@@ -232,6 +232,8 @@ public:
         const auto firstCode = Finish(first);
         const auto secondCode = Finish(second);
         Pump(handled + (firstCode == 0 ? 1u : 0u) + (secondCode == 0 ? 1u : 0u));
+        std::cout << "CONCURRENT observed client1_exit=" << firstCode << " client2_exit=" << secondCode
+            << " before=" << before << " after=" << handled << '\n';
         Check(firstCode == 0 && secondCode == 0 && handled == before + 2, "concurrent clients each delivered once");
         Check(CurrentPath() == jpeg || CurrentPath() == png, "concurrent final bitmap valid");
         Check((appliedPaths[before] == jpeg && appliedPaths[before + 1] == png)
@@ -601,7 +603,13 @@ private:
             } else {
                 Check(result == InitResult::Success && primary.m_renderer.IsInitialized()
                     && primary.m_imageLoader.GetWicFactory() != nullptr, "full primary or bypass initialized");
-                Check(primary.m_currentImage && primary.m_currentImage->gpuBitmap, "startup bitmap applied");
+                const auto readyDeadline=GetTickCount64()+10000;
+                while ((!primary.m_currentImage || primary.m_folders.empty()) && GetTickCount64()<readyDeadline) {
+                    primary.m_folderData.ProcessPending();
+                    primary.m_imageLoader.ProcessPendingTextures(primary.m_renderer);
+                    Sleep(2);
+                }
+                Check(primary.m_currentImage && primary.m_currentImage->gpuBitmap, "async startup bitmap applied");
                 if (scenario <= 4) Check(primary.m_currentImage->filePath == (injected ? earlyPath : path),
                     "retained path overrides initial file only after startup");
                 Check(primary.m_ipc.m_running.load() == !bypass, "bypass or primary server");
@@ -613,6 +621,19 @@ private:
                 primary.m_window.Show(SW_HIDE);
                 ShellIntegrator::UnregisterTrayIcon(primary.m_window.GetHwnd());
                 if (scenario == 1) {
+                    // Exercise an actual post-startup IPC open through the asynchronous production receiver.
+                    Check(SingleInstanceIpc::SendMessage(primary.m_ipc.m_pipeName,
+                        SingleInstanceIpc::WideToUtf8(path)),"async running receiver accepts next file");
+                    const auto openDeadline=GetTickCount64()+10000;
+                    while ((!primary.m_currentImage || primary.m_currentImage->filePath!=path) && GetTickCount64()<openDeadline) {
+                        MSG message{};
+                        while(PeekMessageW(&message,primary.m_window.GetHwnd(),0,0,PM_REMOVE)) {
+                            if(message.message!=WM_QUIT) { TranslateMessage(&message); DispatchMessageW(&message); }
+                        }
+                        primary.RenderFrame(); Sleep(2);
+                    }
+                    Check(primary.m_currentImage && primary.m_currentImage->filePath==path && primary.m_currentImage->HasGpuBitmap(),
+                        "running asynchronous IPC receiver applies new original bitmap");
                     primary.m_settings.hide_to_tray_on_close = true;
                     Check(!primary.m_window.events.onCloseRequest() && primary.m_ipc.m_running,
                         "hiding to tray keeps IPC alive");
@@ -624,12 +645,23 @@ private:
                     while (primary.m_ipc.GetDiagnostics().posted == before && GetTickCount64() < end) Sleep(1);
                     Check(primary.m_ipc.GetDiagnostics().posted == before + 1, "native close has pending payload");
                     const auto current = primary.m_currentImage;
+                    Check(GetWindowLongPtrW(primary.m_window.GetHwnd(),GWLP_USERDATA)==reinterpret_cast<LONG_PTR>(&primary.m_window),"native close still owns WndProc state");
                     SendMessageW(primary.m_window.GetHwnd(), WM_CLOSE, 0, 0);
                     Check(!IsWindow(primary.m_window.GetHwnd()) && !primary.m_ipc.m_serverThread.joinable(),
                         "IPC stops before actual HWND destruction");
                     Check(primary.m_currentImage == current, "native close discards path without applying it");
+                    // Model App::Run's unfiltered pump: lazy WM_QUIT synthesis can wait for pending window messages.
                     MSG quit = {};
-                    Check(PeekMessageW(&quit, nullptr, WM_QUIT, WM_QUIT, PM_REMOVE) && quit.message == WM_QUIT,
+                    bool hasQuit=false;
+                    const auto quitDeadline=GetTickCount64()+1000;
+                    while (!hasQuit && GetTickCount64()<quitDeadline) {
+                        while (PeekMessageW(&quit,nullptr,0,0,PM_REMOVE)) {
+                            if (quit.message==WM_QUIT) { hasQuit=true; break; }
+                            TranslateMessage(&quit); DispatchMessageW(&quit);
+                        }
+                        if (!hasQuit) Sleep(1);
+                    }
+                    Check(hasQuit && quit.message == WM_QUIT,
                         "native close still posts quit");
                 }
             }

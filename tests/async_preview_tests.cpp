@@ -1423,6 +1423,8 @@ private:
 int RunIpcDiagnosticTests();
 // Runs the isolated real-WIC decoder suite with its own COM and data setup.
 int RunImageDecodeTests();
+// Runs isolated cache, scheduler, folder and async viewer regressions.
+int RunStartupCacheTests();
 // Runs bounded child processes exercising loader queues and private IPC shutdown.
 int RunShutdownTests(int argc, char* argv[]);
 
@@ -1430,6 +1432,7 @@ int RunShutdownTests(int argc, char* argv[]);
 int main(int argc, char* argv[]) {
     if (argc > 1 && std::string_view(argv[1]).starts_with("--shutdown-")) return RunShutdownTests(argc, argv);
     if (argc > 1 && std::string_view(argv[1]).starts_with("--ipc-")) return RunIpcDiagnosticTests();
+    if (argc > 1 && std::string_view(argv[1]).starts_with("--startup-cache-")) return RunStartupCacheTests();
     if (argc > 1 && std::string_view(argv[1]) == "--decode-tests") return RunImageDecodeTests();
     try {
         kv::ScopedComInit com;

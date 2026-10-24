@@ -70,12 +70,13 @@ ImageLoader::~ImageLoader() {
 }
 
 void ImageLoader::Shutdown() {
-    std::queue<DecodeTask> discarded;
+    std::queue<DecodeTask> discarded, discardedForeground, discardedDestination;
     {
         std::lock_guard lock(m_queueMutex);
         m_shutdown = true;
         m_stopSource.request_stop();
         discarded.swap(m_taskQueue);
+        discardedForeground.swap(m_foregroundQueue); discardedDestination.swap(m_destinationQueue);
     }
     m_queueCV.notify_all();
 
@@ -83,6 +84,8 @@ void ImageLoader::Shutdown() {
         if (w.joinable()) w.join();
     }
     m_workers.clear();
+    m_thumbnailCache.Shutdown();
+    m_pendingViewers.clear();
     std::vector<PendingTexture> pending;
     std::vector<PendingAnimatedTexture> animated;
     {
@@ -103,22 +106,33 @@ void ImageLoader::WorkerLoop() {
         DecodeTask task;
         {
             std::unique_lock lock(m_queueMutex);
-            m_queueCV.wait(lock, [this] { return m_shutdown || !m_taskQueue.empty(); });
-
+            m_queueCV.wait(lock, [this] {
+                return m_shutdown || !m_foregroundQueue.empty() ||
+                    (m_activeThumbnails<3 && !m_destinationQueue.empty()) ||
+                    (!m_taskQueue.empty() && (!m_taskQueue.front().thumbnail || m_activeThumbnails<3));
+            });
             if (m_shutdown) return;
-
-            task = std::move(m_taskQueue.front());
-            m_taskQueue.pop();
+            auto& queue=!m_foregroundQueue.empty() ? m_foregroundQueue :
+                (m_activeThumbnails<3 && !m_destinationQueue.empty()) ? m_destinationQueue : m_taskQueue;
+            task=std::move(queue.front()); queue.pop();
+            if (task.thumbnail) ++m_activeThumbnails;
         }
-        task();
+        PerformanceTrace::Event("work.started", task.traceId);
+        try { task(); } catch (...) { LogError(L"Background image request failed"); }
+        PerformanceTrace::Event("work.finished", task.traceId);
+        { std::lock_guard lock(m_queueMutex); if (task.thumbnail) --m_activeThumbnails; }
+        m_queueCV.notify_all();
     }
 }
 
-void ImageLoader::EnqueueTask(std::function<void()> task, ImageCancellation cancel) {
+void ImageLoader::EnqueueTask(std::function<void()> task, ImageCancellation cancel, int priority, bool thumbnail) {
     {
         std::lock_guard lock(m_queueMutex);
         if (m_shutdown) return;
-        m_taskQueue.push({std::move(task), std::move(cancel)});
+        const auto id = ++m_nextTaskId;
+        PerformanceTrace::Event("work.queued", id);
+        auto& queue=priority==0 ? m_foregroundQueue : priority==1 ? m_destinationQueue : m_taskQueue;
+        queue.push({std::move(task), std::move(cancel), priority, thumbnail, id});
     }
     m_queueCV.notify_one();
 }
@@ -247,6 +261,47 @@ std::shared_ptr<ImageData> ImageLoader::DecodeImage(
     return image;
 }
 
+
+void ImageLoader::InitializeThumbnailCache(const std::filesystem::path& root) { m_thumbnailCache.Initialize(root); }
+
+void ImageLoader::LoadForViewerAsync(const std::wstring& path, std::function<void(ViewerLoadResult)> callback, std::weak_ptr<const bool> lifetime) {
+    const ImageCancellation cancel(lifetime, m_stopSource.get_token());
+    EnqueueTask([this, path, callback=std::move(callback), cancel] {
+        auto result = LoadForViewerSync(path, cancel);
+        if (cancel.IsCancelled()) return;
+        std::lock_guard lock(m_pendingMutex);
+        if (!cancel.IsCancelled()) m_pendingViewers.push_back({std::move(result), callback, cancel});
+    }, cancel, 0);
+}
+
+void ImageLoader::LoadThumbnailAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t size,
+    ImageUploadPredicate isCurrent, std::weak_ptr<const bool> lifetime, bool destination) {
+    const ImageCancellation cancel(lifetime, m_stopSource.get_token());
+    EnqueueTask([this,path,callback=std::move(callback),size,isCurrent=std::move(isCurrent),cancel] {
+        if (cancel.IsCancelled()) return;
+        std::wstring signature;
+        try { signature = ThumbnailCache::Signature(path); } catch (...) { }
+        std::shared_ptr<ImageData> image;
+        try { image=m_thumbnailCache.Read(path,signature,size); } catch (...) { }
+        bool hit = image != nullptr;
+        if (!image) image = DecodeImage(path, size, size, cancel);
+        if (cancel.IsCancelled()) return;
+        if (image && !signature.empty()) {
+            std::wstring after;
+            try { after = ThumbnailCache::Signature(path); } catch (...) { }
+            if (signature != after) {
+                PerformanceTrace::Event("cache.invalidated");
+                signature=after; hit=false;
+                image=signature.empty() ? nullptr : DecodeImage(path,size,size,cancel);
+                try { if (signature!=ThumbnailCache::Signature(path)) image.reset(); } catch (...) { image.reset(); }
+            }
+        }
+        // Publish before optional compression/writing; only CPU bytes go to the cache writer.
+        { std::lock_guard lock(m_pendingMutex); m_pendingTextures.push_back({image,callback,isCurrent,cancel}); }
+        if (image && !hit && !cancel.IsCancelled()) m_thumbnailCache.Store(signature,size,*image);
+    }, cancel, destination ? 1 : 2, true);
+}
+
 // ─── Animated Image Loading ──────────────────────────────────────────────────
 
 std::shared_ptr<AnimatedImageData> ImageLoader::LoadAnimatedSync(const std::wstring& path) {
@@ -266,24 +321,26 @@ std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedImage(const std::w
     return DecodeAnimatedFrames(decoder.Get(), path, frameCount, cancel);
 }
 
-ViewerLoadResult ImageLoader::LoadForViewerSync(const std::wstring& path) {
-    if (!IsAnimatedFormat(path)) return {LoadSync(path), nullptr};
+ViewerLoadResult ImageLoader::LoadForViewerSync(const std::wstring& path, ImageCancellation cancel) {
+    PerformanceSpan span("viewer.decode.begin", "viewer.decode.end");
+    if (cancel.IsCancelled()) return {};
+    if (!IsAnimatedFormat(path)) return {DecodeImage(path, 0, 0, cancel), nullptr};
     {
         auto decoder = CreateDecoder(path);
         if (decoder) {
             UINT frameCount = 0;
             if (SUCCEEDED(decoder->GetFrameCount(&frameCount))) {
                 if (frameCount > 1) {
-                    auto animation = DecodeAnimatedFrames(decoder.Get(), path, frameCount);
+                    auto animation = DecodeAnimatedFrames(decoder.Get(), path, frameCount, cancel);
                     if (animation && animation->IsValid()) return {nullptr, std::move(animation)};
                 } else {
-                    auto image = DecodeImage(decoder.Get(), path, 0, 0);
+                    auto image = DecodeImage(decoder.Get(), path, 0, 0, cancel);
                     if (image && image->IsValid()) return {std::move(image), nullptr};
                 }
             }
         }
     } // Release failed attempt (including file handle) before preserving the legacy fresh static fallback.
-    return {LoadSync(path), nullptr};
+    return {DecodeImage(path, 0, 0, cancel), nullptr};
 }
 
 std::shared_ptr<AnimatedImageData> ImageLoader::DecodeAnimatedFrames(
@@ -510,20 +567,43 @@ void ImageLoader::LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadC
 }
 
 void ImageLoader::CancelObsoleteRequests() {
-    std::unique_lock lock(m_queueMutex);
-    if (m_taskQueue.empty()) return; // No temporary queue allocation on the idle render path.
-    std::queue<DecodeTask> retained, discarded;
-    while (!m_taskQueue.empty()) {
-        auto& target = m_taskQueue.front().cancel.IsCancelled() ? discarded : retained;
-        target.push(std::move(m_taskQueue.front()));
-        m_taskQueue.pop();
+    std::vector<DecodeTask> discarded;
+    {
+        std::lock_guard lock(m_queueMutex);
+        for (auto* queue : {&m_foregroundQueue,&m_destinationQueue,&m_taskQueue}) {
+            if (queue->empty()) continue; // No temporary deque allocation on the idle render path.
+            std::queue<DecodeTask> retained;
+            while (!queue->empty()) {
+                auto task=std::move(queue->front()); queue->pop();
+                if (task.cancel.IsCancelled()) discarded.push_back(std::move(task));
+                else retained.push(std::move(task));
+            }
+            queue->swap(retained);
+        }
     }
-    m_taskQueue.swap(retained);
-    lock.unlock(); // Release canceled captures only after unlocking, on the owner/UI thread.
+    if (!discarded.empty()) m_queueCV.notify_all();
+    // Repeated opens must not retain full-resolution CPU results until a later render frame.
+    std::vector<PendingViewer> obsolete;
+    {
+        std::lock_guard lock(m_pendingMutex);
+        std::erase_if(m_pendingViewers,[&](PendingViewer& viewer) {
+            if (!viewer.cancel.IsCancelled()) return false;
+            obsolete.push_back(std::move(viewer)); return true;
+        });
+    }
+    // Canceled captures and CPU buffers are released on UI, outside both queue locks.
 }
 
 void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     CancelObsoleteRequests();
+    std::vector<PendingViewer> viewers;
+    { std::lock_guard lock(m_pendingMutex); viewers.swap(m_pendingViewers); }
+    for (auto& viewer : viewers) {
+        if (viewer.cancel.IsCancelled()) continue;
+        if (viewer.result.image) UploadToGpu(*viewer.result.image, renderer);
+        if (viewer.result.animation) UploadAnimationToGpu(*viewer.result.animation, renderer);
+        if (!viewer.cancel.IsCancelled() && viewer.callback) viewer.callback(std::move(viewer.result));
+    }
     std::vector<PendingTexture> pending;
     std::vector<PendingAnimatedTexture> pendingAnimated;
     {

@@ -63,6 +63,7 @@ struct WindowEvents {
 // ─── Window Class ────────────────────────────────────────────────────────────
 
 class Window {
+    friend class StartupCacheTests; // Isolated WARP async tests suppress real-window sizing.
     friend class AsyncPreviewTests; // Owns a message-only HWND in callback tests.
     friend class IpcDiagnosticTests; // Routes message-only receiver traffic through the real handler.
 public:

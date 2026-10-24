@@ -26,6 +26,7 @@ struct ThumbnailInfo {
 };
 
 class ThumbnailStrip {
+    friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
     friend class App;
     friend class AsyncPreviewTests; // Exercises real requests and callbacks without visible UI.
 public:
@@ -81,10 +82,13 @@ private:
     RectF GetThumbnailRect(int index, float windowWidth, float windowHeight) const;
     // Returns a half-open candidate interval with inclusive edge visibility; invalid geometry falls back to all items.
     std::pair<size_t, size_t> GetVisibleRange(float windowWidth) const;
+    // Same inclusive geometry for a destination offset, without mutating animated UI state.
+    std::pair<size_t, size_t> GetVisibleRange(float windowWidth, float scrollX) const;
     float GetThumbnailWidth() const;
     void DrawMirror(Renderer& renderer, ID2D1Bitmap1* bitmap, const RectF& rect, float opacity);
     // Requests a thumbnail with unique identity and a pre-upload UI validity check; completion still checks identity.
-    void LoadThumbnail(int index);
+    // Destination requests precede intermediate visible positions without changing the scroll animation.
+    void LoadThumbnail(int index, bool destination = false);
     // UI-only read: matches token and exact path without consuming loading state or retaining an item address.
     bool IsThumbnailRequestCurrent(const ImageRequestToken& request) const;
     // Applies a completion once to the current token/path match; removed requests do nothing.

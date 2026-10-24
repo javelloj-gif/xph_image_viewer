@@ -8,6 +8,7 @@
 #include "common/types.h"
 #include "common/image_request.h"
 #include "loader/image_loader.h"
+#include "core/folder_scan_service.h"
 #include <string>
 #include <vector>
 #include <memory>
@@ -46,11 +47,23 @@ struct FolderInfo {
 // The optional App pointer is non-owning and must outlive calls that use it.
 // Folder/preview mutators below automatically advance the transient layout revision when geometry inputs change.
 class FolderDataManager {
+    friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
 public:
     friend class App;
     // Creates empty state; destruction releases owned state without saving it.
     FolderDataManager() = default;
-    ~FolderDataManager() = default;
+    // Joins enumeration before model/callback storage is destroyed.
+    ~FolderDataManager();
+    // UI owner: enables dedicated-worker enumeration; isolated non-window consumers retain synchronous AddFolder.
+    void EnableAsync();
+    // UI: drains worker snapshots and applies only current navigation requests.
+    void ProcessPending();
+    // UI: cancels enumeration and callbacks before HWND/loader teardown, preserving pending session records.
+    void StopScanning();
+    // UI read: pending descriptors keep startup from falling back to an unrelated current directory.
+    bool HasPendingFolders() const { return !m_pendingFolders.empty(); }
+    // UI: prevents a snapshot started before a known deletion from reintroducing that file into a model.
+    void NotifyImageRemoved(const std::wstring& path);
 
     // Keeps state ownership and App's aliases bound to a single service instance.
     FolderDataManager(const FolderDataManager&) = delete;
@@ -60,9 +73,9 @@ public:
     void Initialize(App* app);
 
     // ─── Folder Management ───────────────────────────────────────────────────
-    // Scans supported files synchronously, builds previews and sorts; ignores empty folders.
-    // restoringSession suppresses selection/session save. Otherwise selects (also for duplicates),
-    // optionally loads an image through App, and saves the session only for a new folder.
+    // UI: queues CPU enumeration/sort when async is enabled, otherwise scans synchronously; ignores empty folders.
+    // Restoration selects only the first successful no-argument session folder. Explicit requests select
+    // only their current navigation generation; new-folder saves also preserve unresolved session records.
     void AddFolder(const std::wstring& folderPath, bool restoringSession = false, bool loadImage = true);
     // Erases a valid folder (canceling its leases/hover), clamps selection, saves and redraws; does not reload App's file list.
     void RemoveFolder(int index);
@@ -124,6 +137,19 @@ public:
     bool CompletePreview(const ImageRequestToken& request, std::shared_ptr<ImageData> image);
 
 private:
+    // UI-only descriptor preserves a requested/restored folder until its worker completes or it is canceled.
+    struct PendingFolder { std::wstring path; bool restoring, loadImage; uint64_t generation, fileMutation; ImageLoadLifetime lifetime; };
+    // UI: enqueues/reprioritizes a folder without reading its contents or borrowing model addresses.
+    void RequestFolder(const std::wstring& path, bool restoring, bool loadImage);
+    // UI: publishes a complete snapshot, guarding navigation against superseded requests and sort changes.
+    void CompleteFolder(const ImageRequestToken& request, FolderSnapshot snapshot);
+    std::unique_ptr<FolderScanService> m_scanner;
+    std::vector<PendingFolder> m_pendingFolders;
+    std::vector<std::wstring> m_sessionOrder;
+    uint64_t m_navigationGeneration = 0;
+    bool m_restoreSelect = false;
+    uint64_t m_fileMutation = 0;
+    std::vector<std::pair<std::wstring,uint64_t>> m_removedDuringScan;
     // Resolves session.txt on each call using the shared user_data search and EXE fallback.
     std::wstring GetSessionFilePath() const;
     // Resolves fav.txt on each call using the shared user_data search and EXE fallback.

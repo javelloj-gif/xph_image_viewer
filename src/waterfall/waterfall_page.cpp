@@ -175,7 +175,16 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
     ComPtr<ID2D1Factory> factory;
     renderer.GetD2DContext()->GetFactory(&factory);
 
-    bool allReady=true; size_t visible=0;
+    // Cancel queued/decode work outside the current viewport without releasing reusable textures.
+    for (size_t i=0;i<folder.previews.size();++i) {
+        const auto& r=m_previewRects[i];
+        if (r.bottom+m_scrollOffset<0 || r.top+m_scrollOffset>size.height) {
+            auto& item=folder.previews[i];
+            if (item.isLoading) { item.loadLifetime.reset(); item.pendingRequest.reset(); item.isLoading=false; }
+        }
+    }
+    bool allVisibleReady=true;
+    size_t visibleCount=0;
     // Draw normal previews (using virtual scrolling)
     for (size_t i = 0; i < folder.previews.size(); ++i) {
         if (static_cast<int>(i) == activeIdx) {
@@ -194,7 +203,8 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
             continue;
         }
 
-        ++visible; allReady &= item.texture && item.texture->HasGpuBitmap();
+        ++visibleCount;
+        allVisibleReady &= item.texture && item.texture->HasGpuBitmap();
         if (item.texture && item.texture->HasGpuBitmap()) {
             bool rounded = (m_cornerRadius > 0.0f);
             ComPtr<ID2D1Layer> layer;
@@ -231,9 +241,15 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
         }
     }
 
-    const bool ready=allReady && visible && std::abs(m_scrollOffset-m_targetScrollOffset)<0.1f;
+    if (activeIdx>=0 && activeIdx<static_cast<int>(folder.previews.size())) {
+        const auto& active=folder.previews[activeIdx];
+        allVisibleReady &= active.texture && active.texture->HasGpuBitmap();
+        if (!active.texture && !active.isLoading && !active.loadFailed) LoadPreviewTexture(m_app->m_currentFolderIdx,activeIdx);
+    }
+    const bool ready=allVisibleReady && visibleCount>0 && std::abs(m_scrollOffset-m_targetScrollOffset)<0.1f;
     m_app->m_waterfallReadyDrawnThisFrame=ready && m_readyLastFrame && m_readyRevision==m_layoutRevision;
     m_readyLastFrame=ready; m_readyRevision=m_layoutRevision;
+    if (m_app->m_waterfallReadyDrawnThisFrame) PerformanceTrace::Event("waterfall.viewport.ready",m_app->m_imageGeneration,visibleCount);
     // Draw enlarged hovered preview on top of other cells (with shadow)
     if (activeIdx >= 0 && activeIdx < static_cast<int>(folder.previews.size()) && !m_viewerModal) {
         auto& item = folder.previews[activeIdx];
@@ -386,13 +402,15 @@ void WaterfallPage::LoadPreviewTexture(int folderIdx, int previewIdx) {
     item.pendingRequest = request;
     item.loadLifetime = std::make_shared<const bool>(true);
     item.isLoading = true;
-    m_app->m_imageLoader.LoadAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
+    m_app->m_imageLoader.LoadThumbnailAsync(item.filePath, [this, request](std::shared_ptr<ImageData> img) {
         const bool hasImage = img != nullptr;
         if (m_app->m_folderData.CompletePreview(request, std::move(img))) {
-            if (hasImage) { CalculateLayout(); PerformanceTrace::Event("waterfall.ready",m_app->m_imageGeneration); }
+            // CompletePreview advances geometry revision; Draw rebuilds once after the delivery batch.
+            if (hasImage) PerformanceTrace::Event("waterfall.ready",m_app->m_imageGeneration);
+            else PerformanceTrace::Event("waterfall.failed",m_app->m_imageGeneration);
             m_app->m_window.RequestRedraw();
         }
-    }, 200, 200, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }, item.loadLifetime); // 200px width previews
+    }, 200, [this, request]() { return m_app->m_folderData.IsPreviewRequestCurrent(request); }, item.loadLifetime); // 200px width previews
 }
 
 void WaterfallPage::DrawCheckerboard(Renderer& renderer, const RectF& rect) {

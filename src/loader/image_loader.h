@@ -7,6 +7,7 @@
 
 #include "common/types.h"
 #include "common/image_request.h"
+#include "loader/thumbnail_cache.h"
 #include "rendering/renderer.h"
 
 namespace kv {
@@ -62,6 +63,7 @@ using AnimatedImageLoadCallback = std::function<void(std::shared_ptr<AnimatedIma
 
 // Owns CPU workers and pending UI deliveries; terminal shutdown cancels unstarted work, never executing UI callbacks.
 class ImageLoader {
+    friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
     friend class ShutdownTests; // Controls task boundaries and inspects released queues in isolated processes.
     friend class AsyncPreviewTests; // Controls existing queues with zero workers in tests.
     friend class ImageDecodeTests; // Supplies a forwarding WIC factory for decoder counts/failure controls.
@@ -94,9 +96,17 @@ public:
     [[nodiscard]]
     std::shared_ptr<AnimatedImageData> LoadAnimatedSync(const std::wstring& path);
 
-    // Blocks on CPU using the existing extension policy; shares a successful decoder and releases it before fresh static fallback.
+    // Blocks on CPU using the existing extension policy; honors cancellation between WIC stages.
+    // Shares a successful decoder and releases it before fresh static fallback.
     // Returns animation only when valid; does not upload, enqueue work or change any viewer state.
-    [[nodiscard]] ViewerLoadResult LoadForViewerSync(const std::wstring& path);
+    [[nodiscard]] ViewerLoadResult LoadForViewerSync(const std::wstring& path, ImageCancellation cancel = {});
+
+    // UI admission, CPU worker decode with foreground priority; delivery/upload only through ProcessPendingTextures.
+    void LoadForViewerAsync(const std::wstring& path, std::function<void(ViewerLoadResult)> callback, std::weak_ptr<const bool> lifetime);
+    // UI admission for exact 100/200 thumbnails; cache/decoding on workers, existing delivery/lease contracts apply.
+    void LoadThumbnailAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t size, ImageUploadPredicate isCurrent, std::weak_ptr<const bool> lifetime, bool destination = false);
+    // UI owner supplies the private cache root before thumbnail work begins.
+    void InitializeThumbnailCache(const std::filesystem::path& root);
 
     // ── Asynchronous Loading ───────────────────────────────────────────────
     // Decoding runs on background threads. Callback fires when pixel data
@@ -111,7 +121,8 @@ public:
     // Same lease contract for animation; cancellation discards partial frames without callback.
     void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback, std::weak_ptr<const bool> lifetime = {});
 
-    // UI thread: removes obsolete queued requests and frees their captures outside locks; active calls observe cancellation.
+    // UI: removes obsolete queued work/full-resolution results and frees their captures outside locks.
+    // Active calls observe cancellation; repeated opens do not retain old CPU images until a future frame.
     void CancelObsoleteRequests();
 
     /// UI: prunes obsolete tasks; canceled leases skip predicate/upload/callback. Validity-only rejection still delivers CPU result.
@@ -172,6 +183,10 @@ private:
         ImageCancellation cancel;
     };
 
+    // CPU viewer results cross to the UI without capturing or mutating an App on workers.
+    struct PendingViewer { ViewerLoadResult result; std::function<void(ViewerLoadResult)> callback; ImageCancellation cancel; };
+    std::vector<PendingViewer> m_pendingViewers;
+    ThumbnailCache m_thumbnailCache;
     std::mutex                     m_pendingMutex;
     std::vector<PendingTexture>    m_pendingTextures;
     std::vector<PendingAnimatedTexture> m_pendingAnimatedTextures;
@@ -182,10 +197,16 @@ private:
     struct DecodeTask {
         std::function<void()> work;
         ImageCancellation cancel;
+        int priority = 2;
+        bool thumbnail = false;
+        uint64_t traceId = 0;
         // Allows controlled delivery tests and workers to execute only still-current work.
         void operator()() const { if (!cancel.IsCancelled()) work(); }
     };
     std::queue<DecodeTask> m_taskQueue;
+    std::queue<DecodeTask> m_foregroundQueue, m_destinationQueue; // Stable O(1) priority classes, not a per-pop queue scan.
+    size_t m_activeThumbnails = 0;
+    uint64_t m_nextTaskId = 0;
     std::mutex                     m_queueMutex;
     std::condition_variable        m_queueCV;
     std::atomic<bool>              m_shutdown = true;
@@ -194,7 +215,7 @@ private:
     // Worker-only: takes tasks until stopped; completes a task already taken, never drains queued work after stop.
     void WorkerLoop();
     // Serializes admission with shutdown; rejected/canceled tasks never invoke completion callbacks.
-    void EnqueueTask(std::function<void()> task, ImageCancellation cancel = {});
+    void EnqueueTask(std::function<void()> task, ImageCancellation cancel = {}, int priority = 2, bool thumbnail = false);
 
     // ── WIC Factory ───────────────────────────────────────────────────────
     ComPtr<IWICImagingFactory2>    m_wicFactory;

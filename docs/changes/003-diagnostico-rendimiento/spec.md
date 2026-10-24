@@ -1,5 +1,19 @@
 # 003: Diagnóstico de arranque, IPC y consumo en reposo
 
+**Alcance vigente aprobado, 2026-10-23:** implementar arranque asíncrono completo,
+prioridad de miniaturas, caché persistente sin pérdidas y medición real según
+[implementation-plan.md](implementation-plan.md). Sustituye las exclusiones de
+optimización y carpetas grandes del texto histórico inferior. Meta de 100 ms
+para el original utilizable, sin reducir calidad; no es garantía previa.
+
+AC-01..05 se amplían con AC-06: UI/GPU exclusivamente en principal y solicitudes
+obsoletas descartadas; AC-07: caché exacta, invalidable, acotada y prescindible;
+AC-08: sesión/datos/controles preservados durante cargas y cierre; AC-09: candidato
+limpio y comparación reproducible con base identificada, sin certificar pantalla
+por la mera llamada a Present. Los criterios necesarios sin evidencia quedan abiertos.
+
+## Especificación histórica del diagnóstico
+
 Fecha: 2026-10-22. Estado: porción diagnóstica IPC implementada y ejecutada;
 primera ejecución real pendiente; base acotada CPU/memoria/GPU sin logging obtenida.
 Sin optimizaciones aplicadas. [Validación real posterior a 005](real-validation.md).

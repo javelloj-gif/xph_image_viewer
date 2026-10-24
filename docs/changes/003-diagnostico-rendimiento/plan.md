@@ -1,5 +1,14 @@
 # Plan: 003 Diagnóstico de rendimiento
 
+**Estado vigente 2026-10-23:** el propietario aprobó [implementation-plan.md](implementation-plan.md):
+arranque asíncrono completo, prioridad/cancelación visible, caché persistente exacta
+y medición reproducible. P1..P6 implementados/verificados; P7 (comparación/portable)
+en curso. Las recomendaciones y pendientes inferiores son históricos; no reabrir
+la base ni repetir 010/AR-002/AR-005. Cualquier aceptación restante se registra con
+sus límites en result.md; la meta de 100 ms no se presume cumplida.
+
+## Plan histórico
+
 Especificación: [spec.md](spec.md). Última actualización: 2026-10-22.
 Estado: diagnóstico IPC histórico y validación real posterior a 005 ejecutados;
 arranque real pendiente; base acotada CPU/memoria/GPU sin logging y entrada Shell

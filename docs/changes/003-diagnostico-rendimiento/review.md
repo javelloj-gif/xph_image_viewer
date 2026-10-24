@@ -1,5 +1,69 @@
 # Revisión de la porción diagnóstica IPC de 003
 
+## Revisión de implementación asíncrona y caché — 2026-10-23
+
+Habilidad local lenteuv-architecture-review, sin delegación. Base funcional 9b1d7e8;
+instrumentación guardada en commits posteriores y diff de implementación separado.
+Leídos AGENTS/workflow/contexto/desarrollo y los documentos 003. Inspeccionados
+App/LoadImage/Initialize/RenderFrame, ImageLoader/colas/entrega/cierre, servicio de
+escaneo, FolderDataManager/sesión/orden, tira/Waterfall y caché SQLite/Compression.
+Revisados CMake, pruebas nuevas y ejecutor de rendimiento. No es una auditoría nueva
+de Board, codecs, escritores de metadatos, renderer completo ni repositorio.
+
+- **R003-01, riesgo alto, atendido:** una apertura vieja o un snapshot anterior
+  podía sustituir selección/navegación tras una nueva interacción. Generaciones,
+  leases, comprobación antes de upload y entrega UI; cancelación también retira
+  resultados CPU grandes ya pendientes. La ordenación cambiada durante un scan
+  se repite en el trabajador. Los borrados conocidos se filtran por época de mutación.
+  Evidencia de código y regresiones de latest-wins, cambio de orden y borrado.
+- **R003-02, riesgo alto, atendido:** guardar durante restauración podría perder
+  carpetas no publicadas. Descriptores pendientes y orden de sesión preservados
+  al guardar; el worker no modifica modelos, UI ni archivos personales. Tests
+  verifican guardado temprano. Cancelación/joins conservan dependencias hasta retornar
+  la llamada WIC/E/S activa, sin plazo universal ni hilos detached.
+- **R003-03, riesgo alto, atendido:** una caché solo por ruta o una descompresión
+  confiada podría devolver contenido viejo o tamaños no válidos. Clave con tamaño,
+  mtime, identidad/ChangeTime y variante/pipeline, firma antes/después, dimensiones
+  y longitud limitadas y checksum de píxeles. Cache miss/fallo usa WIC. Pruebas de
+  igualdad exacta, variantes, Unicode, modificación, reemplazo y corrupción; un
+  proceso propio adicional lee la misma caché. No se usa hash completo del original
+  para lookup ni se añade un observador universal de cambios externos a texturas ya listas.
+- **R003-04, tradeoff explícito:** tres workers de miniaturas dejan capacidad a la
+  imagen principal; pueden reducir throughput frío frente a cuatro. Lectura SQLite
+  espera como máximo 10 ms por el mutex local y no espera locks de otro proceso;
+  si no accede, decodifica desde el original. Writer separado, cola de hasta 128
+  entradas/8 MiB de píxeles, compresión sin pérdidas y escrituras prescindibles.
+  SQLite sin WAL, auto-vacuum, reserva de journal, cap de páginas y expulsión por
+  transacciones pequeñas. El mantenimiento de una reducción grande de cuota es
+  incremental, hasta 32 entradas por escritura. No se promete reducir CPU/E/S/RAM
+  y latencia simultáneamente. Modelo y texturas activas conservan su retención previa;
+  el presupuesto de disco no es un presupuesto global RAM/VRAM.
+
+Los comentarios de contratos se concentran en declaraciones. GPU/callbacks siguen
+en UI; servicios CPU no toman direcciones de previews. La preparación del destino
+no cambia la animación ni deriva la variante 100 desde la 200. Waterfall invalida
+geometría por lote y mide readiness tras dos frames con la misma revisión.
+
+Evidencia automatizada: Release/CTest 8/8. El smoke nativo anterior pasó diez
+escenarios; se repite sobre la versión final, incluido IPC con receptor ya arrancado.
+El harness de cierre ahora drena mensajes como App::Run: no interpreta un Peek filtrado
+inmediato como prueba suficiente de WM_QUIT. Es adaptación de validación, sin cambio
+del protocolo IPC ni investigación del reporte histórico cerrado.
+
+Medición/entrega en curso. No certificar UX completa, primera sesión nueva ni
+cumplimiento p95 <=100 ms por compilar o por el retorno de Present. DXGI correlaciona
+un ID de frame; la observación produce una cota superior, no una medición óptica.
+La evidencia anterior y sus límites permanecen abajo como historial.
+
+**Límite adicional de ejecución:** apareció un fallo intermitente en el par de
+clientes de ipc.delivery_diagnostics; una repetición aislada pasó. Se conserva
+como IPC-003-CONCURRENT-01 en known-issues, sin causa ni atribución al diff nuevo.
+No se modificó el transporte y no se investiga el antiguo reporte manual cerrado.
+Se añadió salida de códigos/recuentos antes del assert para no perder evidencia
+si vuelve a ocurrir. Los checks siguen siendo estrictos; no se oculta el fallo.
+
+## Revisión histórica
+
 Seguimiento: [006](../006-optimizaciones-locales/review.md) implementa la primera
 porción local, con revisión/equivalencia/medición propias. La auditoría histórica de
 abajo no es una afirmación de que ninguna oportunidad se haya implementado después.

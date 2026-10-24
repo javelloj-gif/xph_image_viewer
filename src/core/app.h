@@ -64,7 +64,8 @@ enum class InitResult {
 // ─── Application Class ──────────────────────────────────────────────────────
 
 class App {
-    friend class AsyncPreviewTests; // Deterministic callback delivery tests; no public test API.
+    friend class AsyncPreviewTests;
+    friend class StartupCacheTests; // Exercises production async generations/cache with isolated data. // Deterministic callback delivery tests; no public test API.
     friend class IpcDiagnosticTests; // Observes applied image state through the real IPC handler.
 public:
     // Binds folder/selection aliases to this App's owned shared folder service.
@@ -79,7 +80,8 @@ public:
     /// Parse command-line arguments into an AppConfig
     static AppConfig ParseCommandLine(int argc, wchar_t* argv[]);
 
-    // UI thread: resolve IPC with a hidden HWND before heavy services; retain reentrant paths until ready.
+    // UI: resolve IPC with a hidden HWND; after WIC, start explicit CPU decode while graphics initialize.
+    // Retain reentrant paths until pages are ready; all results wait for normal main-thread delivery.
     // Forwarding exits skip services; partial failure releases retained paths with the callback/App.
     // Installs terminal close handling that stops IPC before Window destroys its HWND; hiding keeps services alive.
     InitResult Initialize(const AppConfig& config);
@@ -124,12 +126,26 @@ private:
     void DrawCloseButton();
 
     // ── Image Management ──────────────────────────────────────────────────
-    // UI thread: consumes the shared-decoder CPU result, uploads and preserves animated/static state/selection effects.
+    // UI: queues foreground CPU decode; replaces the prior lease and leaves its displayed image intact until success.
     void LoadImage(const std::wstring& path);
-    bool m_originalDrawnThisFrame=false,m_stripReadyDrawnThisFrame=false,m_waterfallReadyDrawnThisFrame=false;
-    uint64_t m_imageGeneration=0;
-    UINT m_originalPresentId=0;
-    // Adds/selects a shared folder and synchronizes page/strip state; optionally loads its image.
+    // UI admission before renderer initialization is allowed: CPU result waits for normal UI delivery.
+    void BeginViewerLoad(const std::wstring& path);
+    // UI after page initialization: queues folder data without delaying an already decoding original.
+    void PrepareImageFolder(const std::wstring& path);
+    // UI: commits a current CPU/GPU result without selecting a page or applying obsolete work.
+    void ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loaded);
+    // UI: reconciles the latest requested image with a newly available folder snapshot.
+    void OnFolderReady();
+    bool m_asyncLoading = false;
+    ImageLoadLifetime m_imageLoadLifetime;
+    std::wstring m_requestedImagePath;
+    uint64_t m_imageGeneration = 0, m_presentedGeneration = 0;
+    bool m_originalFramePending = false;
+    bool m_originalDrawnThisFrame = false;
+    bool m_stripReadyDrawnThisFrame = false, m_waterfallReadyDrawnThisFrame = false;
+    UINT m_originalPresentId = 0;
+    uint64_t m_originalPresentGeneration = 0;
+    // UI: queues/selects a shared folder; its snapshot later synchronizes navigation and optional image loading.
     void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
     // Persists the sort mode, reorders shared folders and restores the active image's selection.

@@ -1,5 +1,11 @@
 # Resultado: 003 Diagnóstico de arranque, IPC y reposo
 
+**Ampliación vigente, 2026-10-23:** implementación del
+[plan autorizado](implementation-plan.md) de arranque asíncrono y miniaturas
+persistentes. Release/CTest 8/8 verificados; comparación y entrega en preparación.
+Esta porción no está cerrada funcionalmente ni certifica 100 ms. El resultado
+histórico inferior conserva su revisión y no describe los nuevos contratos.
+
 **Seguimiento de decoder:** [009](../009-decoder-compartido/result.md) comparte
 apertura en carga normal y preserva fallback fresco; bytes/metadata y llamadas WIC
 validados, Release/CTest 5/5. Medición local, sin cerrar pendientes globales de 003.

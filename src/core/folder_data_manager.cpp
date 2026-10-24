@@ -14,7 +14,79 @@
 
 namespace kv {
 
+
+FolderDataManager::~FolderDataManager() { StopScanning(); }
+void FolderDataManager::EnableAsync() { if (!m_scanner) m_scanner=std::make_unique<FolderScanService>(); }
+void FolderDataManager::ProcessPending() { if (m_scanner) m_scanner->ProcessPending(); }
+void FolderDataManager::StopScanning() { if (m_scanner) { m_scanner->Shutdown(); m_scanner.reset(); } }
+void FolderDataManager::NotifyImageRemoved(const std::wstring& path) {
+    ++m_fileMutation;
+    if (!m_pendingFolders.empty()) m_removedDuringScan.emplace_back(path,m_fileMutation);
+}
+
+void FolderDataManager::RequestFolder(const std::wstring& path, bool restoring, bool loadImage) {
+    if (!restoring) { ++m_navigationGeneration; m_restoreSelect=false; }
+    for (size_t i=0;i<m_folders.size();++i) {
+        if (PathEquals(m_folders[i].folderPath,path)) {
+            if (!restoring) { SetCurrentFolderIndex(static_cast<int>(i),loadImage); if (m_app) m_app->OnFolderReady(); }
+            return;
+        }
+    }
+    auto old=std::find_if(m_pendingFolders.begin(),m_pendingFolders.end(),[&](const PendingFolder& f) { return PathEquals(f.path,path); });
+    if (old!=m_pendingFolders.end()) {
+        if (restoring) return;
+        old->lifetime.reset(); m_pendingFolders.erase(old);
+    }
+    if (!restoring && m_app) {
+        CancelPreviewLoads(); m_app->CancelHoverLoads();
+        m_currentFolderIdx=-1; m_app->m_fileList.clear(); m_app->m_currentIndex=-1;
+        m_app->m_thumbnailStrip.SetFileList({});
+    }
+    const auto request=std::make_shared<const std::wstring>(path);
+    auto lifetime=std::make_shared<const bool>(true);
+    m_pendingFolders.push_back({path,restoring,loadImage,m_navigationGeneration,m_fileMutation,lifetime});
+    if (std::find(m_sessionOrder.begin(),m_sessionOrder.end(),path)==m_sessionOrder.end()) m_sessionOrder.push_back(path);
+    m_scanner->Request(path,m_app?m_app->m_settings.sort_mode:0,!restoring,ImageCancellation(lifetime),
+        [this,request](FolderSnapshot snapshot) { CompleteFolder(request,std::move(snapshot)); });
+}
+void FolderDataManager::CompleteFolder(const ImageRequestToken& request, FolderSnapshot snapshot) {
+    auto found=std::find_if(m_pendingFolders.begin(),m_pendingFolders.end(),[&](const PendingFolder& f) { return f.path==*request; });
+    if (found==m_pendingFolders.end()) return;
+    const auto pending=*found;
+    m_pendingFolders.erase(found);
+    if (m_app && snapshot.sortMode!=m_app->m_settings.sort_mode) {
+        // Rescan with current sort metadata on the worker, retaining original navigation intent.
+        auto retry=pending; retry.lifetime=std::make_shared<const bool>(true);
+        m_pendingFolders.push_back(retry);
+        m_scanner->Request(retry.path,m_app->m_settings.sort_mode,!retry.restoring,ImageCancellation(retry.lifetime),
+            [this,request](FolderSnapshot value) { CompleteFolder(request,std::move(value)); });
+        return;
+    }
+    std::erase_if(snapshot.files,[&](const std::wstring& path) {
+        return std::any_of(m_removedDuringScan.begin(),m_removedDuringScan.end(),[&](const auto& removed) {
+            return removed.second>pending.fileMutation && PathEquals(path,removed.first);
+        });
+    });
+    if (m_pendingFolders.empty()) m_removedDuringScan.clear();
+    if (!snapshot.complete || snapshot.files.empty()) return;
+    FolderInfo folder; folder.folderPath=snapshot.path; folder.folderName=std::filesystem::path(snapshot.path).filename().wstring();
+    if (folder.folderName.empty()) folder.folderName=snapshot.path;
+    folder.filePaths=std::move(snapshot.files); folder.previews.resize(folder.filePaths.size());
+    for (size_t i=0;i<folder.previews.size();++i) folder.previews[i].filePath=folder.filePaths[i];
+    folder.previewsInitialized=true; m_folders.push_back(std::move(folder)); NotifyPreviewLayoutChanged();
+    const bool select=(!pending.restoring && pending.generation==m_navigationGeneration) || (pending.restoring && m_restoreSelect && m_currentFolderIdx<0);
+    if (select) {
+        m_restoreSelect=false;
+        SetCurrentFolderIndex(static_cast<int>(m_folders.size()-1),pending.loadImage);
+        if (m_app) m_app->OnFolderReady();
+        if (!pending.restoring) SaveSession();
+    }
+}
+
 void FolderDataManager::Initialize(App* app) {
+    StopScanning();
+    m_pendingFolders.clear(); m_sessionOrder.clear(); m_restoreSelect = false;
+    m_removedDuringScan.clear(); m_fileMutation=0;
     m_app = app;
     m_folders.clear();
     NotifyPreviewLayoutChanged();
@@ -35,6 +107,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool restoring
     namespace fs = std::filesystem;
     
     auto normPath = NormalizeFolderPath(folderPath);
+    if (m_scanner) { RequestFolder(normPath, restoringSession, loadImage); return; }
     for (size_t i = 0; i < m_folders.size(); ++i) {
         if (PathEquals(m_folders[i].folderPath, normPath)) {
             if (!restoringSession) {
@@ -91,6 +164,8 @@ void FolderDataManager::RemoveFolder(int index) {
     if (index < 0 || index >= static_cast<int>(m_folders.size())) return;
     if (m_app) m_app->CancelHoverLoads();
     
+    std::erase(m_sessionOrder, m_folders[index].folderPath);
+    ++m_navigationGeneration;
     m_folders.erase(m_folders.begin() + index);
     NotifyPreviewLayoutChanged();
 
@@ -114,6 +189,7 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
         if (m_app) m_app->CancelHoverLoads();
     }
     
+    ++m_navigationGeneration;
     m_currentFolderIdx = index;
     if (m_app && m_currentFolderIdx >= 0) {
         auto& folder = m_folders[m_currentFolderIdx];
@@ -136,6 +212,7 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
 }
 
 bool FolderDataManager::LoadSession(bool loadImage) {
+    m_restoreSelect = loadImage;
     std::wstring path = GetSessionFilePath();
     if (!std::filesystem::exists(path)) return false;
 
@@ -168,7 +245,8 @@ bool FolderDataManager::LoadSession(bool loadImage) {
     for (size_t i = 0; i + 3 < lines.size(); i += 4) {
         std::wstring fPath = toWString(lines[i]);
         if (fPath.empty()) continue;
-        if (!std::filesystem::exists(fPath)) continue;
+        if (!m_scanner && !std::filesystem::exists(fPath)) continue;
+        if (std::find(m_sessionOrder.begin(),m_sessionOrder.end(),fPath)==m_sessionOrder.end()) m_sessionOrder.push_back(fPath);
         size_t prevSize = m_folders.size();
         try {
             AddFolder(fPath, true);
@@ -183,7 +261,7 @@ bool FolderDataManager::LoadSession(bool loadImage) {
     if (loadedAny && !m_folders.empty()) {
         SetCurrentFolderIndex(0, loadImage);
     }
-    return loadedAny;
+    return loadedAny || HasPendingFolders();
 }
 
 bool FolderDataManager::SaveSession() {
@@ -207,8 +285,16 @@ bool FolderDataManager::SaveSession() {
         return strTo;
     };
 
-    for (const auto& folder : m_folders) {
-        std::string fPath = toUtf8(folder.folderPath);
+    std::vector<std::wstring> paths;
+    auto append = [&paths](const std::wstring& value) { if (std::find(paths.begin(),paths.end(),value)==paths.end()) paths.push_back(value); };
+    for (const auto& value : m_sessionOrder) {
+        if (std::any_of(m_folders.begin(),m_folders.end(),[&](const FolderInfo& f) { return PathEquals(f.folderPath,value); }) ||
+            std::any_of(m_pendingFolders.begin(),m_pendingFolders.end(),[&](const PendingFolder& f) { return PathEquals(f.path,value); })) append(value);
+    }
+    for (const auto& folder : m_folders) append(folder.folderPath);
+    for (const auto& pending : m_pendingFolders) append(pending.path);
+    for (const auto& folderPath : paths) {
+        std::string fPath = toUtf8(folderPath);
         std::string currentImageMd5 = "";
         std::string modifiers = "";
         

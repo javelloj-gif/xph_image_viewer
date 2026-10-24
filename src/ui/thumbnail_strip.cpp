@@ -137,23 +137,34 @@ void ThumbnailStrip::Update(double dt) {
         }
     }
 
-    // Trigger loads for visible thumbnails
-    if (m_opacity > 0.0f) {
-        auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-        float windowWidth = targetSize.width;
-        float windowHeight = targetSize.height;
-
-        const auto [first, end] = GetVisibleRange(windowWidth);
-        for (size_t i = first; i < end; ++i) {
-            RectF r = GetThumbnailRect(static_cast<int>(i), windowWidth, windowHeight);
-            if (r.right >= 0 && r.left <= windowWidth) {
-                LoadThumbnail(static_cast<int>(i));
+    // Prepare destination after the first original frame; keep intermediate animation, not its obsolete queue.
+    if (m_opacity > 0.0f || (m_app->m_asyncLoading && !m_app->m_originalFramePending && m_app->m_currentImage)) {
+        const auto size=m_app->m_renderer.GetTargetSize().ToFloat();
+        const auto [first,end]=GetVisibleRange(size.width);
+        const auto [targetFirst,targetEnd]=GetVisibleRange(size.width,m_targetScrollX);
+        for (size_t i=0;i<m_thumbnails.size();++i) {
+            if ((i<first || i>=end) && (i<targetFirst || i>=targetEnd)) {
+                auto& item=m_thumbnails[i];
+                if (item.isLoading) { item.loadLifetime.reset(); item.pendingRequest.reset(); item.isLoading=false; }
             }
+        }
+        if (m_app->m_currentIndex>=0) LoadThumbnail(m_app->m_currentIndex,true);
+        for (size_t i=targetFirst;i<targetEnd;++i) LoadThumbnail(static_cast<int>(i),true);
+        if (m_opacity>0.0f) for (size_t i=first;i<end;++i) {
+            const auto rect=GetThumbnailRect(static_cast<int>(i),size.width,size.height);
+            if (rect.right>=0 && rect.left<=size.width) LoadThumbnail(static_cast<int>(i));
+        }
+        const bool ready=targetFirst<targetEnd && std::all_of(m_thumbnails.begin()+targetFirst,m_thumbnails.begin()+targetEnd,
+            [](const ThumbnailInfo& item) { return item.texture!=nullptr; });
+        if (ready) {
+            PerformanceTrace::Event("strip.target.prepared",m_app->m_imageGeneration,targetEnd-targetFirst);
+            if (m_opacity>0 && std::abs(m_scrollX-m_targetScrollX)<0.1f)
+                PerformanceTrace::Event("strip.viewport.ready",m_app->m_imageGeneration,targetEnd-targetFirst);
         }
     }
 }
 
-void ThumbnailStrip::LoadThumbnail(int index) {
+void ThumbnailStrip::LoadThumbnail(int index, bool destination) {
     if (index < 0 || index >= static_cast<int>(m_thumbnails.size())) return;
     auto& info = m_thumbnails[index];
 
@@ -164,9 +175,9 @@ void ThumbnailStrip::LoadThumbnail(int index) {
         info.loadLifetime = std::make_shared<const bool>(true);
         info.isLoading = true;
         
-        m_app->m_imageLoader.LoadAsync(info.path, [this, request](std::shared_ptr<ImageData> data) {
+        m_app->m_imageLoader.LoadThumbnailAsync(info.path, [this, request](std::shared_ptr<ImageData> data) {
             CompleteThumbnail(request, std::move(data));
-        }, 100, 100, [this, request]() { return IsThumbnailRequestCurrent(request); }, info.loadLifetime); // decimate/scale to 100x100
+        }, 100, [this, request]() { return IsThumbnailRequestCurrent(request); }, info.loadLifetime, destination); // decimate/scale to 100x100
     }
 }
 
@@ -192,6 +203,7 @@ void ThumbnailStrip::CompleteThumbnail(const ImageRequestToken& request, std::sh
         PerformanceTrace::Event("strip.ready",m_app->m_imageGeneration);
     } else {
         it->loadFailed = true;
+        PerformanceTrace::Event("strip.failed",m_app->m_imageGeneration);
     }
     m_app->m_window.RequestRedraw();
 }
@@ -212,26 +224,34 @@ RectF ThumbnailStrip::GetThumbnailRect(int index, float windowWidth, float windo
 }
 
 std::pair<size_t, size_t> ThumbnailStrip::GetVisibleRange(float windowWidth) const {
+    return GetVisibleRange(windowWidth,m_scrollX);
+}
+
+std::pair<size_t, size_t> ThumbnailStrip::GetVisibleRange(float windowWidth, float scrollX) const {
     const size_t count = m_thumbnails.size();
     const float width = GetThumbnailWidth();
-    if (!std::isfinite(windowWidth) || !std::isfinite(m_scrollX) ||
+    if (!std::isfinite(windowWidth) || !std::isfinite(scrollX) ||
         !std::isfinite(width) || width <= 0.0f || windowWidth < 0.0f ||
-        !std::isfinite((windowWidth - width) / 2.0f + m_scrollX) ||
+        !std::isfinite((windowWidth - width) / 2.0f + scrollX) ||
         count > static_cast<size_t>(std::numeric_limits<int>::max())) return {0, count};
 
     // Use the actual float geometry at both inclusive edges, avoiding division/rounding drift.
+    auto rectAt = [&](size_t index) {
+        const float base=(windowWidth-width)/2.0f+scrollX;
+        return RectF::FromXYWH(base+width*static_cast<int>(index),0,width,width);
+    };
     size_t first = 0;
     size_t end = count;
     while (first < end) {
         const size_t mid = first + (end - first) / 2;
-        if (GetThumbnailRect(static_cast<int>(mid), windowWidth, 0).right < 0.0f) first = mid + 1;
+        if (rectAt(mid).right < 0.0f) first = mid + 1;
         else end = mid;
     }
     const size_t begin = first;
     end = count;
     while (first < end) {
         const size_t mid = first + (end - first) / 2;
-        if (GetThumbnailRect(static_cast<int>(mid), windowWidth, 0).left <= windowWidth) first = mid + 1;
+        if (rectAt(mid).left <= windowWidth) first = mid + 1;
         else end = mid;
     }
     return {begin, first};
@@ -282,7 +302,8 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     renderer.PushClip(RectF::FromXYWH(0, windowHeight - HEIGHT + 30, windowWidth, HEIGHT - 30));
 
     const auto [first, end] = GetVisibleRange(windowWidth);
-    m_app->m_stripReadyDrawnThisFrame=first<end && std::abs(m_scrollX-m_targetScrollX)<0.1f && std::all_of(m_thumbnails.begin()+first,m_thumbnails.begin()+end,[](const ThumbnailInfo& item) {return item.texture!=nullptr;});
+    m_app->m_stripReadyDrawnThisFrame=first<end && std::abs(m_scrollX-m_targetScrollX)<0.1f &&
+        std::all_of(m_thumbnails.begin()+first,m_thumbnails.begin()+end,[](const ThumbnailInfo& item) { return item.texture!=nullptr; });
     for (size_t i = first; i < end; ++i) {
         RectF rect = GetThumbnailRect(static_cast<int>(i), windowWidth, windowHeight);
         if (rect.right < 0 || rect.left > windowWidth) continue;

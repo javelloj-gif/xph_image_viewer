@@ -38,6 +38,7 @@ set(SOURCES
     src/rendering/renderer.cpp
     src/rendering/animation_controller.cpp
     src/rendering/animation_curve.cpp
+    src/loader/thumbnail_cache.cpp
     src/loader/image_loader.cpp
     src/loader/frame_sequencer.cpp
     src/metadata/xmp_tag_manager.cpp
@@ -46,6 +47,7 @@ set(SOURCES
     src/metadata/jpeg_segment_injector.cpp
     src/metadata/wic_metadata_reader_writer.cpp
     src/metadata/async_directory_scanner.cpp
+    src/core/folder_scan_service.cpp
     src/core/folder_data_manager.cpp
     src/board/board_page.cpp
     src/board/board_canvas.cpp
@@ -79,6 +81,7 @@ set(HEADERS
     src/rendering/renderer.h
     src/rendering/animation_controller.h
     src/rendering/animation_curve.h
+    src/loader/thumbnail_cache.h
     src/loader/image_loader.h
     src/loader/frame_sequencer.h
     src/metadata/xmp_tag_manager.h
@@ -170,6 +173,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     dwmapi.lib
 
     # Windows Imaging Component (image decoding)
+    cabinet.lib
+    winsqlite3.lib
     windowscodecs.lib
 
     # Multimedia timer (high-resolution timing)
@@ -205,6 +210,7 @@ add_executable(tagging_tests
     src/metadata/wic_metadata_reader_writer.cpp
     src/metadata/async_directory_scanner.cpp
     src/loader/image_loader.cpp
+    src/loader/thumbnail_cache.cpp
     src/common/pch.cpp
     tests/tagging_tests.cpp
     tests/metadata_cache_tests.cpp
@@ -225,6 +231,8 @@ if(MSVC)
 endif()
 target_link_libraries(tagging_tests PRIVATE
     ole32.lib
+    cabinet.lib
+    winsqlite3.lib
     windowscodecs.lib
     user32.lib
     gdi32.lib
@@ -263,12 +271,17 @@ set_tests_properties(common.user_data_paths PROPERTIES TIMEOUT 30)
 # Link actual consumers and loader; delivery is controlled without workers or app renderer initialization.
 set(ASYNC_PREVIEW_TEST_SOURCES ${SOURCES})
 list(REMOVE_ITEM ASYNC_PREVIEW_TEST_SOURCES src/main.cpp)
-add_executable(async_preview_tests tests/async_preview_tests.cpp tests/ipc_diagnostic_tests.cpp tests/image_decode_tests.cpp tests/shutdown_tests.cpp ${ASYNC_PREVIEW_TEST_SOURCES})
+add_executable(async_preview_tests tests/startup_cache_tests.cpp tests/async_preview_tests.cpp tests/ipc_diagnostic_tests.cpp tests/image_decode_tests.cpp tests/shutdown_tests.cpp ${ASYNC_PREVIEW_TEST_SOURCES})
 target_precompile_headers(async_preview_tests PRIVATE src/common/pch.h)
 target_include_directories(async_preview_tests PRIVATE src)
 target_compile_options(async_preview_tests PRIVATE /W4 /WX /permissive- /utf-8 /MP /EHsc /wd4100)
 get_target_property(LENTEUV_TEST_LINK_LIBRARIES ${PROJECT_NAME} LINK_LIBRARIES)
-target_link_libraries(async_preview_tests PRIVATE ${LENTEUV_TEST_LINK_LIBRARIES})
+target_link_libraries(async_preview_tests PRIVATE
+    cabinet.lib winsqlite3.lib ${LENTEUV_TEST_LINK_LIBRARIES})
+add_test(NAME loader.startup_cache COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+    -File "${CMAKE_SOURCE_DIR}/scripts/run_startup_cache_tests.ps1"
+    -Executable "$<TARGET_FILE:async_preview_tests>" -RunRoot "${CMAKE_BINARY_DIR}/test-runs")
+set_tests_properties(loader.startup_cache PROPERTIES TIMEOUT 90)
 add_test(NAME ui.async_previews COMMAND async_preview_tests)
 set_tests_properties(ui.async_previews PROPERTIES TIMEOUT 60)
 add_test(NAME lifecycle.cancellation
