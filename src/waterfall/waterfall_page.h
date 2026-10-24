@@ -51,6 +51,7 @@ public:
 private:
     // UI thread: reuses base rects until model/selection/width/count or column/spacing parameters change.
     void CalculateLayout();
+    // UI: draws/requests visible previews and reports readiness after two stable geometry frames.
     void DrawPreviewsGrid(Renderer& renderer, const RectF& rect);
     void DrawScrollbars(Renderer& renderer, const RectF& rect);
     void DrawScrollbar(Renderer& renderer, const RectF& trackRect, float contentHeight, float viewHeight, float scrollOffset, float opacity);
@@ -76,6 +77,8 @@ private:
     std::vector<RectF> m_previewRects;
     // Fixed-size cache key only; the existing rect vector remains the sole geometry storage.
     bool m_layoutValid = false;
+    bool m_readyLastFrame = false;
+    uint64_t m_readyRevision = 0;
     uint64_t m_layoutRevision = 0;
     int m_layoutFolder = -1;
     float m_layoutWidth = 0.0f;

@@ -231,7 +231,9 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
         }
     }
 
-    m_app->m_waterfallReadyDrawnThisFrame=allReady && visible;
+    const bool ready=allReady && visible && std::abs(m_scrollOffset-m_targetScrollOffset)<0.1f;
+    m_app->m_waterfallReadyDrawnThisFrame=ready && m_readyLastFrame && m_readyRevision==m_layoutRevision;
+    m_readyLastFrame=ready; m_readyRevision=m_layoutRevision;
     // Draw enlarged hovered preview on top of other cells (with shadow)
     if (activeIdx >= 0 && activeIdx < static_cast<int>(folder.previews.size()) && !m_viewerModal) {
         auto& item = folder.previews[activeIdx];
