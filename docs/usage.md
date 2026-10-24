@@ -11,6 +11,13 @@ Ejecuta `lenteuv.exe` con la ruta de un archivo o directorio, o arrástralo a la
 Las carpetas visitadas se guardan en la sesión. La configuración de instancia única
 envía aperturas externas al proceso activo; `--multiple` o `--lite` la omiten.
 
+La imagen y la lista de su carpeta se preparan en segundo plano. El original
+anterior permanece hasta cargar correctamente el nuevo. Zoom y paneo están
+disponibles al aparecer la imagen; la navegación espera la lista de su carpeta.
+La tira y Cascada reutilizan automáticamente una caché de miniaturas bajo
+`user_data/cache/thumbnails-v1`, sin opciones adicionales ni cambios de calidad.
+La primera visita todavía necesita generar las miniaturas desde las fotografías.
+
 | Entrada | Resultado cuando no la consume un overlay/modo |
 | --- | --- |
 | NUM1 | Ir al visor principal |

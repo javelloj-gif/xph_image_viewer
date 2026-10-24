@@ -7,6 +7,11 @@ y PowerShell (5.1 o posterior). La versión mínima de CMake se elevó de 3.20 a
 porque el preset utiliza el generador Visual Studio 17 2022. No hay paquetes C++
 externos que descargar para compilar.
 
+003 utiliza SQLite de Windows (`winsqlite/winsqlite3.h`, `winsqlite3.lib`) y
+Windows Compression API (`compressapi.h`, `cabinet.lib`) para la caché prescindible.
+El SDK 10.0.22621.0 usado en la validación los incluye; no se incorpora otra copia
+de SQLite ni se descarga una dependencia.
+
 Desde la raíz:
 
 ```powershell
@@ -42,6 +47,24 @@ El generador prefiere `assets/branding/lenteuv.png`; CairoSVG es opcional para l
 SVG si falta el PNG. Revisa el diff del ICO antes de confirmarlo.
 
 ## Tests aislados
+
+La configuración actual contiene ocho suites. `loader.startup_cache` usa
+`run_startup_cache_tests.ps1`, otro EXE aislado y copias propias de fixtures/datos.
+Sus 89 comprobaciones cubren píxeles exactos entre generación y persistencia,
+variantes, firmas, Unicode, corrupción, cuotas/LRU, lectura entre procesos,
+prioridades/cancelación, snapshots y sesión pendiente. WIC/WARP comprueban entrega
+en UI; no certifican presentación nativa ni un plazo de 100 ms.
+
+Para medir arranque usa `scripts/run_startup_benchmark.ps1` o la matriz secuencial
+`scripts/run_startup_comparison.ps1`. Ambos requieren un RunRoot nuevo bajo build,
+leen los originales y crean datos/cachés propios junto a una copia del EXE.
+La instrumentación QPC se activa con `LENTEUV_PERF_OUTPUT` absoluto y exporta al
+salir; por defecto está desactivada. Las variables LENTEUV_PERF_* de escenario,
+duración y salida son del ejecutor, sin preferencias ni opciones visuales nuevas.
+Cada ejecución guarda CSV, manifest, hashes/configuración y trazas localmente.
+No ejecutar builds u otras pruebas intensivas simultáneamente con la medición.
+No confundir E/S lógica del proceso con lecturas físicas de disco ni caché de
+aplicación vacía con una primera sesión de Windows. Véase la evidencia de 003.
 
 `ipc.delivery_diagnostics` usa `run_ipc_diagnostics.ps1`: copia el harness de 004,
 fixtures y user_data a un run nuevo. El mismo EXE ejecuta roles sender en procesos

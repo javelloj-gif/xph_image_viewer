@@ -105,11 +105,13 @@ void ThumbnailStrip::Update(double dt) {
     }
 
     float lerpFactor = 1.0f - std::exp(-15.0f * static_cast<float>(dt));
+    const float previousScroll=m_scrollX;
     m_scrollX = std::lerp(m_scrollX, m_targetScrollX, lerpFactor);
     m_opacity = std::lerp(m_opacity, m_targetOpacity, lerpFactor);
 
     if (std::abs(m_targetScrollX - m_scrollX) < 0.1f) m_scrollX = m_targetScrollX;
     if (std::abs(m_targetOpacity - m_opacity) < 0.01f) m_opacity = m_targetOpacity;
+    m_scrollStableFrames=m_scrollX==previousScroll ? std::min(2u,m_scrollStableFrames+1) : 0;
 
     // Check mouse autohide trigger
     POINT pt;
@@ -158,7 +160,7 @@ void ThumbnailStrip::Update(double dt) {
             [](const ThumbnailInfo& item) { return item.texture!=nullptr; });
         if (ready) {
             PerformanceTrace::Event("strip.target.prepared",m_app->m_imageGeneration,targetEnd-targetFirst);
-            if (m_opacity>0 && std::abs(m_scrollX-m_targetScrollX)<0.1f)
+            if (m_opacity>0 && (std::abs(m_scrollX-m_targetScrollX)<0.1f || m_scrollStableFrames>=2))
                 PerformanceTrace::Event("strip.viewport.ready",m_app->m_imageGeneration,targetEnd-targetFirst);
         }
     }
@@ -302,7 +304,7 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     renderer.PushClip(RectF::FromXYWH(0, windowHeight - HEIGHT + 30, windowWidth, HEIGHT - 30));
 
     const auto [first, end] = GetVisibleRange(windowWidth);
-    m_app->m_stripReadyDrawnThisFrame=first<end && std::abs(m_scrollX-m_targetScrollX)<0.1f &&
+    m_app->m_stripReadyDrawnThisFrame=first<end && (std::abs(m_scrollX-m_targetScrollX)<0.1f || m_scrollStableFrames>=2) &&
         std::all_of(m_thumbnails.begin()+first,m_thumbnails.begin()+end,[](const ThumbnailInfo& item) { return item.texture!=nullptr; });
     for (size_t i = first; i < end; ++i) {
         RectF rect = GetThumbnailRect(static_cast<int>(i), windowWidth, windowHeight);

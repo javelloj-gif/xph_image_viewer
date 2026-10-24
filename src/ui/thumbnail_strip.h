@@ -103,6 +103,8 @@ private:
     // ── Scroll & Opacity Transition State ──────────────────────────────────
     float m_scrollX = 0.0f;
     float m_targetScrollX = 0.0f;
+    // Diagnostic stability of the actual float position, including representable lerp plateaus.
+    unsigned m_scrollStableFrames = 0;
     float m_opacity = 0.0f;
     float m_targetOpacity = 0.0f;
 

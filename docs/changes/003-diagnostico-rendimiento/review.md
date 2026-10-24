@@ -62,6 +62,15 @@ No se modificó el transporte y no se investiga el antiguo reporte manual cerrad
 Se añadió salida de códigos/recuentos antes del assert para no perder evidencia
 si vuelve a ocurrir. Los checks siguen siendo estrictos; no se oculta el fallo.
 
+**R003-05, diagnóstico, corregido:** la serie de tira mostró que el lerp float en
+posiciones lejanas puede estabilizarse a una distancia representable >0,1 px del
+destino. El antiguo criterio de readiness nunca cerraba esos casos aunque el área
+visible ya no se moviera. Se reconoce también una posición idéntica en dos updates
+consecutivos, sin alterar lerp, snap, efectos ni cadencia. La base instrumentada
+recibe el mismo criterio y una regresión reproduce el plateau a 144 Hz. Se conserva
+la serie anterior como exploratoria y se repite la matriz. Release/CTest 8/8
+posteriores correctos (89 checks de startup/cache, 17,96 s).
+
 ## Revisión histórica
 
 Seguimiento: [006](../006-optimizaciones-locales/review.md) implementa la primera

@@ -199,6 +199,10 @@ public:
         strip.SetFileList(paths); strip.m_scrollX=0; strip.m_targetScrollX=-50.0f*7000;
         const auto destinationRange=strip.GetVisibleRange(800,strip.m_targetScrollX);
         Check(destinationRange.first>6900 && destinationRange.second<7100,"target viewport independent of animated current position");
+        strip.m_scrollX=-332349.875f; strip.m_targetScrollX=-332350.0f;
+        strip.Update(1.0/144); strip.Update(1.0/144);
+        Check(strip.m_scrollX==-332349.875f && strip.m_scrollStableFrames==2,
+            "diagnostic recognizes a representable large-offset lerp plateau without altering animation");
         app.m_folderData.StopScanning();
     }
     // Runs each behavior and leaves its isolated evidence on disk for diagnosis.

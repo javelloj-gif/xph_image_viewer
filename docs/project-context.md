@@ -2,15 +2,15 @@
 
 # Contexto técnico de LenteUV
 
-**Reporte funcional posterior, 2026-10-23:** en portable 014, abrir otra imagen
-mediante el mismo ejecutable mantiene la anterior en el visor (punto 6 IPC).
-El propietario lo identifica como error legado y difiere expresamente su
-tratamiento. [IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) es
-evidencia de usuario, sin causa ni reproducción adicional confirmadas aquí.
-Las pruebas aisladas y el cierre de implementación AR-005 no certifican la
-aceptación global de IPC. No investigar ni corregir este caso hasta nueva instrucción.
+**Reporte vigente, 2026-10-23:** el propietario confirma que IPC actualiza el visor
+al abrir otra imagen desde Windows en el candidato aceptado de 002.
+[IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) queda cerrado por
+funcionamiento actual reportado, sin diagnóstico causal. En las pruebas de 003
+apareció un fallo intermitente distinto con dos clientes simultáneos del harness;
+se conserva como IPC-003-CONCURRENT-01 en [problemas conocidos](known-issues.md).
+Ninguna de estas evidencias certifica todos los escenarios IPC.
 
-Última revisión: 2026-10-22 (servicios R1/R2, contratos de carga y optimizaciones 006..009). Audiencia: agentes y desarrolladores que mantengan este repositorio.
+Última revisión: 2026-10-23 (003: arranque asíncrono y caché de miniaturas). Audiencia: agentes y desarrolladores que mantengan este repositorio.
 
 Estructura vigente: `src/` contiene el código, la raíz contiene CMake y `tests/fixtures/` conserva las muestras. Los builds y paquetes se generan en `build/` y `dist/`.
 
@@ -39,12 +39,12 @@ No hay dependencia de Qt ni de un runtime Python para ejecutar o compilar el vis
 | --- | --- |
 | `main.cpp`, `common/` | `wWinMain`, captura SEH, COM RAII, tipos geométricos, temporizadores y logs |
 | `core/app.*` | Arranque, enrutamiento, modo activo, apertura, navegación, lista actual, borrado y ajuste de ventana |
-| `core/folder_data_manager.*` | Modelo compartido de carpetas/previews, selección, escaneo síncrono, sesión/favoritos e historial; App lo posee como `m_folderData` |
+| `core/folder_data_manager.*`, `core/folder_scan_service.*` | Estado UI de carpetas/previews, selección y sesión; enumeración/ordenación en un trabajador CPU dedicado |
 | `core/window.*` | HWND, estilos/transparencia, DPI, fullscreen, captura de ratón y traducción de mensajes a callbacks |
 | `core/single_instance_ipc.*` | Cliente/servidor named pipe, envío de rutas y cierre del hilo servidor |
 | `core/settings.*` | Preferencias y parser/escritor JSON propio |
 | `rendering/` | Dispositivo D3D11, DXGI, Direct2D, DirectWrite, DirectComposition, curvas y animaciones por nombre |
-| `loader/` | `ImageLoader`, decodificación WIC, trabajadores, colas de texturas y `FrameSequencer` |
+| `loader/` | `ImageLoader`, WIC, colas CPU/GPU, `FrameSequencer` y caché persistente de miniaturas |
 | `viewer/`, `ui/thumbnail_strip.*` | Imagen principal, transformaciones, zoom de región y tira inferior |
 | `waterfall/` | Distribución en columnas, desplazamiento y visor modal dentro de la misma aplicación |
 | `board/` | Tablero, selección, edición, conexiones, serialización, búsqueda, escaneo y distribución |
@@ -57,16 +57,28 @@ Patrones observados: composición de componentes, callbacks `std::function`, RAI
 
 `FolderDataManager` reside en core y se usa en el hilo UI. App mantiene referencias
 `m_folders`/`m_currentFolderIdx` a ese estado; mover el servicio no las convierte en
-copias. La API sigue combinando navegación y persistencia: AddFolder escanea y ordena
-sincrónicamente, y normalmente selecciona/carga/guarda; `restoringSession=true` suprime
-selección y guardado para restaurar sesión. El gestor/modelo compartido permanece
-en core tras retirar la página en 002.
+copias. En producción AddFolder solicita un snapshot CPU al trabajador dedicado;
+ProcessPending lo publica en UI si conserva su lease. Las solicitudes explícitas
+tienen prioridad sobre restauraciones aún en cola. La generación de navegación
+impide que una restauración tardía seleccione otra carpeta. Los descriptores todavía
+pendientes se conservan al guardar sesión, incluido cierre temprano. El adaptador
+síncrono sigue disponible para consumidores aislados que no habilitan EnableAsync.
+El gestor/modelo compartido permanece en core tras retirar la página en 002.
 
 ## Arranque, entrada, renderizado y cierre
 
 **Código:** `wWinMain` consulta el flag de diagnóstico temprano; `wWinMainImpl` establece DPI Per-Monitor V2, inicializa COM, convierte argumentos y crea `App`. `ParseCommandLine` admite archivo/carpeta y `--frameless`, `--windowed`, `--opaque`, `--maximized`, `--fullscreen`, `--multiple`/`--lite` (también con un guion). Las dos últimas alternativas desactivan el control de instancia para ese proceso; no confundir `--lite` con una implementación independiente de visor.
 
-`App::Initialize` carga settings/traducciones y crea HWND oculto; instala un callback temporal propietario de rutas tempranas y resuelve IPC. Solo si continúa inicializa gestor/favoritos, loader de cuatro trabajadores, fachada XMP y overlays; registra bandeja/callbacks restantes y crea el renderer; muestra la ventana según preferencias; inicializa las páginas y restaura sesión antes de cargar el argumento explícito. El orden importa: una carga prematura antes del renderer/páginas produjo problemas históricos de arranque. Sin argumentos ni carpetas restauradas se intenta el directorio de trabajo. Tras contenido inicial y timer instala el callback IPC definitivo y aplica rutas retenidas; los secundarios evitan los servicios pesados y conservan errores 005.
+`App::Initialize` carga settings/traducciones y crea HWND oculto; instala un callback
+temporal propietario de rutas tempranas y resuelve IPC. Solo si continúa inicializa
+gestor/favoritos y loader de cuatro trabajadores. La decodificación CPU del archivo
+explícito puede empezar antes del renderer y solaparse con su inicialización; su
+resultado espera a ProcessPendingTextures, después de inicializar las páginas.
+La textura y el estado UI se crean/aplican exclusivamente en el hilo principal.
+La sesión y carpetas se enumeran/ordenan fuera de UI. Sin argumentos ni restauración
+pendiente se intenta el directorio de trabajo. Tras contenido inicial y timer instala
+el callback IPC definitivo y aplica rutas retenidas; los secundarios evitan los
+servicios pesados y conservan errores 005.
 
 `Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Waterfall=5; el valor retirado 4 no tiene enumerador. Los atajos de cambio de modo NO corresponden directamente a esos valores. NUM2/2 quedan reservados y la posición radial — / Unavailable está inactiva. No hay diálogo ni migración añadidos para preferencias antiguas; 4 ya no designa un modo soportado. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las tres páginas funcionales.
 
@@ -125,11 +137,15 @@ plazo universal para una llamada ya iniciada. Desde 014, stop_token y lease déb
 
 **Código:** WIC decodifica en CPU a BGRA premultiplicado de 32 bits; D2D/GPU dibuja, escala y compone. `ImageData` mantiene bytes CPU y `ID2D1Bitmap1`; subir a GPU no libera automáticamente los píxeles. `AnimatedImageData` conserva todos los frames decodificados; `UploadAnimationToGpu` crea sus bitmaps y `FrameSequencer` administra retrasos, bucles, pausa y velocidad.
 
-`App::LoadImage` usa `LoadForViewerSync`, bloqueante y solo CPU. Mantiene selección
+`App::LoadImage` en producción solicita `LoadForViewerAsync`; el worker usa el mismo
+`LoadForViewerSync`, solo CPU. Mantiene selección
 por extensión, comparte decoder entre count y decode normal y devuelve estático o
 animación válida. Ante apertura/count/animación inválidos o reuse estático fallido
 libera el intento y reabre para fallback estático. No garantizar una sola apertura
-en errores. `LoadSync`/`LoadAnimatedSync` siguen bloqueantes y conservan contrato para
+en errores. La generación y lease cancelan resultados obsoletos antes y después del
+upload. El original anterior permanece hasta el éxito del nuevo; un callback tardío
+no cambia el modo. La carpeta pendiente no permite navegar con una lista anterior.
+`LoadSync`/`LoadAnimatedSync` siguen bloqueantes y conservan contrato para
 otros consumidores. Las cargas asíncronas encolan tareas, los trabajadores decodifican
 y guardan resultados bajo mutex. `ProcessPendingTextures` intercambia colas, comprueba
 el predicado opcional de vigencia fuera del mutex, sube texturas si procede y ejecuta
@@ -149,11 +165,25 @@ Ordenar/desplazar conserva el token; borrar o reemplazar lo descarta, incluso al
 a añadir la misma ruta. Las entradas retenidas de la tira conservan caché y solicitudes;
 ocurrencias duplicadas no comparten solicitudes pendientes. Desde 014, tira/previews/hover y Board poseen leases transitorios que solo se prestan débilmente al loader. Borrar/reemplazar o salir de carpeta/página cancela solicitudes; ordenar conserva previews pero cancela hover cuyo índice puede cambiar. Board identifica cada solicitud por ítem, incluso con rutas duplicadas. El loader poda la cola y detiene trabajo activo en límites cooperativos. Desde [011](changes/011-vigencia-antes-upload/result.md),
 tira/previews añaden el mismo contraste token/ruta antes del upload, sin consumir token
-ni invalidar layout. Comprobación final de 004 y revisión 007 permanecen. Otros
+ni invalidar layout. Desde 003 ampliado, tres colas FIFO priorizan original, destino
+de tira y área visible; como máximo tres miniaturas ocupan los cuatro workers. La
+tira prepara el destino conservando la animación y cancela pendientes fuera del
+destino/área visible. Waterfall cancela fuera de su viewport y agrupa invalidaciones
+de geometría. Comprobación final de 004 y revisión 007 permanecen. Otros
 consumidores y cargas animadas conservan su camino sin predicado de upload, pero admiten cancelación por lease. No hay presupuesto global de RAM/VRAM ni límite general
 de tareas pendientes. El tablero solicita texturas de hasta 400x400 y expulsa las más
 lejanas cuando supera `MAX_BOARD_TEXTURES=150`; ese límite cuenta objetos con textura,
 no bytes ni toda la memoria del proceso.
+
+La caché de disco es exclusiva de miniaturas 100x100 y 200x200 independientes,
+BGRA premultiplicado exacto, SQLite del sistema y Compression API sin pérdidas.
+Vive bajo la raíz resuelta `user_data/cache/thumbnails-v1`; no cataloga originales.
+Lookup/compresión/escritura/LRU ocurren fuera de UI. Firma con ruta, identidad,
+tamaño, mtime/ChangeTime y versión antes/después de la generación; ante fallo usa
+el original. El presupuesto es min(1 GiB, 1% libre), con protección bajo 1 GiB libre,
+reserva de journal y expulsión incremental. El writer acota su cola a 128 entradas
+y 8 MiB de píxeles; descarta pendientes al cerrar. Una llamada SQLite/WIC/E/S activa
+debe retornar antes del join. No hay nuevo presupuesto global de RAM/VRAM.
 
 **Pendiente:** medir carpetas de 10 000–50 000 imágenes, picos al cargar animaciones, latencia de cancelación, memoria CPU/GPU, trabajo en idle y pérdida de dispositivo. No describir aceleración de dibujo como garantía de decodificación GPU o responsividad.
 
