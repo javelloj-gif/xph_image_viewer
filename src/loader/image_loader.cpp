@@ -547,7 +547,7 @@ void ImageLoader::LoadAsync(const std::wstring& path, ImageLoadCallback callback
             std::lock_guard lock(m_pendingMutex);
             m_pendingTextures.push_back({ nullptr, callback, isCurrent, cancel });
         }
-    }, cancel);
+    }, cancel, 2, targetWidth>0 && targetHeight>0);
 }
 
 void ImageLoader::LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback, std::weak_ptr<const bool> lifetime) {

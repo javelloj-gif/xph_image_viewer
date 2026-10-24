@@ -166,7 +166,8 @@ a añadir la misma ruta. Las entradas retenidas de la tira conservan caché y so
 ocurrencias duplicadas no comparten solicitudes pendientes. Desde 014, tira/previews/hover y Board poseen leases transitorios que solo se prestan débilmente al loader. Borrar/reemplazar o salir de carpeta/página cancela solicitudes; ordenar conserva previews pero cancela hover cuyo índice puede cambiar. Board identifica cada solicitud por ítem, incluso con rutas duplicadas. El loader poda la cola y detiene trabajo activo en límites cooperativos. Desde [011](changes/011-vigencia-antes-upload/result.md),
 tira/previews añaden el mismo contraste token/ruta antes del upload, sin consumir token
 ni invalidar layout. Desde 003 ampliado, tres colas FIFO priorizan original, destino
-de tira y área visible; como máximo tres miniaturas ocupan los cuatro workers. La
+de tira y área visible; como máximo tres miniaturas ocupan los cuatro workers,
+incluidas las solicitudes estáticas de tamaño limitado de Board (sin caché 400px). La
 tira prepara el destino conservando la animación y cancela pendientes fuera del
 destino/área visible. Waterfall cancela fuera de su viewport y agrupa invalidaciones
 de geometría. Comprobación final de 004 y revisión 007 permanecen. Otros
@@ -178,7 +179,10 @@ no bytes ni toda la memoria del proceso.
 La caché de disco es exclusiva de miniaturas 100x100 y 200x200 independientes,
 BGRA premultiplicado exacto, SQLite del sistema y Compression API sin pérdidas.
 Vive bajo la raíz resuelta `user_data/cache/thumbnails-v1`; no cataloga originales.
-Lookup/compresión/escritura/LRU ocurren fuera de UI. Firma con ruta, identidad,
+Preparación SQLite/lookup/compresión/escritura/LRU ocurren fuera de UI; el writer
+prepara la base durante la inicialización del renderer. La admisión inicial usa
+presupuesto de espera de 500 ms en workers de miniaturas, posteriores de 10 ms;
+la imagen principal no espera SQLite. Firma con ruta, identidad,
 tamaño, mtime/ChangeTime y versión antes/después de la generación; ante fallo usa
 el original. El presupuesto es min(1 GiB, 1% libre), con protección bajo 1 GiB libre,
 reserva de journal y expulsión incremental. El writer acota su cola a 128 entradas

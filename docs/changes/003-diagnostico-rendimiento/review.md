@@ -30,7 +30,8 @@ de Board, codecs, escritores de metadatos, renderer completo ni repositorio.
   para lookup ni se añade un observador universal de cambios externos a texturas ya listas.
 - **R003-04, tradeoff explícito:** tres workers de miniaturas dejan capacidad a la
   imagen principal; pueden reducir throughput frío frente a cuatro. Lectura SQLite
-  espera como máximo 10 ms por el mutex local y no espera locks de otro proceso;
+  usa presupuesto de 500 ms para admisión inicial y 10 ms con la base preparada;
+  no espera locks de SQLite de otro proceso (el scheduler puede demorar el despertar).
   si no accede, decodifica desde el original. Writer separado, cola de hasta 128
   entradas/8 MiB de píxeles, compresión sin pérdidas y escrituras prescindibles.
   SQLite sin WAL, auto-vacuum, reserva de journal, cap de páginas y expulsión por
@@ -87,6 +88,21 @@ registradas en result.md):
   conservar una transacción que impida los siguientes BEGIN. La regresión mantiene
   un read lock independiente, comprueba ausencia de bytes no confirmados y
   recuperación posterior. No se relajan los checks de caché ni de IPC.
+- **R003-08, rendimiento de cola, atendido:** las trazas de cc5db31 detectaron
+  aperturas SQLite de unos 300 ms que hacían expirar las lecturas concurrentes y
+  disparaban regeneraciones. El writer prepara la base durante la inicialización
+  del renderer; las miniaturas coordinan esa admisión inicial con presupuesto de
+  500 ms. La imagen principal conserva su worker y no espera SQLite. La apertura
+  del sistema de archivos ya iniciada debe retornar; no se promete interrupción
+  forzada. La nueva serie mide ese trabajo y no atribuye al nuevo EXE las cifras
+  de cc5db31. La política posterior de contención conserva presupuesto de 10 ms.
+- **Reserva de capacidad:** el único llamador productivo restante de LoadAsync
+  con tamaño limitado es Board (400px). También participa en el techo de tres
+  miniaturas, sin añadir una variante persistente nueva. La prueba de gating usa
+  esa admisión real antes de arrancar los cuatro workers y verifica capacidad
+  disponible para foreground. No se cambia la calidad, retención ni formato Board.
+
+Última validación de fuentes: Release y CTest 8/8, 18,27 s, 94 checks startup/cache.
 
 ## Revisión histórica
 

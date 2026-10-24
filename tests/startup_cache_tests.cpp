@@ -129,15 +129,22 @@ public:
     }
     // Real worker gating proves foreground capacity and stable priority without relying on decode speed.
     void Scheduling() {
-        ImageLoader loader; Check(loader.Initialize(4),"four workers");
+        ImageLoader loader; Check(loader.Initialize(0),"controlled four-worker admission");
         std::atomic<int> active=0,peak=0;
         std::atomic<bool> release=false,foreground=false;
-        for(int i=0;i<8;++i) loader.EnqueueTask([&] {
+        // Always unblock and join gated workers before the test's atomic state is destroyed, including failure.
+        struct FinishWorkers { ImageLoader& loader; std::atomic<bool>& release;
+            ~FinishWorkers() { release=true; loader.Shutdown(); } } cleanup{loader,release};
+        for(int i=0;i<8;++i) {
+            loader.LoadAsync(a.wstring(),{},400,400); // Same admission used by Board, retaining its cache policy.
+            loader.m_taskQueue.back().work=[&] {
             const int count=++active; int observed=peak.load();
             while(count>observed && !peak.compare_exchange_weak(observed,count)) { }
             while(!release.load()) Sleep(1);
             --active;
-        },{},2,true);
+            };
+        }
+        for(int i=0;i<4;++i) loader.m_workers.emplace_back(&ImageLoader::WorkerLoop,&loader);
         Until([&] { return active==3; },"exactly three thumbnail slots become occupied");
         loader.EnqueueTask([&] { foreground=true; },{},0,false);
         Until([&] { return foreground.load(); },"reserved worker serves foreground while thumbnails blocked");

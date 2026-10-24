@@ -20,17 +20,18 @@ struct ImageData;
 class ThumbnailCache {
     friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
 public:
-    // Does not open files; database initialization is lazy on the first worker request.
+    // Creates an inactive store; Initialize starts database preparation outside UI.
     ThumbnailCache() = default;
     // Stops the writer before releasing database state; queued writes may be discarded.
     ~ThumbnailCache();
-    // UI owner: resolves an already chosen private cache directory and starts one writer.
+    // UI owner: starts one writer which prepares the database concurrently with renderer initialization.
     void Initialize(const std::filesystem::path& root, uint64_t maximumBytes = 1024ull*1024*1024);
     // UI owner: discards queued writes and joins an in-progress small transaction/compression.
     void Shutdown();
     // Worker: returns an attribute/file-identity signature, or empty when source validation fails.
     static std::wstring Signature(const std::wstring& path);
-    // Worker: database contention waits at most 10 ms; caller also verifies source signature after reading.
+    // Worker: initial database admission uses a 500 ms wait budget, later contention 10 ms.
+    // Neither wait uses UI/foreground capacity; caller verifies source signature again after reading.
     std::shared_ptr<ImageData> Read(const std::wstring& path, const std::wstring& signature, uint32_t size);
     // Worker: best-effort bounded CPU-only submission; never retains GPU state or blocks on writes.
     void Store(const std::wstring& signature, uint32_t size, const ImageData& image);
@@ -57,6 +58,7 @@ private:
     std::filesystem::path m_root;
     uint64_t m_maximumBytes = 1024ull*1024*1024;
     sqlite3* m_db = nullptr;
+    std::atomic<bool> m_databaseReady = false;
     std::timed_mutex m_dbMutex;
     std::mutex m_writeMutex;
     std::condition_variable m_cv;

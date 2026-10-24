@@ -117,6 +117,7 @@ public:
     // Before initialization/after stop, submissions are ignored; shutdown cancels undelivered callbacks.
     // Captured consumers must outlive delivery, just as for the completion callback.
     // Optional weak lease cancels CPU work and delivery when its UI owner is removed; never capture the lease in callback.
+    // Bounded-size requests (including Board) share the three-thumbnail concurrency ceiling, without disk caching 400px.
     void LoadAsync(const std::wstring& path, ImageLoadCallback callback, uint32_t targetWidth = 0, uint32_t targetHeight = 0, ImageUploadPredicate isCurrent = {}, std::weak_ptr<const bool> lifetime = {});
     // Same lease contract for animation; cancellation discards partial frames without callback.
     void LoadAnimatedAsync(const std::wstring& path, AnimatedImageLoadCallback callback, std::weak_ptr<const bool> lifetime = {});

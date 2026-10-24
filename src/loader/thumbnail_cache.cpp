@@ -46,6 +46,7 @@ void ThumbnailCache::Shutdown() {
     if (m_writer.joinable()) m_writer.join();
     std::lock_guard lock(m_dbMutex);
     if (m_db) { sqlite3_close(m_db); m_db = nullptr; }
+    m_databaseReady=false;
 }
 std::wstring ThumbnailCache::Signature(const std::wstring& path) {
     HANDLE file = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -63,6 +64,7 @@ std::wstring ThumbnailCache::Signature(const std::wstring& path) {
 }
 bool ThumbnailCache::Open() {
     if (m_db) return true;
+    PerformanceSpan span("cache.open.begin","cache.open.end");
     if (m_root.empty()) return false;
     std::error_code error;
     std::filesystem::create_directories(m_root, error);
@@ -80,13 +82,14 @@ bool ThumbnailCache::Open() {
     if (sqlite3_exec(m_db, schema, nullptr, nullptr, nullptr) != SQLITE_OK) {
         sqlite3_close(m_db); m_db = nullptr; return false;
     }
+    m_databaseReady=true;
     return true;
 }
 std::shared_ptr<ImageData> ThumbnailCache::Read(const std::wstring& path, const std::wstring& signature, uint32_t size) {
     PerformanceSpan span("cache.read.begin", "cache.read.end");
     if (m_stop.load()) { ++m_misses; return nullptr; }
     std::unique_lock lock(m_dbMutex, std::defer_lock);
-    const bool acquired=lock.try_lock_for(std::chrono::milliseconds(10));
+    const bool acquired=lock.try_lock_for(std::chrono::milliseconds(m_databaseReady.load() ? 10 : 500));
     if ((size!=100 && size!=200) || signature.empty() || !acquired || !Open()) { ++m_misses; return nullptr; }
     Statement query(m_db, "SELECT w,h,alpha,compressed,checksum,pixels FROM thumbs WHERE key=? AND size=?");
     if (!query.value) { ++m_misses; return nullptr; }
@@ -129,6 +132,8 @@ void ThumbnailCache::Store(const std::wstring& signature, uint32_t size, const I
     m_cv.notify_one();
 }
 void ThumbnailCache::WriterLoop() {
+    // Prepare SQLite alongside renderer startup, before the first visible thumbnail burst.
+    try { std::lock_guard lock(m_dbMutex); if (!m_stop) Open(); } catch (...) { }
     for (;;) {
         Write write;
         bool hasWrite=false;
