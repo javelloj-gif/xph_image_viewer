@@ -62,6 +62,18 @@ public:
         if(wait!=WAIT_OBJECT_0) { TerminateProcess(child.hProcess,99); WaitForSingleObject(child.hProcess,1000); }
         DWORD code=99; GetExitCodeProcess(child.hProcess,&code); CloseHandle(child.hThread); CloseHandle(child.hProcess);
         Check(wait==WAIT_OBJECT_0 && code==0,"another process reuses exact cached pixels");
+        sqlite3* blockingReader=nullptr;
+        Check(sqlite3_open16((root/L"cache"/L"thumbnails.sqlite").c_str(),&blockingReader)==SQLITE_OK,"independent locking connection");
+        Check(sqlite3_exec(blockingReader,"BEGIN; SELECT pixels FROM thumbs LIMIT 1",nullptr,nullptr,nullptr)==SQLITE_OK,"external read transaction holds shared lock");
+        const auto lockedKey=signature+L"|locked-write";
+        std::thread blockedWriter([&] { cache.Commit({lockedKey,100,image->width,image->height,image->hasAlpha,image->pixels}); });
+        blockedWriter.join();
+        { std::lock_guard lock(cache.m_dbMutex);
+            Check(sqlite3_get_autocommit(cache.m_db)!=0,"failed cache commit releases its transaction"); }
+        Check(!cache.Read(a.wstring(),lockedKey,100),"blocked commit never publishes uncommitted cache bytes");
+        sqlite3_exec(blockingReader,"ROLLBACK",nullptr,nullptr,nullptr); sqlite3_close(blockingReader);
+        cache.Store(lockedKey,100,*image);
+        Until([&] { return cache.Read(a.wstring(),lockedKey,100)!=nullptr; },"cache recovers after external reader releases lock");
         auto previousTime=std::filesystem::last_write_time(a);
         std::filesystem::last_write_time(a,previousTime+std::chrono::seconds(2));
         const auto changed=ThumbnailCache::Signature(a.wstring());

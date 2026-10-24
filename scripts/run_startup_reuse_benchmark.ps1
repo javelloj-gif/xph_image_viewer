@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$ComparisonRoot,
     [Parameter(Mandatory)][string]$Images,
     [Parameter(Mandatory)][string]$RunRoot,
+    [string]$CandidateComparisonRoot,
     [ValidateRange(1,30)][int]$Repetitions=10
 )
 $ErrorActionPreference='Stop'
@@ -21,7 +22,8 @@ public static class ReuseBenchmarkNative {
 '@
 $rows=@()
 foreach ($variant in @('base','candidate')) {
-    $source=Join-Path $ComparisonRoot "$variant-waterfall-warm"
+    $sourceRoot=if ($variant -eq 'candidate' -and $CandidateComparisonRoot) { $CandidateComparisonRoot } else { $ComparisonRoot }
+    $source=Join-Path $sourceRoot "$variant-waterfall-warm"
     $manifest=Get-Content -LiteralPath "$source\manifest.json" -Raw | ConvertFrom-Json
     foreach ($image in $manifest.SourceFiles) {
         $run=Join-Path $root "$variant-$($image.Position)"

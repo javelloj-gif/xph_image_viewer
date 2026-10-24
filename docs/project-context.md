@@ -182,7 +182,9 @@ Lookup/compresión/escritura/LRU ocurren fuera de UI. Firma con ruta, identidad,
 tamaño, mtime/ChangeTime y versión antes/después de la generación; ante fallo usa
 el original. El presupuesto es min(1 GiB, 1% libre), con protección bajo 1 GiB libre,
 reserva de journal y expulsión incremental. El writer acota su cola a 128 entradas
-y 8 MiB de píxeles; descarta pendientes al cerrar. Una llamada SQLite/WIC/E/S activa
+y 8 MiB de píxeles, más 128 actualizaciones de recencia con ventana de agrupación
+de 250 ms; un hit no hace un UPDATE síncrono. Descarta pendientes al cerrar.
+Una llamada SQLite/WIC/E/S activa
 debe retornar antes del join. No hay nuevo presupuesto global de RAM/VRAM.
 
 **Pendiente:** medir carpetas de 10 000–50 000 imágenes, picos al cargar animaciones, latencia de cancelación, memoria CPU/GPU, trabajo en idle y pérdida de dispositivo. No describir aceleración de dibujo como garantía de decodificación GPU o responsividad.

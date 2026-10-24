@@ -71,6 +71,23 @@ recibe el mismo criterio y una regresión reproduce el plateau a 144 Hz. Se cons
 la serie anterior como exploratoria y se repite la matriz. Release/CTest 8/8
 posteriores correctos (89 checks de startup/cache, 17,96 s).
 
+La revisión vigente añade dos correcciones finales (validación y serie final
+registradas en result.md):
+
+- **R003-06, rendimiento, atendido:** la serie instrumentada encontró hits
+  acompañados de muchas escrituras de recencia y decodificaciones adicionales.
+  El UPDATE síncrono por hit mantenía el mutex SQLite durante journal/commit.
+  La recencia pasa al writer en lotes acotados de 128 registros con ventana de
+  250 ms; un nuevo write drena la recencia antes de expulsar por LRU. Se preserva
+  el tiempo de acceso, se descartan pendientes al cerrar y se omite recencia
+  bajo 1 GiB libre. La mejora efectiva requiere contraste de la serie final;
+  el diseño por sí solo no demuestra su magnitud.
+- **R003-07, robustez, atendido:** COMMIT puede fallar ante un lector de otra
+  conexión después de un INSERT correcto. Se hace ROLLBACK explícito para no
+  conservar una transacción que impida los siguientes BEGIN. La regresión mantiene
+  un read lock independiente, comprueba ausencia de bytes no confirmados y
+  recuperación posterior. No se relajan los checks de caché ni de IPC.
+
 ## Revisión histórica
 
 Seguimiento: [006](../006-optimizaciones-locales/review.md) implementa la primera

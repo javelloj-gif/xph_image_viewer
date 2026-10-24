@@ -10,11 +10,12 @@
 #include <cstdint>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 struct sqlite3;
 namespace kv {
 struct ImageData;
-// Disposable exact-pixel thumbnail store. Workers read/touch recency; one bounded writer commits pixels.
+// Disposable exact-pixel thumbnail store. Workers read; one bounded writer commits pixels/recency.
 // Contains no GPU/UI objects. Cache failure never prevents loading the source image.
 class ThumbnailCache {
     friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
@@ -41,11 +42,17 @@ public:
 private:
     // One pending thumbnail owns only pixels, dimensions and its immutable source signature.
     struct Write { std::wstring key; uint32_t size, width, height; bool alpha; std::vector<uint8_t> pixels; };
+    // Bounded recency updates retain access time, without synchronous journal writes on a cache hit.
+    struct Touch { std::wstring key; uint32_t size; uint64_t used; };
     // Called under database lock on a worker; rollback journal and auto-vacuum keep accounting bounded.
     bool Open();
     // Writer-only: compresses exact bytes, reclaims LRU entries, commits or abandons on any error.
     void Commit(const Write& write);
-    // Dedicated writer consumes at most 8 MiB of queued bytes, with cooperative terminal stop.
+    // Worker: best-effort recency admission; the writer coalesces a short burst into one transaction.
+    void QueueTouch(const std::wstring& key, uint32_t size);
+    // Writer: applies bounded recency batches before eviction; contention discards regenerable metadata.
+    void CommitTouches(const std::deque<Touch>& touches);
+    // Dedicated writer consumes <=128 writes/8 MiB of pixels and <=128 touches; terminal stop discards both.
     void WriterLoop();
     std::filesystem::path m_root;
     uint64_t m_maximumBytes = 1024ull*1024*1024;
@@ -54,6 +61,8 @@ private:
     std::mutex m_writeMutex;
     std::condition_variable m_cv;
     std::deque<Write> m_writes;
+    std::deque<Touch> m_touches;
+    std::chrono::steady_clock::time_point m_touchReady{};
     size_t m_queuedBytes = 0;
     std::atomic<bool> m_stop = true;
     std::thread m_writer;

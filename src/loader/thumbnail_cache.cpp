@@ -41,7 +41,7 @@ void ThumbnailCache::Initialize(const std::filesystem::path& root, uint64_t maxi
     catch (...) { m_stop=true; m_root.clear(); throw; }
 }
 void ThumbnailCache::Shutdown() {
-    { std::lock_guard lock(m_writeMutex); m_stop = true; m_writes.clear(); m_queuedBytes = 0; }
+    { std::lock_guard lock(m_writeMutex); m_stop = true; m_writes.clear(); m_touches.clear(); m_queuedBytes = 0; }
     m_cv.notify_all();
     if (m_writer.joinable()) m_writer.join();
     std::lock_guard lock(m_dbMutex);
@@ -101,6 +101,7 @@ std::shared_ptr<ImageData> ThumbnailCache::Read(const std::wstring& path, const 
     image->hasAlpha = sqlite3_column_int(query.value, 2) != 0;
     image->pixels.resize(static_cast<size_t>(w) * h * 4);
     const auto data = sqlite3_column_blob(query.value, 5);
+    if (!data) { ++m_misses; return nullptr; }
     bool valid = false;
     if (sqlite3_column_int(query.value, 3)) {
         Compression handles;
@@ -112,16 +113,9 @@ std::shared_ptr<ImageData> ThumbnailCache::Read(const std::wstring& path, const 
         memcpy(image->pixels.data(), data, image->pixels.size()); valid = true;
     }
     if (!valid || Checksum(image->pixels) != static_cast<uint64_t>(sqlite3_column_int64(query.value, 4))) { ++m_misses; return nullptr; }
-    // Finalize the read before touching recency so the rollback journal cannot retain a reader transaction.
+    // Finalize before queuing recency; synchronous UPDATE/journal flushes here serialize warm hits.
     sqlite3_finalize(query.value); query.value = nullptr;
-    Statement touch(m_db, "UPDATE thumbs SET used=? WHERE key=? AND size=?");
-    if (touch.value) {
-        FILETIME now; GetSystemTimeAsFileTime(&now);
-        ULARGE_INTEGER stamp; stamp.LowPart = now.dwLowDateTime; stamp.HighPart = now.dwHighDateTime;
-        sqlite3_bind_int64(touch.value, 1, static_cast<sqlite3_int64>(stamp.QuadPart));
-        sqlite3_bind_text16(touch.value, 2, signature.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(touch.value, 3, static_cast<int>(size)); sqlite3_step(touch.value);
-    }
+    try { QueueTouch(signature,size); } catch (...) { } // Recency admission is optional even for a valid hit.
     ++m_hits; PerformanceTrace::Event("cache.hit", 0, size);
     return image;
 }
@@ -137,11 +131,51 @@ void ThumbnailCache::Store(const std::wstring& signature, uint32_t size, const I
 void ThumbnailCache::WriterLoop() {
     for (;;) {
         Write write;
-        { std::unique_lock lock(m_writeMutex); m_cv.wait(lock, [this] { return m_stop || !m_writes.empty(); });
+        bool hasWrite=false;
+        std::deque<Touch> touches;
+        { std::unique_lock lock(m_writeMutex); m_cv.wait(lock, [this] { return m_stop || !m_writes.empty() || !m_touches.empty(); });
             if (m_stop) return;
-            write = std::move(m_writes.front()); m_writes.pop_front(); m_queuedBytes -= write.pixels.size(); }
-        try { Commit(write); } catch (...) { } // Disposable cache failures cannot terminate a worker/process.
+            if (m_writes.empty() && !m_touches.empty())
+                m_cv.wait_until(lock,m_touchReady,[this] { return m_stop || !m_writes.empty(); });
+            if (m_stop) return;
+            touches.swap(m_touches);
+            if (!m_writes.empty()) {
+                write = std::move(m_writes.front()); m_writes.pop_front(); m_queuedBytes -= write.pixels.size(); hasWrite=true;
+            }
+        }
+        try { if (!touches.empty()) CommitTouches(touches); if (hasWrite) Commit(write); }
+        catch (...) { } // Disposable cache failures cannot terminate a worker/process.
     }
+}
+void ThumbnailCache::QueueTouch(const std::wstring& key, uint32_t size) {
+    std::lock_guard lock(m_writeMutex);
+    if (m_stop || m_touches.size()>=128) return;
+    FILETIME now; GetSystemTimeAsFileTime(&now);
+    ULARGE_INTEGER stamp; stamp.LowPart=now.dwLowDateTime; stamp.HighPart=now.dwHighDateTime;
+    if (m_touches.empty()) m_touchReady=std::chrono::steady_clock::now()+std::chrono::milliseconds(250);
+    m_touches.push_back({key,size,stamp.QuadPart}); m_cv.notify_one();
+}
+void ThumbnailCache::CommitTouches(const std::deque<Touch>& touches) {
+    PerformanceSpan span("cache.touch.begin","cache.touch.end");
+    std::lock_guard lock(m_dbMutex);
+    ULARGE_INTEGER free{};
+    if (m_stop || !GetDiskFreeSpaceExW(m_root.c_str(),&free,nullptr,nullptr) || free.QuadPart<1024ull*1024*1024 ||
+        !Open() || sqlite3_exec(m_db,"BEGIN IMMEDIATE",nullptr,nullptr,nullptr)!=SQLITE_OK) return;
+    bool success=true;
+    {
+        Statement update(m_db,"UPDATE thumbs SET used=? WHERE key=? AND size=?");
+        success=update.value!=nullptr;
+        for (const auto& touch : touches) {
+            if (!success || m_stop) { success=false; break; }
+            sqlite3_reset(update.value); sqlite3_clear_bindings(update.value);
+            sqlite3_bind_int64(update.value,1,static_cast<sqlite3_int64>(touch.used));
+            sqlite3_bind_text16(update.value,2,touch.key.c_str(),-1,SQLITE_TRANSIENT);
+            sqlite3_bind_int(update.value,3,static_cast<int>(touch.size));
+            success=sqlite3_step(update.value)==SQLITE_DONE;
+        }
+    }
+    if (!success || sqlite3_exec(m_db,"COMMIT",nullptr,nullptr,nullptr)!=SQLITE_OK)
+        sqlite3_exec(m_db,"ROLLBACK",nullptr,nullptr,nullptr);
 }
 void ThumbnailCache::Commit(const Write& write) {
     PerformanceSpan span("cache.write.begin", "cache.write.end");
@@ -193,6 +227,9 @@ void ThumbnailCache::Commit(const Write& write) {
             success = sqlite3_step(insert.value) == SQLITE_DONE;
         }
     }
-    sqlite3_exec(m_db, success ? "COMMIT" : "ROLLBACK", nullptr, nullptr, nullptr);
+    // A reader in another process can reject COMMIT after INSERT succeeded. Do not
+    // retain that transaction/lock or poison subsequent BEGIN attempts in this connection.
+    if (!success || sqlite3_exec(m_db,"COMMIT",nullptr,nullptr,nullptr)!=SQLITE_OK)
+        sqlite3_exec(m_db,"ROLLBACK",nullptr,nullptr,nullptr);
 }
 } // namespace kv

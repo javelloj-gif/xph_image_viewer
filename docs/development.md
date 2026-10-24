@@ -50,7 +50,7 @@ SVG si falta el PNG. Revisa el diff del ICO antes de confirmarlo.
 
 La configuración actual contiene ocho suites. `loader.startup_cache` usa
 `run_startup_cache_tests.ps1`, otro EXE aislado y copias propias de fixtures/datos.
-Sus 89 comprobaciones cubren píxeles exactos entre generación y persistencia,
+Sus 94 comprobaciones cubren píxeles exactos entre generación y persistencia,
 variantes, firmas, Unicode, corrupción, cuotas/LRU, lectura entre procesos,
 prioridades/cancelación, snapshots y sesión pendiente. WIC/WARP comprueban entrega
 en UI; no certifican presentación nativa ni un plazo de 100 ms.
