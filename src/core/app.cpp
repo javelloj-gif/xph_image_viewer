@@ -413,9 +413,8 @@ void App::RenderFrame() {
         if (m_originalPresentId && m_renderer.GetPresentationStatistics(stats) && stats.PresentCount==m_originalPresentId) {
             PerformanceTrace::Event("frame.original.display_confirmed",m_imageGeneration,stats.PresentCount); m_originalPresentId=0;
         }
-        const auto limit = PerformanceTrace::Environment(L"LENTEUV_PERF_EXIT_MS");
-        static const ULONGLONG started = GetTickCount64();
-        if (!limit.empty() && GetTickCount64() - started >= wcstoull(limit.c_str(), nullptr, 10)) {
+        if (PerformanceTrace::Get().ShouldExit(m_originalDrawnThisFrame && !firstContent,
+            m_stripReadyDrawnThisFrame,m_waterfallReadyDrawnThisFrame)) {
             m_isQuitting = true; m_window.Close();
         }
     }

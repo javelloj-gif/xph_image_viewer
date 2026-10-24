@@ -52,7 +52,7 @@ public:
     /// Begin a new frame. Acquires the render target and sets it as current.
     void BeginFrame();
 
-    /// End the frame and present to screen. Calls IDXGISwapChain::Present.
+    // UI: ends drawing and submits Present1; returns its status, which alone does not prove visibility.
     HRESULT EndFrame();
     // UI diagnostics: exact DXGI present IDs/statistics; unsupported/occluded observations remain unconfirmed.
     UINT GetLastPresentId() const;

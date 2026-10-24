@@ -1,5 +1,7 @@
 #pragma once
 #include <Windows.h>
+#include <cstdint>
+#include <cwchar>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -46,6 +48,17 @@ public:
     }
     // Read-only diagnostic state; normal product runs do not activate benchmark input/exit.
     bool Enabled() const { return m_enabled; }
+    // UI benchmark only: exits after the requested content is submitted plus a settling interval, or safety timeout.
+    bool ShouldExit(bool originalSubmitted, bool stripSubmitted, bool waterfallSubmitted) {
+        if (!m_enabled) return false;
+        const auto now=GetTickCount64();
+        if (!m_firstFrame) m_firstFrame=now;
+        m_originalSubmitted |= originalSubmitted;
+        const bool ready=m_scenario==L"strip" ? stripSubmitted : m_scenario==L"waterfall" ? waterfallSubmitted : m_originalSubmitted;
+        if (ready && !m_readyFrame) m_readyFrame=now;
+        return (m_readyExitMs && m_readyFrame && now-m_readyFrame>=m_readyExitMs) ||
+            (m_exitMs && now-m_firstFrame>=m_exitMs);
+    }
 private:
     // Immutable event owns no image/path data; phase strings must have static storage.
     struct EventData { LONGLONG qpc; DWORD thread; const char* phase; uint64_t generation, value; };
@@ -54,6 +67,11 @@ private:
         try {
             m_path = Environment(L"LENTEUV_PERF_OUTPUT");
             m_enabled = !m_path.empty() && m_path.is_absolute();
+            if (m_enabled) {
+                m_scenario=Environment(L"LENTEUV_PERF_SCENARIO");
+                m_exitMs=wcstoull(Environment(L"LENTEUV_PERF_EXIT_MS").c_str(),nullptr,10);
+                m_readyExitMs=wcstoull(Environment(L"LENTEUV_PERF_READY_EXIT_MS").c_str(),nullptr,10);
+            }
             LARGE_INTEGER f; QueryPerformanceFrequency(&f); m_frequency = f.QuadPart;
             if (m_enabled) m_events.reserve(8192);
         } catch (...) { m_enabled = false; }
@@ -64,6 +82,9 @@ private:
     std::mutex m_mutex;
     std::vector<EventData> m_events;
     size_t m_dropped = 0;
+    std::wstring m_scenario;
+    ULONGLONG m_firstFrame=0,m_readyFrame=0,m_exitMs=0,m_readyExitMs=0;
+    bool m_originalSubmitted=false;
 };
 
 // Lexical CPU/queue phase pair; event collection is a no-op when diagnostics are off.
