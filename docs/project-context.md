@@ -2,6 +2,12 @@
 
 # Contexto técnico de LenteUV
 
+**Estado vigente 2026-10-24:** [003 cerrada y aceptada](changes/003-diagnostico-rendimiento/closure.md),
+junto con las tareas anteriores; base lista para nuevas modificaciones funcionales.
+Último lote: enumeración antes del renderer y carpeta explícita sin escaneo duplicado;
+CPU en worker, callbacks/UI/GPU en principal. Rendimiento restante e IPC concurrente
+conservan seguimiento independiente aceptado, sin declararlos resueltos.
+
 **Reporte vigente, 2026-10-23:** el propietario confirma que IPC actualiza el visor
 al abrir otra imagen desde Windows en el candidato aceptado de 002.
 [IPC-014-01](changes/014-cancelacion-ar005/user-validation.md) queda cerrado por
@@ -10,7 +16,7 @@ apareció un fallo intermitente distinto con dos clientes simultáneos del harne
 se conserva como IPC-003-CONCURRENT-01 en [problemas conocidos](known-issues.md).
 Ninguna de estas evidencias certifica todos los escenarios IPC.
 
-Última revisión: 2026-10-23 (003: arranque asíncrono y caché de miniaturas). Audiencia: agentes y desarrolladores que mantengan este repositorio.
+Última revisión: 2026-10-24 (cierre 003: arranque asíncrono y caché de miniaturas). Audiencia: agentes y desarrolladores que mantengan este repositorio.
 
 Estructura vigente: `src/` contiene el código, la raíz contiene CMake y `tests/fixtures/` conserva las muestras. Los builds y paquetes se generan en `build/` y `dist/`.
 

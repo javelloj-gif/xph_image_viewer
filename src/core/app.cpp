@@ -157,6 +157,19 @@ InitResult App::Initialize(const AppConfig& config) {
     m_taggingModal.Initialize(this);
     trace("TaggingModal initialized");
 
+    // CPU enumeration overlaps graphics creation. No snapshots/textures are delivered here.
+    m_viewerPage.Initialize(this);
+    m_thumbnailStrip.Initialize(this);
+    m_boardPage.Initialize(this);
+    m_waterfallPage.Initialize(this);
+    const bool loadSessionImage = config.initialFilePath.empty() && config.initialFolderPath.empty();
+    const auto initialFolder = config.initialFilePath.empty() ? config.initialFolderPath
+        : std::filesystem::path(config.initialFilePath).parent_path().wstring();
+    m_folderData.LoadSession(loadSessionImage, initialFolder, config.initialFilePath.empty());
+    if (initialFolder.empty() && m_folders.empty() && !m_folderData.HasPendingFolders()) {
+        LoadFolder(std::filesystem::current_path().wstring());
+    }
+
     // Register system tray icon
     ShellIntegrator::RegisterTrayIcon(
         m_window.GetHwnd(),
@@ -228,25 +241,7 @@ InitResult App::Initialize(const AppConfig& config) {
         m_window.SetFullscreen(true);
     }
 
-    m_viewerPage.Initialize(this);
-    m_thumbnailStrip.Initialize(this);
-    m_boardPage.Initialize(this);
-    m_waterfallPage.Initialize(this);
-
     SetPage(static_cast<Page>(m_settings.page_on_app_launch_from_explorer));
-
-    // ── Load Initial Content ──────────────────────────────────────────────
-    bool loadSessionImage = config.initialFilePath.empty() && config.initialFolderPath.empty();
-    m_folderData.LoadSession(loadSessionImage);
-
-    if (!config.initialFilePath.empty()) {
-        PrepareImageFolder(config.initialFilePath);
-    } else if (!config.initialFolderPath.empty()) {
-        LoadFolder(config.initialFolderPath);
-    } else if (m_folders.empty() && !m_folderData.HasPendingFolders()) {
-        // Try loading current directory if nothing else is specified or restored by session
-        LoadFolder(std::filesystem::current_path().wstring());
-    }
 
     m_frameTimer.Reset();
     m_window.events.onIpcOpenPath = [this](const std::wstring& rawPath) { OnIpcOpenPath(rawPath); };

@@ -182,8 +182,11 @@ private:
     // ── Internal Setup ─────────────────────────────────────────────────────
     // Recreates device/factory resources on UI/render thread, clearing private formats before any replacement.
     bool CreateDeviceResources(HWND hwnd, bool translucent);
+    // UI: creates the flip-model swap chain; diagnostics record its duration without changing presentation.
     bool CreateSwapChain(HWND hwnd, bool translucent);
+    // UI: binds the swap chain surface as the D2D drawing target, including after resize.
     bool CreateRenderTarget();
+    // UI: attaches the translucent swap chain to the HWND's DirectComposition visual tree.
     bool SetupDirectComposition(HWND hwnd);
     // Releases device resources and private text formats on UI/render thread.
     void DiscardDeviceResources();

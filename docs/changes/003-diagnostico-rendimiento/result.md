@@ -1,9 +1,36 @@
 # Resultado: 003 arranque asíncrono y miniaturas persistentes
 
+**003 completada y aceptada por el propietario el 2026-10-24.**
+Portable final: `dist/lenteuv_003_final_20261024.zip`, con el EXE medido en frío
+SHA256 `874F5783B219E24FE1AD74B330BBF9A344EF2DAB0E3664738CED579CF5FF50D6`.
+Frío n=1: 1995,63 ms totales / 473,18 ms internos; 100 ms no acreditados.
+Rendimiento e intermitencia concurrente IPC quedan en seguimiento aceptado.
+Identidad, evidencia y criterios en [closure.md](closure.md). Base lista para nuevas funciones.
+
+## Registro anterior al cierre (histórico)
+
 **Entrega 2026-10-24:** implementación del [plan autorizado](implementation-plan.md)
 en fuentes `b0e98f8`, rama `codex/003-arranque-cache`. Código y evidencia automatizada
-entregados; **003 permanece abierto para aceptación del propietario y primera sesión
-real de Windows**. La meta de 100 ms no está acreditada. El diagnóstico histórico
+entregados; **003 permanece abierto por rendimiento inicial rechazado**.
+El [reporte vigente del propietario del 2026-10-24](user-validation.md) confirma
+zoom/paneo, tira, navegación rápida, Waterfall, Board e IPC correctos; múltiples
+pruebas tras iniciar el SO. Considera inaceptables los aproximadamente 3000 ms
+iniciales y sustituye su aceptación anterior del rendimiento.
+Una [única primera apertura instrumentada](first-session-analysis.md), sin argumentos
+y con sesión/caché existentes, envió el original a 1932 ms; confirmación DXGI
+observada a 1956 ms. Intervalo dominante de 1325 ms previo a main.entry aún sin
+desglose causal; renderer 208 ms y catálogo restaurado 224 ms se ejecutan en serie.
+No hubo repetición ni cambios de producto; las opciones siguen siendo propuestas.
+El propietario autorizó posteriormente **preparar la opción 1**: WPT instalado,
+recolector ETW y bloqueos validados sin iniciar el visor; [protocolo](etw-capture-protocol.md)
+listo para otro boot. Entrada explícita `F:\Pictures\FotosTEMP`, medios solo lectura.
+**Captura ETW posterior realizada una sola vez:** [resultado](etw-result.md).
+Original enviado a 2216 ms, DXGI observado a 2237 ms; espera del creador de 1426 ms
+en CreateProcess/WdFilter, reactivado por MsMpEng, con FileScan del EXE de 1408 ms
+confirmado por Get-MpPerformanceReport. Cero eventos perdidos, salida 0, settings/
+sesión iguales y ninguna modificación del visor observada en multimedia. No son
+mediciones comparables de versiones distintas ni una mejora implementada.
+La meta de 100 ms no está acreditada. El diagnóstico histórico
 inferior conserva su revisión y no describe los contratos nuevos.
 
 ## Resultado actual
@@ -32,8 +59,10 @@ adicionales de primera generación; no se afirma mejora en toda condición.
 
 Mismo EXE medido. Staging nuevo, runtime/imports verificados, locales, licencia y
 atribuciones conservados. user_data contiene defaults y sesión vacía, sin cachés,
-logs ni datos de ensayo. La prueba nativa del portable usó otra copia bajo build;
-la carpeta de entrega permanece sin ejecutar. Guía: [functional-test.md](functional-test.md).
+logs ni datos de ensayo al entregar. La prueba nativa inicial del portable usó otra
+copia bajo build; posteriormente el propietario usó el candidato y se realizaron
+las primeras aperturas QPC/ETW documentadas con datos existentes.
+Guía: [functional-test.md](functional-test.md).
 
 002 permanece aceptado e intacto: EXE SHA256
 `42432671B4BE7602C4F2B4060586CFE5B6EB36AE0D382B84312038CBE60BF23A`, ZIP
@@ -46,11 +75,11 @@ Los artefactos de medición/build actuales siguen siendo necesarios y se conserv
 | Criterio | Resultado y límite |
 | --- | --- |
 | AC-01 | Ejecutores reproducibles, entorno/configuración/EXE/datos identificados y hashes comparados; CSV/JSON y detalles privados locales |
-| AC-02 | 30 aperturas por posición/escenario de base y 003 preparada/vacía; primera apertura de otra sesión Windows pendiente, sin simular disco frío |
+| AC-02 | Series históricas n=30 por condición, múltiples primeras aperturas manuales reportadas (~3 s) y una primera apertura instrumental real (1932/1956 ms). Escenarios distintos, sin p95 inicial ni comparación causal; rendimiento inicial rechazado |
 | AC-03 | Último CTest IPC correcto y diez escenarios nativos, incluido receptor arrancado. IPC-003-CONCURRENT-01 conserva un fallo previo concurrente intermitente; sin causa ni protocolo modificado. IPC-014-01 sigue cerrado por reporte anterior |
 | AC-04 | CPU/peak working set/E/S lógica y GPU por PID; muestras separadas de 15 s de primer uso, n=1 por posición. No certifican reposo habitual sin diagnóstico ni E/S física |
 | AC-05 | Costes, tradeoffs, censuras, revisión y candidatos de medición registrados; no se atribuye toda latencia fría a una sola causa |
-| AC-06 | Generaciones, gating foreground, cancelación, entrega en UI y snapshots comprobados; recorrido visual/interacciones del propietario pendiente |
+| AC-06 | Generaciones, gating foreground, cancelación, entrega en UI y snapshots comprobados; propietario confirma zoom/paneo, tira, navegación rápida, Waterfall, Board e IPC. Sin inferir escenarios adicionales |
 | AC-07 | BGRA exacto, variantes independientes, Unicode, invalidación/reemplazo/borrado, corrupción de payload, raíz inválida, LRU con cuota de 4 MiB y locks/conexión/proceso adicionales; sin agotar volumen real |
 | AC-08 | Guardado de sesión pendiente, ordenación tardía y borrados conocidos comprobados. Sin migraciones de datos ni nuevas interacciones; aceptación manual global pendiente |
 | AC-09 | Candidato limpio/hash del mismo EXE medido y comparación documentados; confirmación DXGI separada de envío de frame, sin certificar 100 ms |
@@ -68,9 +97,11 @@ Con 60 s quedó preparado antes de los ciclos. No se ocultó como medición cali
 
 ## Pendiente para cierre
 
-Recoger [aceptación funcional](functional-test.md) de este EXE, coordinar la primera
-sesión real y disponer expresamente los límites restantes, incluida la intermitencia
-del harness IPC y el coste de Waterfall vacío. No se modificaron fotografías ni
+Resolver el rendimiento inicial rechazado por el propietario, eligiendo y validando
+las propuestas actualizadas del [resultado ETW](etw-result.md) antes
+de declarar mejora. No se implementan por este diagnóstico ni se repite la única
+primera ejecución disponible. Conservar la intermitencia del harness IPC y los
+límites de la [confirmación funcional](functional-test.md). No se modificaron fotografías ni
 se cambiaron asociaciones; datos/cachés de pruebas permanecen aislados. No declarar
 aceptación por CTest, por el portable previo ni por el retorno de Present.
 
@@ -226,3 +257,21 @@ del payload si falla PostMessage. Evitar mezclar por defecto ACK, mutex de elecc
 cancelación de IO o migraciones. La matriz actual debe pasar a exigir apertura válida
 cuando se implemente la corrección; no mantener una pérdida de petición como regresión
 aceptable del producto. El resto de la investigación 003 continúa abierto.
+# Estado de la optimización interna — 2026-10-24
+
+**Comprobación posterior en frío:** [nueva sesión, una apertura del candidato](cold-internal-result.md),
+1995,63 ms invocación→original y 473,18 ms entrada→original. Enumeración 277,89 ms
+solapada con renderer, sin duplicarla. ETW/QPC sin pérdidas; cero mutaciones del visor
+en multimedia. La comparación preparada inferior y esta única fría son evidencias
+distintas: no certifican una reducción causal exacta ni cierran 003.
+
+Diff local implementado: enumeración en paralelo con inicialización gráfica,
+carpeta explícita solicitada antes de restauraciones sin duplicarla, orden persistente
+de sesión conservado y marcadores gráficos adicionales. Release compilado y CTest
+8/8 correctos en 17,34 s (`build/startup-internal-003-build.log`, local).
+Harness nativo completado con diez escenarios correctos. Ocho pares de aperturas
+posteriores: mediana entrada→original 327,98 ms anterior / 334,69 ms nuevo, sin mejora
+acreditada. D3D11CreateDevice concentra 199,03 ms de los 204,22 ms del renderer.
+Ver [comprobación](internal-startup-result.md). No hay paquete nuevo ni aceptación
+del rendimiento. No declarar eliminados los 789,46 ms hipotéticos ni cerrar 003.
+Ver [continuidad vigente](resume.md) para el siguiente paso y los límites de la captura única.

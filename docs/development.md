@@ -66,6 +66,13 @@ No ejecutar builds u otras pruebas intensivas simultáneamente con la medición.
 No confundir E/S lógica del proceso con lecturas físicas de disco ni caché de
 aplicación vacía con una primera sesión de Windows. Véase la evidencia de 003.
 
+Para el diagnóstico ETW de primera apertura de 003 existe
+`scripts/run_startup_etw.ps1` (PowerShell 7; por defecto Preflight, sin lanzar).
+Su helper `startup_etw_collector.ps1` eleva solo WPR; el visor conserva token normal.
+No usarlo como benchmark repetitivo: Capture requiere otro boot y confirmación,
+fija la carpeta acordada de solo lectura y conserva un guard por boot. Preparación,
+validación sin producto y procedimiento en [protocolo ETW 003](changes/003-diagnostico-rendimiento/etw-capture-protocol.md).
+
 `run_startup_comparison.ps1` permite indicar `CandidateRevision` cuando se mide un
 EXE ya construido; usa 30 repeticiones también para cada namespace vacío por defecto.
 `run_startup_reuse_benchmark.ps1` prepara ambos viewports antes de ciclos de modos,
@@ -308,3 +315,17 @@ exclusivos de Library se retiraron; snapshots/layout-benchmark actuales cubren s
 Waterfall, sin reinterpretar los resultados históricos de 007. El snapshot de layout
 actual escribe 12 frames, no los 24 históricos con las dos páginas.
 Validación final y límites en [resultado 002](changes/002-retirar-library/result.md).
+
+## Base aceptada tras cerrar 003
+
+El propietario cerró 003 el 2026-10-24 con límites de rendimiento y seguimiento
+IPC explícitos. Release/CTest 8/8, diez escenarios nativos y smoke del portable
+final correctos. La entrega usa staging limpio, defaults y sesión vacía; mismo
+EXE medido en frío. [Cierre e identidad](changes/003-diagnostico-rendimiento/closure.md).
+El último LoadSession puede recibir carpeta inicial prioritaria: registra primero
+el orden persistente, encola esa carpeta una vez y después las restauraciones.
+App prepara consumidores y encola enumeración antes del renderer; los snapshots
+no se entregan hasta ProcessPending en principal tras inicialización correcta.
+No ejecutar harness ni benchmarks antes de una primera apertura coordinada.
+Los nuevos cambios funcionales tienen alcance propio; no repetir campañas de 003
+ni borrar datos/artefactos por inercia.

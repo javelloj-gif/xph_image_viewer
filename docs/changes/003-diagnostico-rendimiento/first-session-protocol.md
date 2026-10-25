@@ -1,6 +1,20 @@
 # Protocolo para la primera ejecución real de otra sesión
 
-Estado: preparación; sin medición de primera ejecución real. Fecha: 2026-10-22.
+**Actualización vigente:** la [captura ETW autorizada](etw-result.md) ya se realizó
+una sola vez tras otro boot. No repetir: se guardó evidencia de espera del creador
+de 1426 ms en Defender, original enviado 2216 ms y DXGI observado 2237 ms.
+
+**Protocolo de la captura posterior:** [etw-capture-protocol.md](etw-capture-protocol.md)
+y scripts ETW preparados, entrada explícita a la carpeta indicada por el propietario,
+medios solo lectura. No ejecutar las repeticiones del protocolo histórico inferior.
+
+Estado: protocolo histórico preparado el 2026-10-22; una [primera apertura real
+instrumentada](first-session-analysis.md) ejecutada una sola vez el 2026-10-24.
+Original enviado a 1932 ms, confirmación DXGI observada a 1956 ms. La oportunidad de
+esta sesión está consumida: no repetir ni aplicar automáticamente las repeticiones
+del protocolo histórico inferior. Los múltiples arranques de unos 3000 ms reportados
+por el propietario son inaceptables y sustituyen la aceptación previa del tiempo
+inicial. No se obtuvo una distribución de primeras aperturas ni traza kernel causal.
 Este documento coordina una observación manual; no crea recordatorio, monitor ni
 proceso residente y no autoriza reiniciar/cerrar sesión o cambiar asociaciones.
 

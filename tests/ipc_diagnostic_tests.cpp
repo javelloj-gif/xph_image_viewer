@@ -520,10 +520,13 @@ private:
         return nullptr;
     }
 
-    // Forces the renderer's existing device failure branch after the primary server has started.
-    static HRESULT WINAPI FailCreateDevice(IDXGIAdapter*, D3D_DRIVER_TYPE, HMODULE, UINT,
-        const D3D_FEATURE_LEVEL*, UINT, UINT, ID3D11Device**, D3D_FEATURE_LEVEL*, ID3D11DeviceContext**) {
-        return E_FAIL;
+    // Observes deferred CPU work at the real graphics boundary, optionally injecting device failure.
+    static HRESULT WINAPI StartupCreateDevice(IDXGIAdapter* adapter, D3D_DRIVER_TYPE type, HMODULE software, UINT flags,
+        const D3D_FEATURE_LEVEL* levels, UINT count, UINT sdk, ID3D11Device** device,
+        D3D_FEATURE_LEVEL* achieved, ID3D11DeviceContext** context) {
+        if (beforeGraphics) beforeGraphics();
+        if (failGraphics) return E_FAIL;
+        return originalCreateDevice(adapter, type, software, flags, levels, count, sdk, device, achieved, context);
     }
 
     // Exercises actual startup/failures and WM_CLOSE versus hide-to-tray with isolated data/endpoint.
@@ -540,6 +543,8 @@ private:
         const auto earlyPath = (fixtureDirectory / L"imagen Ω.png").wstring();
         ScopedStartupImport hook("CoCreateInstance", reinterpret_cast<void*>(&StartupCoCreate));
         originalCoCreate = reinterpret_cast<decltype(originalCoCreate)>(hook.original);
+        ScopedStartupImport graphicsHook("D3D11CreateDevice", reinterpret_cast<void*>(&StartupCreateDevice));
+        originalCreateDevice = reinterpret_cast<decltype(originalCreateDevice)>(graphicsHook.original);
         for (int scenario = 0; scenario < 10; ++scenario) {
             std::ofstream(settingsPath) << "{\"settings\":{\"single_instance\":["
                 << (scenario == 4 ? "false" : "true")
@@ -563,6 +568,14 @@ private:
                 }
             }
             const bool bypass = scenario >= 2 && scenario <= 4;
+            failGraphics = scenario == 9;
+            bool graphicsObserved = false;
+            beforeGraphics = [&] {
+                graphicsObserved = true;
+                Check(primary.m_folderData.HasPendingFolders(), "folder scan queued before graphics");
+                Check(primary.m_folders.empty() && !primary.m_currentImage,
+                    "CPU completion cannot publish UI or GPU state before renderer readiness");
+            };
             failWic = scenario == 0;
             bool injected = false;
             beforeWic = [&] {
@@ -588,13 +601,14 @@ private:
             };
             std::unique_ptr<ScopedStartupImport> failure;
             if (scenario == 8) failure = std::make_unique<ScopedStartupImport>("CreateWindowExW", reinterpret_cast<void*>(&FailCreateWindow));
-            if (scenario == 9) failure = std::make_unique<ScopedStartupImport>("D3D11CreateDevice", reinterpret_cast<void*>(&FailCreateDevice));
             const auto oldDirectory = std::filesystem::current_path();
             if (scenario == 7) std::filesystem::current_path(fixtureDirectory);
             const auto result = primary.Initialize(config);
             std::filesystem::current_path(oldDirectory);
             failure.reset();
             beforeWic = {};
+            beforeGraphics = {};
+            Check(graphicsObserved == !(failWic || scenario == 8), "startup reaches expected graphics boundary");
             if (failWic || scenario >= 8) {
                 Check(result == InitResult::Failed && !primary.m_currentImage && !primary.m_animatedImage,
                     "partial startup failure preserves error without applying early path");
@@ -673,6 +687,7 @@ private:
                 << " reentrant_path=" << injected << '\n';
         }
         failWic = false;
+        failGraphics = false;
         std::filesystem::remove(settingsPath);
         return 0;
     }
@@ -681,6 +696,9 @@ private:
     inline static decltype(&CreateEventW) originalCreateEvent = nullptr;
     inline static thread_local int eventCall = 0, failedEventCall = 0;
     inline static thread_local std::function<void()> beforeWic;
+    inline static thread_local std::function<void()> beforeGraphics;
+    inline static bool failGraphics = false;
+    inline static decltype(&D3D11CreateDevice) originalCreateDevice = nullptr;
     inline static thread_local bool failWic = false;
     App app;
     std::filesystem::path root, exe;

@@ -80,7 +80,7 @@ public:
     /// Parse command-line arguments into an AppConfig
     static AppConfig ParseCommandLine(int argc, wchar_t* argv[]);
 
-    // UI: resolve IPC with a hidden HWND; after WIC, start explicit CPU decode while graphics initialize.
+    // UI: resolve IPC with a hidden HWND; after WIC, queue CPU decode/enumeration before graphics.
     // Retain reentrant paths until pages are ready; all results wait for normal main-thread delivery.
     // Forwarding exits skip services; partial failure releases retained paths with the callback/App.
     // Installs terminal close handling that stops IPC before Window destroys its HWND; hiding keeps services alive.

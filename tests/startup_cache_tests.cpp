@@ -126,6 +126,26 @@ public:
         scanner.Request(root.wstring(),0,true,{},[&](FolderSnapshot result) { delivered=result.complete; });
         Until([&] { scanner.ProcessPending(); return delivered; },"snapshot delivered only by owner drain");
         scanner.Shutdown();
+
+        FolderDataManager startup; startup.Initialize(nullptr); startup.EnableAsync();
+        const auto restored = root / L"pending-restoration";
+        const auto session = startup.GetSessionFilePath();
+        const auto utf8Root = std::filesystem::path(root).u8string();
+        const auto utf8Restored = restored.u8string();
+        std::ofstream sessionFile(session, std::ios::binary | std::ios::trunc);
+        sessionFile.write(reinterpret_cast<const char*>(utf8Restored.data()), utf8Restored.size()) << "\n\n\n\n";
+        sessionFile.write(reinterpret_cast<const char*>(utf8Root.data()), utf8Root.size()) << "\n\n\n\n";
+        sessionFile.close();
+        Check(startup.LoadSession(false, root.wstring(), false), "startup queues foreground and restoration");
+        Check(startup.m_pendingFolders.size()==2 && !startup.m_pendingFolders[0].restoring
+            && !startup.m_pendingFolders[0].loadImage, "duplicate session target retains single foreground lease");
+        Check(startup.m_sessionOrder.size()==2 && startup.m_sessionOrder[0]==restored.wstring()
+            && startup.m_sessionOrder[1]==root.wstring(), "foreground scheduling preserves persisted record order");
+        Check(startup.m_folders.empty(), "worker cannot publish models before UI drain");
+        Until([&] { startup.ProcessPending(); return !startup.m_folders.empty(); }, "startup foreground publishes on owner");
+        Check(startup.m_folders.size()==1 && startup.m_folders[0].filePaths.size()==2,
+            "duplicate startup target publishes once without losing files");
+        startup.StopScanning();
     }
     // Real worker gating proves foreground capacity and stable priority without relying on decode speed.
     void Scheduling() {

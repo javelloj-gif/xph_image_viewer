@@ -100,8 +100,9 @@ public:
 
     // ─── Session Management ──────────────────────────────────────────────────
     // Appends missing folders from UTF-8 four-line records, skipping invalid entries without saving.
-    // Selects folder zero only if additions succeeded; loadImage controls the final App image load.
-    bool LoadSession(bool loadImage = true);
+    // Optional startup folder is queued first, once, while retaining the original session record order.
+    // Async callbacks remain deferred to ProcessPending; loadImage controls no-argument restoration.
+    bool LoadSession(bool loadImage = true, const std::wstring& initialFolder = {}, bool initialLoadImage = true);
     // Writes folder paths and historical placeholders as four-line UTF-8 records; false on open/create failure.
     bool SaveSession();
 

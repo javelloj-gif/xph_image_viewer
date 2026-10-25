@@ -211,13 +211,10 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
     }
 }
 
-bool FolderDataManager::LoadSession(bool loadImage) {
+bool FolderDataManager::LoadSession(bool loadImage, const std::wstring& initialFolder, bool initialLoadImage) {
     m_restoreSelect = loadImage;
     std::wstring path = GetSessionFilePath();
-    if (!std::filesystem::exists(path)) return false;
-
     std::ifstream file(path, std::ios::in | std::ios::binary);
-    if (!file.is_open()) return false;
 
     std::string line;
     std::vector<std::string> lines;
@@ -227,8 +224,6 @@ bool FolderDataManager::LoadSession(bool loadImage) {
         }
         lines.push_back(line);
     }
-
-    if (lines.size() < 4) return false;
 
     auto toWString = [](const std::string& str) -> std::wstring {
         if (str.empty()) return L"";
@@ -241,12 +236,18 @@ bool FolderDataManager::LoadSession(bool loadImage) {
         return std::wstring(w.data());
     };
 
-    bool loadedAny = false;
+    std::vector<std::wstring> restoredPaths;
     for (size_t i = 0; i + 3 < lines.size(); i += 4) {
         std::wstring fPath = toWString(lines[i]);
         if (fPath.empty()) continue;
         if (!m_scanner && !std::filesystem::exists(fPath)) continue;
         if (std::find(m_sessionOrder.begin(),m_sessionOrder.end(),fPath)==m_sessionOrder.end()) m_sessionOrder.push_back(fPath);
+        restoredPaths.push_back(std::move(fPath));
+    }
+    // Register persistent order before foreground scheduling changes completion order.
+    if (!initialFolder.empty()) AddFolder(initialFolder, false, initialLoadImage);
+    bool loadedAny = false;
+    for (const auto& fPath : restoredPaths) {
         size_t prevSize = m_folders.size();
         try {
             AddFolder(fPath, true);
@@ -258,7 +259,7 @@ bool FolderDataManager::LoadSession(bool loadImage) {
         }
     }
 
-    if (loadedAny && !m_folders.empty()) {
+    if (initialFolder.empty() && loadedAny && !m_folders.empty()) {
         SetCurrentFolderIndex(0, loadImage);
     }
     return loadedAny || HasPendingFolders();

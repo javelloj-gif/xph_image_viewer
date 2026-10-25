@@ -1,6 +1,19 @@
 # 003: aceptación del candidato asíncrono
 
-Estado: pendiente del propietario sobre `dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe`.
+**003 aceptada y cerrada por el propietario, 2026-10-24.** Se conservan los seis
+OK reportados. El portable final usa el mismo EXE del último lote comprobado, con
+Release/CTest 8/8, diez escenarios de arranque y smoke de --multiple/--lite correctos
+en copias aisladas. No se infiere una repetición manual universal sobre ese último
+EXE. Rendimiento y harness IPC conservan sus límites en [closure.md](closure.md).
+
+## Registro anterior al cierre (histórico)
+
+Estado vigente 2026-10-24: el [propietario](user-validation.md) confirma zoom/paneo,
+tira, navegación rápida, Waterfall, Board e IPC correctos sobre el candidato
+`dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe`. Informa múltiples pruebas
+tras iniciar el SO y **rechaza el tiempo inicial de unos 3000 ms**; sustituye la
+aceptación anterior del rendimiento. No se infieren formatos/animaciones ni
+restauración/cierre adicionales. 003 sigue abierta por rendimiento inicial.
 SHA256 y ZIP en result.md; fuentes b0e98f8.
 La aceptación de 002 no se traslada a este binario. No cambiar asociaciones para
 estas pruebas: abrir el EXE candidato con el archivo como argumento o arrastrarlo.
@@ -36,8 +49,12 @@ No publicar fotografías, rutas personales ni logs completos en Git.
 
 ## Medición pendiente de otra sesión
 
-La matriz automática se hizo en una sesión ya utilizada. La primera apertura real
-requiere coordinar una nueva sesión de Windows y el mismo archivo/configuración.
+La matriz automática histórica se hizo en una sesión ya utilizada. Además de los
+reportes manuales de unos 3 s tras iniciar el SO, el agente realizó una sola
+[primera apertura instrumentada](first-session-analysis.md): 1932 ms hasta envío
+del original y 1956 ms hasta confirmación DXGI observada. No se repitió ni calculó
+p95; escenario sin argumentos/restauración, diferente de la matriz histórica.
+Otra captura de primera sesión necesita una nueva oportunidad coordinada.
 No reiniciar, cerrar sesión ni vaciar cachés del sistema automáticamente. Seguir
 el [protocolo histórico](first-session-protocol.md), sustituyendo la instalación
 histórica por el hash del candidato 003. El ejecutor actual añade QPC y correlación

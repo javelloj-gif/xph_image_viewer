@@ -1,5 +1,158 @@
 # Revisión de 003: arranque asíncrono y caché
 
+**Revisión de cierre, 2026-10-24:** revisión local del último diff de App::Initialize,
+FolderDataManager::LoadSession, declaraciones/contratos, fases de Renderer y tests
+de arranque/sesión. CPU worker sin publicación de modelos; callbacks/UI/GPU siguen
+en principal tras renderer listo; partial failure y teardown cubiertos por el harness.
+Sin defecto bloqueante confirmado en ese alcance. Portable con imports comprobados
+y smoke correcto. No equivale a revisión independiente ni auditoría universal.
+Rendimiento e IPC intermitente conservan sus límites aceptados en [closure.md](closure.md).
+
+## Registro anterior al cierre (histórico)
+
+## Resultado de la captura ETW — 2026-10-24
+
+Continuación de la habilidad lenteuv-architecture-review, sin delegación ni cambios
+de fuentes. Alcance: evidencia del arranque y propuestas ya revisadas, no nueva
+auditoría de producto. Revisados ETL/QPC, procesos/hilos/imágenes, CSwitch/ReadyThread,
+stacks con símbolos públicos, faults/disco y reporte oficial de Defender. Auditoría
+FileIO del ETL completo para el visor sobre la carpeta de solo lectura indicada.
+[Resultado y procedimiento reproducible](etw-result.md).
+
+Una sola apertura del candidato/hash previsto en otro boot: original enviado
+2215,70 ms, DXGI observado 2237,34 ms; salida 0, cero pérdidas QPC/ETW y hashes de
+settings/sesión iguales. La auditoría no observa FileIoWrite/Delete/Rename/SetInfo/
+SetEA/SetSecurity del visor sobre la carpeta multimedia. No se tocaron sus archivos
+para comparar hashes ni se inició otra instancia para el análisis.
+
+- **R003-09, diagnóstico de intervalo previo al marcador: atribución resuelta
+  para esta captura, sin extrapolar al historial.** El hilo creador 13196 del padre
+  permanece fuera de CPU 1426,244 ms en Waiting/Executive. Stack del comienzo en
+  CreateProcessInternalW/NtCreateUserProcess/PspCallProcessNotifyRoutines/WdFilter/
+  FltSendMessage. MsMpEng (4688/12740) lo reactiva mediante ReadyThread, antes de
+  crear el hilo principal. Get-MpPerformanceReport mide FileScan del EXE durante
+  1407,5852 ms. No se atribuye la espera a App::Initialize ni al trabajo JIT de
+  otro hilo de PowerShell observado en paralelo. No se usa hit-percent de un
+  butterfly combinado como porcentaje de latencia o CPU del visor.
+- **R003-12, cuello de botella externo de prioridad alta, confirmado en esta
+  ejecución:** análisis síncrono de Defender en creación del proceso. EXE sin
+  firma y eventos de comprobación de confianza/firma; hay un disparador de nube,
+  sin duración de red aislada. Propuesta: evaluar distribución firmada con identidad
+  estable o preparar un reporte técnico si persiste, sin garantizar ahorro por
+  firma y sin confundir Defender Antivirus con SmartScreen. Coste de certificado,
+  proceso de publicación y nuevas mediciones en sesiones disponibles. No se firma,
+  envía el EXE ni cambia seguridad por esta porción; esas decisiones siguen pendientes.
+
+R003-10/11 siguen como oportunidades internas sin implementar. En esta captura
+hay 260 ms de renderer, unos 44 ms de scan de restauración cancelado y 204 ms de
+scan necesario antes de solicitar el original. Conservar generaciones/orden/datos
+al proponer solapamiento; no prometer 100 ms tras retirar una espera externa.
+La preparación ETW y el análisis pedidos están completados; el rendimiento inicial
+continúa rechazado y 003 permanece abierta. No hubo build/CTest/candidato nuevos.
+
+## Preparación de captura ETW — 2026-10-24
+
+Alcance autorizado posterior: preparar opción 1, entrada explícita a la carpeta
+indicada por el propietario, sin modificar multimedia. Revisados los scripts
+run_startup_etw.ps1 y startup_etw_collector.ps1, perfiles WPR, token/UAC,
+handshake, exclusión de reintentos por boot, rutas de salida, cierre y evidencia.
+WPT oficial instalado; fuentes del producto/EXE permanecen iguales. Estado y
+comandos en [etw-capture-protocol.md](etw-capture-protocol.md).
+
+La captura elevada solo pertenece al helper; el padre rechaza elevación para no
+medir LenteUV con token administrativo. Se fija el directorio como argumento y
+Viewer por preparación con configuración validada. No hay comandos de modificación
+de medios ni accesos preparatorios al contenido multimedia. El helper comprueba
+los keywords de CPU/waits/loader/disco/faults/FileIO antes de publicar readiness.
+Un nombre único acota start/stop/cancel; no se cancela una sesión ajena.
+
+Se preserva guard exclusivo antes del único Process.Start del producto, incluso si
+este falla. Capture rechaza el mismo boot de preparación, ausencia de confirmación,
+EXE/settings/sesión modificados, toolchain cambiado o scripts sin validar. Verifica
+otra vez inputs y ausencia de procesos tras UAC. Hash EXE después de medir para
+evitar lectura anticipada. Watchdog del helper guarda evidencia ante pérdida del
+padre; el producto solo recibe cierre normal, sin kill/reintento automático.
+
+Evidencia: validaciones del recolector real sin producto, ETL guardado y pérdidas
+cero; Xperf extrajo procesos/imágenes y stacks. Negativas de Capture sin confirmación
+y con confirmación en el boot consumido verificadas; no llegaron a UAC ni a abrir
+el visor. Parseo de ambos scripts y diff/enlaces comprobados. Ninguna nueva
+ejecución del candidato ni test sobre la carpeta multimedia.
+
+Límites: el tramo Capture→producto/QPC todavía no se ejecuta porque requiere otra
+primera oportunidad real; la validación sin producto no lo convierte en medición.
+No hay PDB Release coincidente disponible; conservar módulos/RVA y símbolos públicos
+del SO, sin usar el Debug distinto. Presencia de eventos antimalware no acredita
+causalidad por sí sola. La traza será global y permanecerá local bajo build.
+No nueva causa ni optimización de producto declarada; R003-09 continúa pendiente
+del análisis de la futura captura. Sin cambios de protocolo IPC o base/AR-005.
+
+## Revisión acotada de primera sesión — 2026-10-24
+
+Habilidad lenteuv-architecture-review aplicada sin delegación. Git 76dc06c,
+fuentes del EXE b0e98f8 y cambios documentales previos preservados. Leídos
+AGENTS/workflow/contexto/desarrollo y documentación 003, criterios/formato de la
+habilidad. Revisión por camino de arranque: main/PreInitDebugIpc/PerformanceTrace,
+App::Initialize/RenderFrame/BeginViewerLoad, restauración/selección de FolderDataManager,
+FolderScanService::Scan, loader CPU/upload, apertura de ThumbnailCache y renderer
+D3D/D2D/DirectWrite/swapchain/composición. CMake e imports PE inspeccionados con dumpbin.
+Sin nueva auditoría de metadatos, Board, codecs completos ni IPC/protocolo.
+
+Ejecución: una única apertura del candidato en la sesión recién reiniciada
+reportada por el propietario. Sin calentamiento/repetición. Original enviado
+1932 ms, confirmación DXGI observada 1956 ms; salida 0, settings/sesión intactos,
+hash EXE conservado y 0 eventos descartados. Evidencia, límites y opciones en
+[first-session-analysis.md](first-session-analysis.md). Sin cambios productivos,
+build ni CTest nuevos. El propietario confirma seis áreas funcionales y rechaza
+los aproximadamente 3000 ms iniciales; 003 sigue abierta por rendimiento inicial.
+
+- **R003-09, diagnóstico de prioridad alta, pendiente de atribución:** main.cpp:48
+  marca main.entry dentro de wWinMainImpl; PreInitDebugIpc está antes (:118) y
+  PerformanceTrace::Get/reserve se ejecuta al registrar el primer evento
+  (performance_trace.h:17/:76). Medidos 1325 ms hasta ese marcador, de ellos unos
+  1298 ms después de creación Win32. Sin ETW de loader/CPU/waits/disco/seguridad,
+  no se puede atribuir a DLL, antivirus, driver ni CRT individualmente. Imports
+  ordinarios confirmados, sin delay directory. Consecuencia: optimizar solo App
+  no atiende el intervalo dominante. Propuesta de coste medio: captura elevada
+  previa a otra primera sesión disponible, correlación de image loads/stacks/faults
+  y, si corresponde, analizador Defender. No reiniciar/repetir ahora; sin exclusiones
+  de seguridad. Diferir imports/servicios es alternativa condicionada a ese perfil,
+  con fallos de carga tardíos y demora de primera miniatura como compromisos.
+- **R003-10, oportunidad de rendimiento de prioridad alta, confirmada en código
+  y en esta ejecución, sin corrección aplicada:** app.cpp:212/:218 inicializa
+  renderer antes de LoadSession (:240); folder_data_manager.cpp:80/:205 solicita
+  original tras aplicar catálogo. Renderer 208 ms y primer catálogo 224 ms se
+  ejecutan en serie al restaurar sin argumentos. Propuesta de coste medio:
+  anticipar el scan CPU y diferir publicación a UI lista. Solapamiento podría
+  evitar del orden de 200 ms si no introduce contención; no es ahorro medido.
+  Preservar prioridad de ruta explícita, generaciones, selección, sesión pendiente,
+  reentrada y cierre; validar todos esos casos antes de otro candidato.
+- **R003-11, oportunidad de rendimiento de prioridad media, medida sin causa
+  interna completa:** folder_scan_service.cpp:44/:47/:52 incluye enumeración y
+  orden. De 224 ms, solo 3 ms son el span de orden final/keys. Hay además unos
+  35 ms desde snapshot hasta image.request, sin desglose de UI/planificación.
+  Propuesta de coste medio: perfilar E/S/atributos y publicación antes de cambiar
+  enumerador/construcción de listas. Conservar sort/ties, Unicode, enlaces,
+  cancelación y cambios del directorio. No presentar otra optimización del
+  comparator como solución al segundo dominante previo al marcador.
+
+Sin defecto nuevo confirmado en thumbnails o driver. Apertura SQLite 13 ms
+solapada; demandas de tira posteriores al original. Renderer 208 ms sin desglose
+por llamada (renderer.cpp:49/:103/:150/:167); instrumentar esas llamadas es
+diagnóstico posterior, no justificación para sustituir backend/transparencia.
+Las recomendaciones son propuestas; las tres quedan pendientes, sin autorización
+inferida para implementarlas ni cerrar el rendimiento por aceptación histórica.
+
+## Actualización manual anterior — 2026-10-24 (sustituida en rendimiento inicial)
+
+El [reporte del propietario](user-validation.md) acepta el rendimiento percibido:
+carga inicial de unos 3 s tras iniciar el SO y mejora considerable posterior,
+también en Waterfall. No confirma la matriz funcional completa, una serie comparable
+de primera sesión ni la disposición de IPC-003-CONCURRENT-01. 003 sigue abierta.
+La meta de 100 ms permanece sin acreditar. Actualización documental sin fuentes,
+nueva auditoría, compilación ni repetición de pruebas; la revisión inferior conserva
+su fecha y alcance histórico.
+
 ## Revisión de implementación asíncrona y caché — 2026-10-23
 
 Habilidad local lenteuv-architecture-review, sin delegación. Base funcional 9b1d7e8;

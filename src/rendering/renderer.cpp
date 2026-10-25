@@ -5,6 +5,7 @@
 // ============================================================================
 #include "common/pch.h"
 #include "renderer.h"
+#include "common/performance_trace.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d2d1.lib")
@@ -46,6 +47,7 @@ bool Renderer::CreateDeviceResources(HWND hwnd, bool translucent) {
     };
 
     D3D_FEATURE_LEVEL achievedLevel;
+    PerformanceTrace::Event("renderer.d3d.begin");
     HRESULT hr = D3D11CreateDevice(
         nullptr,
         D3D_DRIVER_TYPE_HARDWARE,
@@ -67,11 +69,13 @@ bool Renderer::CreateDeviceResources(HWND hwnd, bool translucent) {
             &m_d3dDevice, &achievedLevel, &m_d3dContext
         );
     }
+    PerformanceTrace::Event("renderer.d3d.end");
     KV_HR_RETURN(hr, L"D3D11CreateDevice");
 
     LogInfo(std::format(L"D3D11 device created (feature level: 0x{:X})",
         static_cast<unsigned>(achievedLevel)));
 
+    PerformanceTrace::Event("renderer.d2d.begin");
     D2D1_FACTORY_OPTIONS factoryOptions = {};
 #ifdef _DEBUG
     factoryOptions.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
@@ -100,12 +104,15 @@ bool Renderer::CreateDeviceResources(HWND hwnd, bool translucent) {
     m_d2dContext->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
     m_d2dContext->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
 
+    PerformanceTrace::Event("renderer.d2d.end");
+    PerformanceTrace::Event("renderer.dwrite.begin");
     hr = DWriteCreateFactory(
         DWRITE_FACTORY_TYPE_SHARED,
         __uuidof(IDWriteFactory3),
         reinterpret_cast<IUnknown**>(m_dwriteFactory.ReleaseAndGetAddressOf())
     );
     KV_HR_RETURN(hr, L"DWriteCreateFactory");
+    PerformanceTrace::Event("renderer.dwrite.end");
 
     if (!CreateSwapChain(hwnd, translucent)) return false;
     if (translucent) {
@@ -124,6 +131,7 @@ bool Renderer::CreateDeviceResources(HWND hwnd, bool translucent) {
 }
 
 bool Renderer::CreateSwapChain(HWND hwnd, bool translucent) {
+    PerformanceSpan phase("renderer.swapchain.begin", "renderer.swapchain.end");
     ComPtr<IDXGIDevice> dxgiDevice;
     KV_HR_RETURN(m_d3dDevice.As(&dxgiDevice), L"QueryInterface(IDXGIDevice)");
 
@@ -161,6 +169,7 @@ bool Renderer::CreateSwapChain(HWND hwnd, bool translucent) {
 }
 
 bool Renderer::SetupDirectComposition(HWND hwnd) {
+    PerformanceSpan phase("renderer.composition.begin", "renderer.composition.end");
     ComPtr<IDXGIDevice> dxgiDevice;
     KV_HR_RETURN(m_d3dDevice.As(&dxgiDevice), L"QueryInterface(IDXGIDevice)");
 
@@ -190,6 +199,7 @@ bool Renderer::SetupDirectComposition(HWND hwnd) {
 }
 
 bool Renderer::CreateRenderTarget() {
+    PerformanceSpan phase("renderer.target.begin", "renderer.target.end");
     ComPtr<IDXGISurface> dxgiSurface;
     KV_HR_RETURN(m_swapChain->GetBuffer(0, IID_PPV_ARGS(&dxgiSurface)),
         L"GetBuffer(0)");

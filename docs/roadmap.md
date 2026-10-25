@@ -1,5 +1,11 @@
 # Hoja de ruta
 
+**Estado vigente, 2026-10-24:** 003 cerrada y aceptada por el propietario, junto
+con los cambios anteriores. Base lista para nuevas modificaciones funcionales.
+[Cierre, portable final y límites aceptados](changes/003-diagnostico-rendimiento/closure.md).
+Rendimiento restante e IPC concurrente son seguimientos independientes; no bloquean
+esta entrega y no se declaran resueltos. Los relatos de rechazo inferiores son históricos.
+
 Actualización: 2026-10-24. **Refactorización base y AR-005 completados.** El propietario reportó
 que probó el ejecutable temporal y que todas las funcionalidades base están intactas.
 Se registra como aceptación funcional del usuario; no aportó hash ni una matriz
@@ -25,7 +31,7 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | --- | --- | --- |
 | 001 | [Refactorización base y auditoría](changes/001-refactorizacion-base/spec.md) | Completado en alcance: R1/R2, inventario, disposición de AR-001..007 y aceptación funcional reportada |
 | 002 | [Retirada de Library](changes/002-retirar-library/spec.md) | Completado y aceptado por el propietario el 2026-10-23; Release/CTest 7/7 previos. Limpieza autorizada realizada: 157 EXE y 8 ZIP; candidato aceptado conservado |
-| 003 | [Arranque asíncrono y miniaturas persistentes](changes/003-diagnostico-rendimiento/result.md) | Implementación, comparación y portable b0e98f8 entregados; Release/CTest 8/8 y diez escenarios nativos. Aceptación del propietario/primera sesión real pendientes. 100 ms no acreditados y Waterfall vacío más lento; límites documentados |
+| 003 | [Arranque asíncrono y miniaturas persistentes](changes/003-diagnostico-rendimiento/closure.md) | Completado y aceptado el 2026-10-24. Release/CTest 8/8, diez escenarios nativos y portable final comprobado. Frío n=1: 1996 ms totales / 473 ms internos; 100 ms no alcanzados. Rendimiento e IPC intermitente transferidos a seguimiento aceptado |
 | 004 | [Vigencia de miniaturas](changes/004-vigencia-miniaturas/result.md) | Completado: AR-002, regresión previa y 98 checks iniciales |
 | 005 | [Entrega IPC y fallo explícito](changes/005-entrega-ipc/result.md) | Completado en alcance: AR-003, transporte/error/propiedad; presentación real posterior en 003 |
 | 006 | [Optimizaciones de tira y overlay](changes/006-optimizaciones-locales/result.md) | Completado en alcance: equivalencia y 12 frames WARP; medición local |
@@ -39,6 +45,13 @@ defectos declarados corregidos. El próximo cambio de producto se elige por sepa
 | 014 | [Cancelación completa AR-005](changes/014-cancelacion-ar005/result.md) | Implementación completada y pruebas automatizadas conservadas. Fallo IPC histórico cerrado por reporte posterior de funcionamiento actual al aceptar 002; sin diagnóstico causal |
 
 ## Disposición final de la base
+
+003: opción 1 (ETW) completada en otra primera apertura, carpeta acordada y multimedia
+solo lectura. [Resultado](changes/003-diagnostico-rendimiento/etw-result.md): espera
+síncrona del creador de 1426 ms en Defender, FileScan del EXE 1408 ms; traza sin
+pérdidas. El último lote solapa enumeración/render y fue medido en frío; 003 está cerrada
+por aceptación expresa. Distribución/confianza y trabajo interno restante quedan
+en PERF-003-FOLLOWUP. No repetir automáticamente ninguna captura consumida.
 
 | Hallazgo | Resolución o límite explícito |
 | --- | --- |
@@ -55,13 +68,12 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Trabajo futuro separado, sin ejecución automática
 
-- **003:** implementación asíncrona/caché autorizada y ejecutada sobre el caso real
-  de 7749 elementos. [Medición actual](changes/003-diagnostico-rendimiento/performance-result.md)
-  separa versiones, datos, cachés y presentación. Primera apertura real tras iniciar
-  sesión y aceptación visual del nuevo candidato siguen pendientes.
-  [Explorer/reposo](changes/003-diagnostico-rendimiento/explorer-validation.md) y
-  [presentación/errores](changes/003-diagnostico-rendimiento/real-validation.md)
-  tienen evidencia acotada; no demuestran una mejora causal global.
+- **Seguimientos tras 003:** PERF-003-FOLLOWUP (arranque y generación inicial) e
+  IPC-003-CONCURRENT-01 (harness intermitente) conservados como trabajo independiente
+  aceptado al [cerrar 003](changes/003-diagnostico-rendimiento/closure.md), sin declarar
+  corregidos sus síntomas. El último lote solapa enumeración/render; frío n=1 de
+  1996 ms totales / 473 ms internos. Sin certificación de 100 ms ni mejora causal
+  exacta entre boots. La siguiente intervención requiere alcance propio.
 - **Optimización:** índice de visibles masonry, última medida del overlay y
   presentación por cambios OPT-007; [revisión de oportunidades](changes/003-diagnostico-rendimiento/source-optimization-review.md).
   No reducir FPS/calidad ni cambiar efectos incidentalmente.
@@ -75,11 +87,17 @@ criterio con evidencia y dispone la cobertura no exhaustiva. AR-005 está comple
 
 ## Entrega y continuidad
 
-Candidato 003: **dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe** y ZIP
+Entrega final 003: **dist/lenteuv_003_final_20261024/lenteuv.exe** y ZIP
+**dist/lenteuv_003_final_20261024.zip**. Mismo EXE del último frío; identidad y
+aceptación en [cierre](changes/003-diagnostico-rendimiento/closure.md).
+
+Candidato anterior 003 conservado (histórico): **dist/lenteuv_qa_003_20261024_async_cache/lenteuv.exe** y ZIP
 homónimo, fuentes b0e98f8. [Resultado/hash](changes/003-diagnostico-rendimiento/result.md),
 [métricas](changes/003-diagnostico-rendimiento/performance-result.md) y
 [continuidad](changes/003-diagnostico-rendimiento/resume.md). Código y evidencia
-automatizada entregados; no aceptación visual global ni primera sesión real.
+automatizada entregados; seis áreas funcionales confirmadas por el propietario,
+pero tiempo inicial rechazado. Captura instrumental inicial única y propuestas
+entregadas; falta resolver y aceptar el rendimiento inicial.
 La mejora de caché preparada no oculta el coste mayor de generación inicial.
 
 Candidato aceptado de 002:

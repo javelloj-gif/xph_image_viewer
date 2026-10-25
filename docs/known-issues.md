@@ -2,14 +2,35 @@
 
 # Problemas conocidos y asuntos pendientes
 
+**Disposición vigente 2026-10-24:** [003 cerrada por aceptación del propietario](changes/003-diagnostico-rendimiento/closure.md).
+PERF-003-FOLLOWUP e IPC-003-CONCURRENT-01 permanecen abiertos como seguimientos
+independientes aceptados, sin impedir nuevas funciones ni declararlos corregidos.
+Frío del EXE final: 1995,63 ms totales / 473,18 ms internos, meta de 100 ms no alcanzada;
+[captura y límites](changes/003-diagnostico-rendimiento/cold-internal-result.md).
+Las solicitudes de aceptación inferiores describen estados anteriores al cierre.
+
+**ETW 003, seguimiento posterior 2026-10-24:** una única apertura del directorio
+acordado envió el original a 2216 ms y observó DXGI a 2237 ms. Stacks, CSwitch,
+ReadyThread y Get-MpPerformanceReport atribuyen 1426 ms de espera del creador a
+Defender; FileScan del EXE 1408 ms. [Evidencia y alternativas](changes/003-diagnostico-rendimiento/etw-result.md).
+Sin cambios de seguridad/producto; no extrapolar a todas las primeras sesiones.
+
+Actualización 003, 2026-10-24: el [propietario rechaza el rendimiento inicial](changes/003-diagnostico-rendimiento/user-validation.md)
+de unos 3000 ms en múltiples reinicios, y confirma zoom/paneo, tira, navegación
+rápida, Waterfall, Board e IPC. Una [captura única](changes/003-diagnostico-rendimiento/first-session-analysis.md)
+sin argumentos envió el original a 1932 ms y observó DXGI a 1956 ms; dominan 1325 ms
+previos a main.entry, sin atribución causal a seguridad/DLL/disco. La intermitencia
+IPC-003-CONCURRENT-01 conserva el síntoma sin causa confirmada; su seguimiento
+independiente fue aceptado expresamente al cerrar 003.
+
 La reforma de estructura no pretende corregir la lógica funcional. Las siguientes
 entradas son puntos de partida verificables para futuras tareas, no un diagnóstico
 completo ni una lista de fallos reproducidos visualmente.
 
 | Área | Evidencia y alcance | Siguiente comprobación |
 | --- | --- | --- |
-| Rendimiento 003: límites medidos | **Series 2026-10-23/24:** original enviado con p95 319–327 ms preparado, sin acreditar 100 ms; renderer domina. Waterfall preparado p95 67–72 ms, pero vacío p95 1,22–1,95 s frente a unos 0,68 s de base. [Datos y recursos](changes/003-diagnostico-rendimiento/performance-result.md) | Aceptación del candidato y tradeoffs, primera sesión real coordinada. No reducir calidad ni inferir óptimo universal/visibilidad por Present1 |
-| IPC-003-CONCURRENT-01: entrega simultánea intermitente en harness | **Ejecución 003, 2026-10-23:** una corrida de CTest falló en `concurrent clients each delivered once`; el log registró una sola de las dos rutas. La repetición aislada pasó. Sin causa ni comparación causal contra la base; `single_instance_ipc.cpp` no fue modificado | Conservar el fallo y el pase posterior como evidencia; no declarar aceptación exhaustiva de IPC ni cambiar protocolo/elección de instancia dentro de esta optimización. Es distinto del reporte manual IPC-014-01 cerrado |
+| PERF-003-FOLLOWUP: arranque y generación inicial | **Series 2026-10-23/24:** original enviado con p95 319–327 ms preparado, sin acreditar 100 ms; renderer domina. Waterfall preparado p95 67–72 ms, pero vacío p95 1,22–1,95 s frente a unos 0,68 s de base. [Datos y recursos](changes/003-diagnostico-rendimiento/performance-result.md) | Seguimiento independiente aceptado al cerrar 003: espera previa, creación D3D/decode y generación inicial. Frío final 1996 ms totales / 473 ms internos. Sin corrección pendiente implícita para esta entrega; no certificar 100 ms ni pantalla por Present1 |
+| IPC-003-CONCURRENT-01: entrega simultánea intermitente en harness | **Ejecución 003, 2026-10-23:** una corrida de CTest falló en `concurrent clients each delivered once`; el log registró una sola de las dos rutas. La repetición aislada pasó. Sin causa ni comparación causal contra la base; `single_instance_ipc.cpp` no fue modificado | Seguimiento independiente aceptado por el propietario al cerrar 003. Conservar fallo, pase posterior y test; no declarar corrección ni aceptación exhaustiva de IPC. Es distinto del reporte manual IPC-014-01 cerrado |
 | IPC-014-01: nueva imagen no visible (cerrado por reporte) | **Reporte posterior del propietario, 2026-10-23, al aceptar 002:** IPC opera correctamente y el visor se actualiza al abrir una nueva imagen desde Windows. Se conserva el fallo histórico del portable 014, sin causa confirmada. [Evidencia y estado](changes/014-cancelacion-ar005/user-validation.md) | **Cerrado por funcionamiento actual reportado.** Sin investigación ni cambio de código en esta sesión; no se atribuye una corrección a 002 ni se certifican todos los escenarios IPC |
 | Instancias y responsividad | **Código:** sondeo de pipe sin elección por mutex; desde 003 las cargas principales son asíncronas. Sin ACK de aplicación | Conservar la regresión concurrente identificada arriba; no atribuirle causa ni reabrir IPC-014-01 |
 | Apertura IPC | **003 histórico:** cinco clientes fallaban con error 2 tras detectar receptor. **005:** reintento de apertura, resultado explícito y payload RAII; regresiones correctas. **Validación real posterior:** PNG presentado y error Win32 231 con salida 2 | Completar Explorer/asociaciones y aclarar AR-008; no hay ACK ni elección atómica y no se atribuye toda la historia a una causa |

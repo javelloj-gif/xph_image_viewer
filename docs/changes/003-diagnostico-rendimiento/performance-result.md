@@ -1,5 +1,29 @@
 # 003: comparación de arranque y miniaturas
 
+**Cierre aceptado el 2026-10-24 con límites explícitos.** Último EXE
+`874F5783B219E24FE1AD74B330BBF9A344EF2DAB0E3664738CED579CF5FF50D6`:
+[frío n=1](cold-internal-result.md), 1995,63 ms totales / 473,18 ms internos;
+[serie posterior del último diff](internal-startup-result.md), sin mejora clara
+en caliente. No mezclar estas observaciones con las series del EXE anterior
+inferiores. Meta de 100 ms no alcanzada; seguimiento aceptado en [cierre](closure.md).
+
+## Registro anterior al cierre (histórico)
+
+**Seguimiento ETW posterior:** [una apertura en otro boot](etw-result.md), entrada
+explícita de directorio y caché existente: original enviado 2216 ms, DXGI observado
+2237 ms. Espera de 1426 ms del creador en CreateProcess/WdFilter, reactivado por
+MsMpEng; FileScan del EXE de 1408 ms según analizador oficial. Es evidencia causal
+de esta captura; no se atribuyen a Defender todos los tiempos de series anteriores
+ni se calcula p95 con una muestra. Sin modificación de producto o seguridad.
+
+**Actualización posterior, 2026-10-24:** el propietario informa múltiples pruebas
+tras reinicio y rechaza el tiempo inicial de unos 3000 ms. Confirma zoom/paneo,
+tira, navegación rápida, Waterfall, Board e IPC. Una [primera apertura instrumental
+única](first-session-analysis.md), sin argumentos y restaurando sesión existente,
+envió el original a 1932 ms; confirmación DXGI observada a 1956 ms. 1325 ms quedan
+antes de main.entry, sin desglose causal; renderer 208 ms y catálogo 224 ms en serie.
+Sin repetición ni p95; no sustituye ni se compara causalmente con las series inferiores.
+
 Resultado, 2026-10-24: el original completo mejora aproximadamente 20–22% en mediana,
 pero no acredita la meta de 100 ms. La caché preparada acelera Waterfall; su primera
 generación tiene un coste mayor que la base. Series del 23–24, America/Bogota.
@@ -78,11 +102,15 @@ previas del candidato no se atribuyen al candidato final.
 
 ## Límites de aceptación
 
-La primera apertura real de una nueva sesión de Windows está pendiente de
-coordinación; estas series son posteriores en una sesión ya utilizada. No se
+El [reporte vigente del propietario del 2026-10-24](user-validation.md) observa unos
+3 s iniciales en múltiples pruebas tras reinicio y mejora considerable posterior,
+también en Waterfall. **El tiempo inicial no es aceptable**; sustituye su aceptación
+anterior. Hay una primera captura instrumental real, n=1, documentada arriba;
+no equivale a una distribución comparable ni certifica 100 ms.
+Estas series instrumentadas son posteriores en una sesión ya utilizada. No se
 vacían caches del SO, reinicia Windows ni instala un proceso residente.
-La aceptación visual del propietario sobre 003 también está pendiente según
-[functional-test.md](functional-test.md). Se conserva el fallo intermitente
+Los seis OK funcionales y sus límites constan en [functional-test.md](functional-test.md).
+El rendimiento inicial rechazado impide cerrar 003. Se conserva el fallo intermitente
 IPC-003-CONCURRENT-01 del harness, distinto del reporte manual 014 cerrado.
 
 ## Resultados instrumentados

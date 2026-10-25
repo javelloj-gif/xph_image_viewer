@@ -1,12 +1,58 @@
 # Plan: 003 arranque asíncrono y miniaturas persistentes
 
+**Plan cerrado por aceptación expresa del propietario, 2026-10-24.**
+Implementación, regresiones, mediciones, revisión local, portable limpio y smoke
+completados. Rendimiento restante e IPC concurrente transferidos a seguimiento
+independiente; no quedan tareas activas de 003. Ver [cierre](closure.md).
+Las casillas inferiores conservan decisiones históricas y no son una cola activa.
+
+## Registro anterior al cierre (histórico)
+
+**Actualización vigente:** autorizado abordar el tramo interno estimado en 789,46 ms.
+Una nueva [primera apertura real](cold-internal-result.md) del candidato interno
+registra 1995,63 ms totales / 473,18 ms desde entrada, con solapamiento frío confirmado.
+No repetir en este boot. Sigue pendiente acreditar causalmente la mejora y aceptación.
+El solapamiento de enumeración/render y la prioridad sin escaneo duplicado están
+implementados en fuentes locales. Release/CTest 8/8 (17,34 s), diez escenarios nativos
+y ocho pares de aperturas posteriores completados. [Sin mejora acreditada](internal-startup-result.md):
+327,98→334,69 ms de mediana entrada→original; D3D ocupa ~199 ms. Pendiente otra
+intervención y comparación fría controlada; sin paquete nuevo ni cierre. El apartado siguiente es histórico.
+
 **Estado 2026-10-24:** [implementation-plan.md](implementation-plan.md) implementado
 y validado en sus porciones automatizadas P1..P7; fuentes b0e98f8 y candidato limpio
 identificado en [result.md](result.md). [Métricas](performance-result.md) y revisión
 actualizadas. La meta principal de 100 ms no está acreditada; Waterfall vacío tiene
-un coste mayor que la base. No cerrar 003 hasta aceptación del propietario y primera
-sesión real coordinada, con disposición de los límites. Continuidad en [resume.md](resume.md).
+un coste mayor que la base. El [reporte vigente del propietario](user-validation.md)
+confirma zoom/paneo, tira, navegación rápida, Waterfall, Board e IPC, pero rechaza
+el tiempo inicial de unos 3000 ms. Sustituye su aceptación previa del rendimiento.
+Se ejecutó una sola [primera apertura instrumentada](first-session-analysis.md):
+1932 ms hasta envío del original, confirmación DXGI observada a 1956 ms. Preparado
+análisis de causas y alternativas; no implementadas. 003 sigue abierta por arranque.
+**Seguimiento ETW:** [captura única y análisis completados](etw-result.md): original
+enviado a 2216 ms, DXGI observado a 2237 ms; hilo creador esperando 1426 ms en ruta
+WdFilter/Defender y reactivado por MsMpEng. El analizador oficial mide 1408 ms de
+FileScan del EXE. Las alternativas de distribución/firma y solapamiento siguen
+sin implementar; no repetir la oportunidad ni cerrar 003 por este diagnóstico.
+Continuidad en [resume.md](resume.md).
 La base, Library y AR-005 permanecen cerrados; no iniciar campañas por inercia.
+
+## Preparación autorizada de la opción 1 — 2026-10-24
+
+- [x] Fijar entrada explícita `F:\Pictures\FotosTEMP`, medios solo lectura por
+  instrucción del propietario; datos/cachés y trazas fuera de ese directorio.
+- [x] Instalar solo WPT oficial, inspeccionar perfiles y preparar recolector elevado
+  con padre normal, handshake antes de lanzar y guard exclusivo por boot.
+- [x] Validar ETW sin producto, pérdidas cero, extracción de stacks/imágenes y
+  negativas de captura en la sesión consumida; sin otro lanzamiento de LenteUV.
+- [x] Documentar permisos, comandos y criterios de evidencia en
+  [etw-capture-protocol.md](etw-capture-protocol.md).
+- [x] Capturar una sola apertura tras otro arranque: EXE/hash correcto, salida 0,
+  pérdida de eventos cero, settings/sesión iguales y auditoría sin modificaciones
+  del visor en la carpeta multimedia. [Resultado](etw-result.md).
+- [x] Analizar CPU/waits, módulos, faults/E/S y eventos antimalware: espera síncrona
+  de 1426 ms en creación atribuida a Defender, con stacks/ReadyThread/FileScan.
+- [ ] Elegir tratamiento del frente de distribución/confianza y de la serialización
+  interna. No implementar firma, subir artefactos ni modificar seguridad automáticamente.
 
 ## Plan histórico
 
@@ -238,3 +284,23 @@ otros LenteUV. El propietario confirmó uso previo en esta sesión: no primera r
   Reabrir AR-008 con síntoma nativo.
   No modificar renderer por la captura negra de esta campaña. 003 abierto.
   Sin ampliación a ACK, elección atómica o cierre.
+# Optimización interna posterior a ETW (2026-10-24)
+
+Autorización: abordar los 789,46 ms hipotéticos restantes tras el bloqueo externo.
+Ese valor es una resta de la captura, no una nueva medición ni un presupuesto garantizado.
+
+- [x] Preparar consumidores UI y encolar enumeración antes de crear el renderer;
+  mantener callbacks/GPU en el hilo principal tras inicialización correcta.
+- [x] Registrar primero el orden persistente de sesión y solicitar la carpeta explícita
+  antes de restauraciones, evitando escanear/cancelar/repetir la misma carpeta.
+- [x] Instrumentar fases gráficas para decidir con evidencia si requieren otra intervención.
+- [x] Comparar anterior/nuevo con procesos aislados y la misma carpeta de solo lectura;
+  etiquetar como ejecuciones posteriores, sin repetir la primera medición de esta sesión.
+- [x] Compilar, ejecutar regresiones y arranque nativo; revisar el diff con la habilidad local.
+- [x] Medir una primera apertura del candidato nuevo tras otro boot, sin harness previo.
+  Solapamiento confirmado; n=1 y cambios de entorno limitan comparación causal.
+- [ ] Acreditar mejora de rendimiento comparable y aceptación; localizar/abordar
+  el coste de creación D3D y la decodificación aún posterior al renderer.
+
+Conservar efectos, calidad, selección, IPC, formatos y datos personales. No modificar
+multimedia de `F:\Pictures\FotosTEMP`, seguridad de Windows ni el candidato anterior.

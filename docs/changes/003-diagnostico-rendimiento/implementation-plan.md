@@ -1,5 +1,12 @@
 # 003: implementación autorizada — 2026-10-23
 
+**P1..P7 y último lote interno cerrados por aceptación del propietario, 2026-10-24.**
+Último lote: enumeración solapada con renderer, prioridad explícita sin escaneo
+duplicado, instrumentación y regresiones. Release/CTest 8/8, diez escenarios nativos
+y smoke final correctos. Medición fría y límites en [cierre](closure.md).
+
+## Registro anterior al cierre (histórico)
+
 Base: 9b1d7e8. Rama: codex/003-arranque-cache. El propietario aprobó ampliar 003
 a instrumentación, arranque asíncrono completo, planificación y caché persistente
 de miniaturas, conservando calidad, efectos, datos, IDs e IPC. Esta decisión
@@ -50,9 +57,24 @@ Matriz posterior: n=30 por posición/versión/escenario, 003 preparada y vacía;
 explica primera generación, recursos y censuras. EXE/ZIP limpios y hashes en result.md.
 La selección efectiva fue de unos 12,5 MP, sin atribuirle 24 MP.
 
-- [ ] Aceptación funcional del propietario sobre el candidato 003.
-- [ ] Primera apertura real de una nueva sesión Windows, coordinada y sin reinicio automático.
-- [ ] Disposición explícita de límites: 100 ms no acreditados, Waterfall vacío más lento,
-  intermitencia concurrente del harness IPC sin causa confirmada.
+- [x] Reporte del propietario: zoom/paneo, tira, navegación rápida, Waterfall, Board e IPC OK.
+- [x] Reporte manual de primera apertura tras iniciar el SO: unos 3 s, 2026-10-24.
+- [x] Reporte posterior: múltiples pruebas con SO recién iniciado; unos 3000 ms
+  iniciales NO aceptables. La aceptación previa de ese tiempo queda sustituida.
+- [x] Una sola primera apertura instrumentada autorizada: 1932 ms hasta envío
+  del original; confirmación DXGI observada a 1956 ms. Sin warmup ni repetición.
+- [x] Análisis acotado de causas y opciones con compromisos, sin implementar producto.
+- [x] Opción 1 seleccionada para preparación: WPT instalado, ETW validado sin producto,
+  directorio de entrada fijo y multimedia solo lectura; scripts listos según
+  [etw-capture-protocol.md](etw-capture-protocol.md).
+- [x] Captura ETW única de otro boot y análisis causal: [etw-result.md](etw-result.md).
+  Original enviado 2216 ms, DXGI observado 2237 ms, espera síncrona del creador
+  1426 ms en ruta Defender; FileScan del EXE 1408 ms. Sin cambiar producto/seguridad.
+- [x] Mejoras internas implementadas y medidas; el propietario acepta el cierre con el rendimiento restante como seguimiento separado.
+- [x] Disposición expresa: seguimiento independiente aceptado de IPC-003-CONCURRENT-01, sin declararlo corregido.
+
+Evidencia y alcance del reporte en [user-validation.md](user-validation.md).
+La primera captura y propuestas están en [first-session-analysis.md](first-session-analysis.md).
+El rendimiento inicial está rechazado; no se certifica 100 ms ni matriz funcional universal.
 
 No se declara cierre global ni se reabre IPC-014-01. Continuar con resume.md.

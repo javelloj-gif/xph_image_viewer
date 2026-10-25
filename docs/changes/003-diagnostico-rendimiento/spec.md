@@ -1,5 +1,20 @@
 # 003: arranque asíncrono, miniaturas persistentes y métricas reales
 
+**Cerrada y aceptada por el propietario el 2026-10-24** en su alcance implementado,
+con límites de rendimiento y seguimiento IPC dispuestos expresamente. La meta de
+100 ms no está alcanzada y se conserva como límite, sin impedir el cierre autorizado.
+La [disposición final](closure.md) sustituye los estados pendientes históricos inferiores.
+
+## Registro anterior al cierre (histórico)
+
+**Aceptación vigente, 2026-10-24:** el propietario confirma zoom/paneo, tira,
+navegación rápida, Waterfall, Board e IPC correctos, pero rechaza los aproximadamente
+3000 ms de apertura inicial observados en múltiples reinicios. Esto sustituye la
+aceptación anterior del rendimiento, sin fijar un nuevo umbral numérico. Solicitó
+una única medición de primera sesión y análisis con alternativas; realizados en
+[first-session-analysis.md](first-session-analysis.md). 003 permanece abierta por
+rendimiento inicial; las alternativas no están implementadas por ese diagnóstico.
+
 **Alcance vigente aprobado, 2026-10-23:** implementar arranque asíncrono completo,
 prioridad de miniaturas, caché persistente sin pérdidas y medición real según
 [implementation-plan.md](implementation-plan.md). Sustituye las exclusiones de
@@ -92,3 +107,11 @@ y presentación real; la matriz actual es regresión de éxito/error exactos de 
   inicial: cinco ejecuciones posteriores y primeras ejecuciones en sesiones distintas
   cuando estén disponibles, informando tamaño de muestra y sin inferir de una sola observación.
 - Coordinar primera ejecución real sin interferir con la sesión de trabajo.
+# Ampliación autorizada: camino interno del arranque
+
+Tras ETW, el propietario solicita optimizar el tramo interno estimado en 789,46 ms.
+La mejora se acepta mediante comparación bajo el mismo entorno, sin atribuir una
+serie posterior al comportamiento en frío ni prometer eliminar trabajo gráfico necesario.
+Encolar enumeración antes del renderer conservando entrega UI, priorizar la carpeta
+explícita sin repetirla y preservar el orden de los registros de sesión. La primera
+ejecución futura sigue requiriendo otra sesión de Windows. Multimedia original intacta.
