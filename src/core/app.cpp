@@ -23,6 +23,7 @@ App::App()
 }
 
 App::~App() {
+    m_dockAccessibleState.reset();
     m_window.events.onIpcOpenPath = {};
     m_ipc.Shutdown();
     // Join producers while their page, metadata cache, WIC factory and window still exist.
@@ -95,7 +96,7 @@ InitResult App::Initialize(const AppConfig& config) {
 
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
-    wndConfig.title       = L"LenteUV";
+    wndConfig.title       = L"Image Viewer";
     wndConfig.width       = 1280;
     wndConfig.height      = 800;
     wndConfig.frameless   = config.frameless;
@@ -144,7 +145,7 @@ InitResult App::Initialize(const AppConfig& config) {
     try {
         auto cacheRoot = GetExecutableUserDataRoot() / L"cache" / L"thumbnails-v1";
         if (PerformanceTrace::Get().Enabled()) {
-            const auto cacheNamespace = PerformanceTrace::Environment(L"LENTEUV_CACHE_NAMESPACE");
+            const auto cacheNamespace = PerformanceTrace::Environment(L"IMAGE_VIEWER_CACHE_NAMESPACE");
             if (!cacheNamespace.empty() && cacheNamespace.find_first_not_of(L"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")==std::wstring::npos)
                 cacheRoot /= cacheNamespace;
         }
@@ -174,7 +175,7 @@ InitResult App::Initialize(const AppConfig& config) {
     ShellIntegrator::RegisterTrayIcon(
         m_window.GetHwnd(),
         LoadIconW(nullptr, IDI_APPLICATION),
-        L"LenteUV"
+        L"Image Viewer"
     );
 
     // ── Wire Events ───────────────────────────────────────────────────────
@@ -188,6 +189,8 @@ InitResult App::Initialize(const AppConfig& config) {
     m_window.events.onKeyDown = [this](uint32_t vk, KeyModifiers m) { OnKeyDown(vk, m); };
     m_window.events.onChar = [this](wchar_t ch) { OnChar(ch); };
     m_window.events.onFileDrop = [this](std::vector<std::wstring> f) { OnFileDrop(std::move(f)); };
+    m_window.events.onClientHitTest = [this](float, float) { return IsViewerActive() || m_optionsMenu.IsVisible() || m_taggingModal.IsVisible(); };
+    m_window.events.onGetObject = [this](WPARAM request, LPARAM objectId) { return GetDockAccessibleObject(request, objectId); };
     m_window.events.onMouseLeave = [this]() { OnMouseLeave(); };
     m_window.events.onCloseRequest = [this]() -> bool {
         if (m_settings.hide_to_tray_on_close && !m_isQuitting) {
@@ -318,11 +321,11 @@ int App::Run() {
         // yield CPU time to other processes
         bool needsContinuousRender = m_animations.HasActiveAnimations()
                                    || m_thumbnailStrip.HasActiveAnimations()
-                                   || (m_currentPage == Page::Viewer && m_viewerPage.HasActiveAnimations())
+                                   || (IsViewerActive() && m_viewerPage.HasActiveAnimations())
                                    || (m_animatedImage && !m_frameSequencer.IsPaused())
                                    || (m_currentPage == Page::Board && m_boardPage.m_editor.m_editingNoteIdx != -1)
                                    || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())))
-                                   || (m_radialMenuProgress > 0.0f && m_radialMenuProgress < 1.0f);
+                                   || (m_dockRemaining > 0 || (m_dockOpacity > 0 && m_dockOpacity < 1));
 
         if (!needsContinuousRender) {
             // Wait for next message or 16ms timeout (~60fps max idle rate)
@@ -344,18 +347,7 @@ void App::RenderFrame() {
     // Clamp dt to avoid huge jumps after loading stalls
     dt = std::min(dt, 0.1);
 
-    // Update radial menu animation progress
-    if (m_radialMenuVisible) {
-        if (m_radialMenuProgress < 1.0f) {
-            m_radialMenuProgress = std::min(m_radialMenuProgress + static_cast<float>(dt) * 5.0f, 1.0f);
-            m_window.RequestRedraw();
-        }
-    } else {
-        if (m_radialMenuProgress > 0.0f) {
-            m_radialMenuProgress = std::max(m_radialMenuProgress - static_cast<float>(dt) * 5.0f, 0.0f);
-            m_window.RequestRedraw();
-        }
-    }
+    UpdateDock(dt);
 
     // Update animations
     m_animations.Update(dt);
@@ -363,12 +355,14 @@ void App::RenderFrame() {
     // Update page animations
     if (m_currentPage == Page::Viewer) {
         m_viewerPage.Update(dt);
-        m_thumbnailStrip.Update(dt);
+
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Update(dt);
     } else if (m_currentPage == Page::Waterfall) {
         m_waterfallPage.Update(dt);
     }
+
+    if (IsViewerActive()) m_thumbnailStrip.Update(dt);
 
     // Update animated image playback
     if (m_animatedImage && !m_frameSequencer.IsPaused()) {
@@ -404,9 +398,7 @@ void App::RenderFrame() {
     if (m_taggingModal.IsVisible()) {
         m_taggingModal.Draw(m_renderer);
     }
-    if (m_radialMenuProgress > 0.0f) {
-        DrawRadialMenu();
-    }
+    DrawDock();
 
     const auto presentResult=m_renderer.EndFrame();
     if (presentResult==S_OK) {
@@ -422,7 +414,7 @@ void App::RenderFrame() {
         }
         m_originalFramePending=false;
         if (PerformanceTrace::Get().Enabled()) {
-            const auto scenario=PerformanceTrace::Environment(L"LENTEUV_PERF_SCENARIO");
+            const auto scenario=PerformanceTrace::Environment(L"IMAGE_VIEWER_PERF_SCENARIO");
             if (scenario==L"strip") m_thumbnailStrip.m_mouseMoveTimer=10.0;
             if (scenario==L"waterfall") { SetPage(Page::Waterfall); PerformanceTrace::Event("waterfall.demand",m_imageGeneration); }
         }
@@ -442,10 +434,18 @@ void App::RenderFrame() {
 
 // ─── Draw Viewer Content ─────────────────────────────────────────────────────
 
+bool App::IsViewerActive() const {
+    return m_currentPage == Page::Viewer || (m_currentPage == Page::Waterfall && m_waterfallPage.m_viewerModal);
+}
+
+void App::DrawViewerComposition(Renderer& renderer) {
+    m_viewerPage.Draw(renderer);
+    m_thumbnailStrip.Draw(renderer);
+}
+
 void App::DrawViewerContent() {
     if (m_currentPage == Page::Viewer) {
-        m_viewerPage.Draw(m_renderer);
-        m_thumbnailStrip.Draw(m_renderer);
+        DrawViewerComposition(m_renderer);
     } else if (m_currentPage == Page::Board) {
         m_boardPage.Draw(m_renderer);
     } else if (m_currentPage == Page::Waterfall) {
@@ -684,10 +684,11 @@ void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loa
             m_frameSequencer.SetFrames(delays, anim->loopCount);
 
             ResetView();
-            m_window.SetTitle(std::format(L"LenteUV — {} ({} frames)",
+            m_window.SetTitle(std::format(L"Image Viewer — {} ({} frames)",
                 fs::path(path).filename().wstring(), anim->FrameCount()));
             
             m_folderData.AddToHistory(path);
+            m_thumbnailStrip.SyncSelection(m_currentIndex);
             m_window.RequestRedraw();
             return;
         }
@@ -701,7 +702,7 @@ void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loa
         m_animatedImage = nullptr;
         m_frameSequencer.Reset();
         ResetView();
-        m_window.SetTitle(std::format(L"LenteUV — {} ({}×{})",
+        m_window.SetTitle(std::format(L"Image Viewer — {} ({}×{})",
             fs::path(path).filename().wstring(), image->width, image->height));
 
         m_folderData.AddToHistory(path);
@@ -837,7 +838,7 @@ void App::DeleteImage(const std::wstring& path) {
         } else {
             m_currentIndex = -1;
             ResetView();
-            m_window.SetTitle(L"LenteUV");
+            m_window.SetTitle(L"Image Viewer");
             m_waterfallPage.m_viewerModal = false;
         }
     } else {
@@ -974,6 +975,9 @@ void App::CancelHoverLoads() {
 
 void App::SetPage(Page page) {
     if (page != m_currentPage) {
+        if (IsViewerActive()) { m_viewerPage.CancelPointerGesture(); m_thumbnailStrip.CancelPointerGesture(); }
+        m_waterfallPage.m_viewerModal = false;
+        m_dockFocus = m_dockHovered = -1; m_dockOpacity = 0; m_dockRemaining = 0;
         CancelHoverLoads();
         if (page != Page::Waterfall) m_folderData.CancelPreviewLoads();
         if (page != Page::Viewer) {
@@ -1032,55 +1036,19 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
         if (m_optionsMenu.OnMouseMove(x, y, mods)) return;
     }
 
-    if (m_window.IsFullscreen()) {
-        auto size = m_renderer.GetTargetSize().ToFloat();
-        if (x < 100.0f && y < 100.0f) {
-            if (!m_radialMenuVisible) {
-                m_radialMenuVisible = true;
-                m_window.RequestRedraw();
-            }
-        } else if (m_radialMenuVisible) {
-            bool inMenuArea = (x < 200.0f && y < 200.0f);
-            bool inTravelBand = (y < 80.0f);
-            if (!inMenuArea && !inTravelBand) {
-                m_radialMenuVisible = false;
-                m_window.RequestRedraw();
-            }
-        }
-    } else {
-        if (m_radialMenuVisible) {
-            m_radialMenuVisible = false;
-            m_window.RequestRedraw();
-        }
+    const bool overDockTooltip = m_dockOpacity > 0 && (m_dockHovered >= 0 || m_dockFocus >= 0) && GetDockTooltipRect().Contains(x, y);
+    if (!overDockTooltip) m_dockHovered = HitDock(x, y);
+    if (IsViewerActive() && IsDockHit(x, y)) {
+        m_window.RequestRedraw();
+        return;
     }
 
-    if (m_radialMenuProgress > 0.1f) {
-        int oldHovered = m_radialMenuHoveredIdx;
-        m_radialMenuHoveredIdx = -1;
-        for (int i = 0; i < 4; ++i) {
-            PointF btnCenter = GetRadialButtonCenter(i, m_radialMenuProgress);
-            float dx = x - btnCenter.x;
-            float dy = y - btnCenter.y;
-            float distSq = dx * dx + dy * dy;
-            if (distSq <= 26.0f * 26.0f) {
-                m_radialMenuHoveredIdx = i;
-                break;
-            }
-        }
-        if (m_radialMenuHoveredIdx != oldHovered) {
-            m_window.RequestRedraw();
-        }
-        if (x < 200.0f && y < 200.0f) {
-            return; // Intercept mouse move so background doesn't hover
-        }
-    }
-
+    if (IsViewerActive() && m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseMove(x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseMove(x, y, mods)) return;
     } else {
-        if (m_thumbnailStrip.HandleMouseMove(x, y, mods)) return;
         m_viewerPage.OnMouseMove(x, y, mods);
     }
 }
@@ -1096,25 +1064,13 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (m_optionsMenu.OnMouseDown(btn, x, y, mods)) return;
     }
 
-    if (m_radialMenuProgress > 0.5f) {
-        if (btn == MouseButton::Left && m_radialMenuHoveredIdx != -1) {
-            Page targetPage;
-            if (m_radialMenuHoveredIdx == 0) targetPage = Page::Viewer;
-            else if (m_radialMenuHoveredIdx == 1) return; // Reserved: consume without activating or forwarding.
-            else if (m_radialMenuHoveredIdx == 2) targetPage = Page::Waterfall;
-            else targetPage = Page::Board;
-
-            SetPage(targetPage);
-            m_radialMenuVisible = false;
-            m_radialMenuProgress = 0.0f;
-            m_radialMenuHoveredIdx = -1;
-            m_window.RequestRedraw();
-            return;
-        }
-        if (x < 200.0f && y < 200.0f) {
-            return; // Eat the click
-        }
+    if (IsViewerActive() && IsDockHit(x, y)) {
+        m_dockFocus = -1;
+        m_dockPressed = btn == MouseButton::Left ? HitDock(x, y) : -1;
+        m_window.RequestRedraw();
+        return;
     }
+    m_dockFocus = -1;
 
     // Global close button check
     if (btn == MouseButton::Left) {
@@ -1127,12 +1083,12 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         }
     }
 
+    if (IsViewerActive() && m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDown(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseDown(btn, x, y, mods)) return;
     } else {
-        if (m_thumbnailStrip.HandleMouseDown(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDown(btn, x, y, mods);
     }
 }
@@ -1147,18 +1103,20 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (m_optionsMenu.OnMouseUp(btn, x, y, mods)) return;
     }
 
-    if (m_radialMenuProgress > 0.5f) {
-        if (x < 200.0f && y < 200.0f) {
-            return; // Eat mouse up
-        }
+    if (m_dockPressed >= 0) {
+        const int pressed = m_dockPressed;
+        m_dockPressed = -1;
+        if (btn == MouseButton::Left && HitDock(x, y) == pressed) InvokeDock(pressed);
+        return;
     }
+    if (IsViewerActive() && IsDockHit(x, y)) return;
 
+    if (IsViewerActive() && m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseUp(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseUp(btn, x, y, mods)) return;
     } else {
-        if (m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
         m_viewerPage.OnMouseUp(btn, x, y, mods);
     }
 }
@@ -1169,12 +1127,14 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
     if (m_taggingModal.IsVisible()) {
         if (m_taggingModal.OnMouseWheel(delta, x, y, mods)) return;
     }
+    if (m_optionsMenu.IsVisible()) return;
+    if (IsViewerActive() && IsDockHit(x, y)) return;
+    if (IsViewerActive() && m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseWheel(delta, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseWheel(delta, x, y, mods)) return;
     } else {
-        if (m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
         m_viewerPage.OnMouseWheel(delta, x, y, mods);
     }
 }
@@ -1183,13 +1143,13 @@ void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mod
     m_mouseX = x;
     m_mouseY = y;
     if (m_taggingModal.IsVisible() || m_optionsMenu.IsVisible()) return;
-    if (m_radialMenuProgress > 0.5f && x < 200.0f && y < 200.0f) return;
+    if (IsViewerActive() && IsDockHit(x, y)) return;
+    if (IsViewerActive() && m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else if (m_currentPage == Page::Waterfall) {
         if (m_waterfallPage.OnMouseDoubleClick(btn, x, y, mods)) return;
     } else {
-        if (m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
         m_viewerPage.OnMouseDoubleClick(btn, x, y, mods);
     }
 }
@@ -1201,10 +1161,9 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
     if (m_optionsMenu.IsVisible()) {
         if (m_optionsMenu.OnKeyDown(vk, mods)) return;
     }
+    if (HandleDockKey(vk, mods)) return;
+    if (IsViewerActive() && m_thumbnailStrip.IsMouseOver(m_mouseX, m_mouseY) && m_thumbnailStrip.HandleKeyDown(vk, mods)) return;
     if (m_currentPage == Page::Viewer) {
-        if (m_thumbnailStrip.IsMouseOver(m_mouseX, m_mouseY) && m_thumbnailStrip.HandleKeyDown(vk, mods)) {
-            return;
-        }
         if (m_viewerPage.OnKeyDown(vk, mods)) {
             return;
         }
@@ -1424,101 +1383,143 @@ void App::OnFileDrop(std::vector<std::wstring> files) {
 }
 
 void App::OnMouseLeave() {
-    if (m_currentPage == Page::Viewer) {
+    m_mouseX = m_mouseY = -1;
+    m_dockHovered = -1;
+    if (IsViewerActive()) {
         m_thumbnailStrip.HandleMouseLeave();
     }
 }
 
-PointF App::GetRadialButtonCenter(int idx, float progress) {
-    float startAngle = 0.0f; // 0 degrees
-    float stepAngle = 3.14159265f / 6.0f; // 30 degrees (pi / 6)
-    float angle = startAngle + idx * stepAngle;
-    
-    // Distance from the hub center (50, 50)
-    float distance = 95.0f * progress;
-    
-    float x = 50.0f + distance * cos(angle);
-    float y = 50.0f + distance * sin(angle);
-    return PointF{ x, y };
+LRESULT App::GetDockAccessibleObject(WPARAM request, LPARAM objectId) {
+    if (static_cast<LONG>(objectId) != OBJID_CLIENT) return 0;
+    if (!m_dockAccessibleState) {
+        m_dockAccessibleState = std::make_shared<DockAccessibleState>();
+        auto& state = *m_dockAccessibleState;
+        state.hwnd = m_window.GetHwnd();
+        state.visible = [this] { return IsViewerActive() && m_dockOpacity > 0 && !m_optionsMenu.IsVisible() && !m_taggingModal.IsVisible(); };
+        state.disabled = [this](int index) { return index == 4 || ((index == 2 || index == 3) && !m_currentImage && !m_animatedImage); };
+        state.rect = [this](int index) { const auto r = index < 0 ? GetDockBounds() : GetDockButtonRect(index); return RECT{static_cast<LONG>(r.left),static_cast<LONG>(r.top),static_cast<LONG>(r.right),static_cast<LONG>(r.bottom)}; };
+        state.invoke = [this](int index) { InvokeDock(index); };
+    }
+    auto* accessible = new DockAccessibility(m_dockAccessibleState);
+    const auto result = LresultFromObject(IID_IAccessible, request, accessible);
+    accessible->Release();
+    return result;
 }
 
-void App::DrawRadialMenu() {
-    if (m_radialMenuProgress <= 0.0f) return;
+RectF App::GetDockBounds() const {
+    const float scale = m_window.GetDpi() / 96.0f;
+    const float width = m_renderer.GetTargetSize().ToFloat().width;
+    const int columns = std::clamp(static_cast<int>((width / scale - 76) / 46), 1, 6);
+    const float dockWidth = (12 + columns * 46 - 2) * scale;
+    return RectF::FromXYWH((width - dockWidth) / 2, 12 * scale, dockWidth, (12 + ((6 + columns - 1) / columns) * 46 - 2) * scale);
+}
 
-    PointF hubCenter(50.0f, 50.0f);
-    float progress = m_radialMenuProgress;
+RectF App::GetDockButtonRect(int index) const {
+    const float scale = m_window.GetDpi() / 96.0f;
+    const auto bounds = GetDockBounds();
+    const int columns = std::clamp(static_cast<int>((bounds.Width() / scale - 10) / 46), 1, 6);
+    return RectF::FromXYWH(bounds.left + (6 + index % columns * 46) * scale,
+        bounds.top + (6 + index / columns * 46) * scale, 44 * scale, 44 * scale);
+}
 
-    // Draw connection lines to each active button center
-    for (int i = 0; i < 4; ++i) {
-        PointF btnCenter = GetRadialButtonCenter(i, progress);
-        Color lineCol = (i == 1) ? Color::White(0.15f * progress) : (m_radialMenuHoveredIdx == i)
-            ? Color::FromHex(0x00ffff, 0.4f * progress) 
-            : Color::FromHex(0x00ff88, 0.2f * progress);
-        m_renderer.DrawLine(hubCenter, btnCenter, lineCol, 1.5f);
+int App::HitDock(float x, float y) const {
+    if (!IsViewerActive() || m_dockOpacity <= 0) return -1;
+    for (int index = 0; index < 6; ++index) if (GetDockButtonRect(index).Contains(x, y)) return index;
+    return -1;
+}
+
+RectF App::GetDockTooltipRect() const {
+    const float scale = m_window.GetDpi() / 96.0f;
+    const auto bounds = GetDockBounds();
+    const float width = std::max(0.0f, std::min(260 * scale, m_renderer.GetTargetSize().ToFloat().width - 24 * scale));
+    const float left = std::clamp(bounds.Center().x - width / 2, 0.0f, std::max(0.0f, m_renderer.GetTargetSize().ToFloat().width - width));
+    return RectF::FromXYWH(left, bounds.bottom + 6 * scale, width, 28 * scale);
+}
+
+bool App::IsDockHit(float x, float y) const {
+    return IsViewerActive() && m_dockOpacity > 0 && (GetDockBounds().Contains(x, y) || ((m_dockHovered >= 0 || m_dockFocus >= 0) && GetDockTooltipRect().Contains(x, y)));
+}
+
+void App::UpdateDock(double dt) {
+    if (!IsViewerActive()) {
+        m_dockOpacity = 0; m_dockRemaining = 0; m_dockHovered = m_dockFocus = -1;
+        return;
     }
+    const auto bounds = GetDockBounds();
+    const float scale = m_window.GetDpi() / 96.0f;
+    const bool trigger = m_mouseX >= bounds.left && m_mouseX <= bounds.right && m_mouseY >= 0 && m_mouseY <= 48 * scale;
+    const bool retained = trigger || IsDockHit(m_mouseX, m_mouseY) || m_dockFocus >= 0 || m_optionsMenu.IsVisible() || m_taggingModal.IsVisible() || m_dockPressed >= 0;
+    m_dockRemaining = retained ? 0.9 : std::max(0.0, m_dockRemaining - dt);
+    const float target = m_dockRemaining > 0 ? 1.0f : 0.0f;
+    const float previous = m_dockOpacity;
+    if (!m_settings.effects) m_dockOpacity = target;
+    else if (target > m_dockOpacity) m_dockOpacity = std::min(target, m_dockOpacity + static_cast<float>(dt / 0.18));
+    else m_dockOpacity = std::max(target, m_dockOpacity - static_cast<float>(dt / 0.18));
+    if (previous != m_dockOpacity) m_window.RequestRedraw();
+}
 
-    // Draw Hub
-    // Glowing ring
-    m_renderer.DrawEllipse(hubCenter, 40.0f, 40.0f, Color::FromHex(0x00ffff, 0.3f * progress), 2.0f);
-    // Inner fill
-    m_renderer.FillEllipse(hubCenter, 36.0f, 36.0f, Color::FromRGBA(15, 20, 25, static_cast<uint8_t>(220.0f * progress)));
-    // Border ring
-    m_renderer.DrawEllipse(hubCenter, 36.0f, 36.0f, Color::FromHex(0x00ff88, 0.6f * progress), 1.0f);
-    // Hub Label
-    m_renderer.DrawText(L"KV", RectF::FromXYWH(10.0f, 10.0f, 80.0f, 80.0f), Color::FromHex(0x00ffff, 0.8f * progress), 14.0f, TextAlign::Center, TextVAlign::Center);
+void App::InvokeDock(int index) {
+    if (index == 0) {
+        if (m_currentPage == Page::Waterfall) m_waterfallPage.CloseViewer();
+        else SetPage(Page::Waterfall);
+    } else if (index == 1) SetPage(Page::Board);
+    else if (index == 2 && (m_currentImage || m_animatedImage)) OnKeyDown('R', {});
+    else if (index == 3 && (m_currentImage || m_animatedImage)) OnKeyDown('T', {});
+    else if (index == 5) OnKeyDown('O', {});
+    m_window.RequestRedraw();
+}
 
-    // Draw Buttons
-    const wchar_t* labels[] = { L"VIS", L"—", L"WAT", L"BRD" };
+bool App::HandleDockKey(uint32_t vk, KeyModifiers mods) {
+    if (!IsViewerActive() || mods.ctrl || mods.alt) return false;
+    if (vk == VK_TAB) {
+        m_dockFocus = m_dockFocus < 0 ? (mods.shift ? 5 : 0) : (m_dockFocus + (mods.shift ? 5 : 1)) % 6;
+        m_dockRemaining = 0.9; m_dockOpacity = 1; m_window.RequestRedraw();
+        return true;
+    }
+    if (m_dockFocus < 0) return false;
+    if (vk == VK_ESCAPE) { m_dockFocus = -1; m_window.RequestRedraw(); return true; }
+    if (vk == VK_LEFT || vk == VK_RIGHT) {
+        m_dockFocus = (m_dockFocus + (vk == VK_LEFT ? 5 : 1)) % 6;
+        m_window.RequestRedraw(); return true;
+    }
+    if (vk == VK_RETURN || vk == VK_SPACE) { InvokeDock(m_dockFocus); return true; }
+    return false;
+}
 
-    for (int i = 0; i < 4; ++i) {
-        PointF btnCenter = GetRadialButtonCenter(i, progress);
-        const bool reserved = (i == 1);
-        bool hovered = !reserved && (m_radialMenuHoveredIdx == i);
-        const bool isActive = (i == 0 && m_currentPage == Page::Viewer)
-            || (i == 2 && m_currentPage == Page::Waterfall)
-            || (i == 3 && m_currentPage == Page::Board);
-
-        Color ringColor;
-        Color fillColor;
-        Color textColor;
-
-        if (reserved) {
-            ringColor = Color::White(0.18f * progress);
-            fillColor = Color::FromRGBA(30, 30, 30, static_cast<uint8_t>(180.0f * progress));
-            textColor = Color::White(0.3f * progress);
-        } else if (hovered) {
-            ringColor = Color::FromHex(0x00ffff, 0.9f * progress);
-            fillColor = Color::FromHex(0x00ffff, 0.25f * progress);
-            textColor = Color::White(0.95f * progress);
-        } else if (isActive) {
-            ringColor = Color::FromHex(0x00ff88, 0.7f * progress);
-            fillColor = Color::FromHex(0x00ff88, 0.15f * progress);
-            textColor = Color::FromHex(0x00ff88, 0.9f * progress);
-        } else {
-            ringColor = Color::White(0.3f * progress);
-            fillColor = Color::FromRGBA(10, 10, 10, static_cast<uint8_t>(180.0f * progress));
-            textColor = Color::White(0.6f * progress);
+void App::DrawDock() {
+    if (!IsViewerActive() || m_dockOpacity <= 0) return;
+    const float scale = m_window.GetDpi() / 96.0f;
+    const auto bounds = GetDockBounds();
+    const auto alpha = m_dockOpacity;
+    m_renderer.FillRoundedRect(bounds, 8 * scale, 8 * scale, Color::FromRGBA(26, 33, 36, static_cast<uint8_t>(235 * alpha)));
+    m_renderer.DrawRoundedRect(bounds, 8 * scale, 8 * scale, Color::White(0.12f * alpha), scale);
+    for (int index = 0; index < 6; ++index) {
+        const auto cell = GetDockButtonRect(index);
+        const bool disabled = index == 4 || ((index == 2 || index == 3) && !m_currentImage && !m_animatedImage);
+        const bool hovered = m_dockHovered == index || m_dockFocus == index;
+        const bool active = (index == 0 && m_currentPage == Page::Waterfall) || (index == 3 && m_taggingModal.IsVisible()) || (index == 5 && m_optionsMenu.IsVisible());
+        const auto color = disabled ? Color::White(0.36f * alpha) : (active || hovered) ? Color::FromHex(0x53deee, alpha) : Color::FromHex(0xe9edef, alpha);
+        if (!disabled && (hovered || active)) {
+            m_renderer.FillRoundedRect(cell, 7 * scale, 7 * scale, Color::FromHex(0x53deee, (active ? 0.13f : 0.10f) * alpha));
         }
-
-        // Fill background
-        m_renderer.FillEllipse(btnCenter, 26.0f, 26.0f, fillColor);
-        // Draw ring
-        m_renderer.DrawEllipse(btnCenter, 26.0f, 26.0f, ringColor, hovered ? 2.0f : 1.0f);
-        // Draw Text
-        RectF textRect = RectF::FromXYWH(btnCenter.x - 26.0f, btnCenter.y - 26.0f, 52.0f, 52.0f);
-        m_renderer.DrawText(labels[i], textRect, textColor, 11.0f, TextAlign::Center, TextVAlign::Center);
+        if (m_dockFocus == index) m_renderer.DrawRoundedRect(cell, 7 * scale, 7 * scale, color, scale);
+        const auto center = cell.Center();
+        m_dockIcons.Draw(m_renderer, index, RectF::FromXYWH(center.x - 14 * scale, center.y - 14 * scale, 28 * scale, 28 * scale), color);
+        if (index < 5) {
+            const auto next = GetDockButtonRect(index + 1);
+            if (next.top == cell.top) {
+                const float x = (cell.right + next.left) / 2;
+                m_renderer.DrawLine({x, cell.top + 4 * scale}, {x, cell.bottom - 4 * scale}, Color::White(0.10f * alpha), scale);
+            }
+        }
     }
-
-    // Draw Tooltip / Label
-    if (m_radialMenuHoveredIdx != -1) {
-        const wchar_t* modeNames[] = {
-            L"Viewer Mode (num1)",
-            L"Unavailable",
-            L"Waterfall Mode (num3)",
-            L"Board Mode (num4)"
-        };
-        RectF tooltipRect = RectF::FromXYWH(15.0f, 155.0f, 220.0f, 25.0f);
-        m_renderer.DrawText(modeNames[m_radialMenuHoveredIdx], tooltipRect, m_radialMenuHoveredIdx == 1 ? Color::White(0.4f * progress) : Color::FromHex(0x00ffff, 0.9f * progress), 12.0f, TextAlign::Left, TextVAlign::Center);
+    const int named = m_dockFocus >= 0 ? m_dockFocus : m_dockHovered;
+    if (named >= 0) {
+        const wchar_t* names[] = {L"Waterfall (NUM3)",L"Board (NUM4)",L"Rotate 90° (R)",L"Tags (T)",L"Sort & Filter — coming later",L"Settings (O)"};
+        const auto tooltip = GetDockTooltipRect();
+        m_renderer.FillRoundedRect(tooltip,4*scale,4*scale,Color::Black(0.95f*alpha));
+        m_renderer.DrawText(names[named],tooltip,Color::White(alpha),12*scale,TextAlign::Center,TextVAlign::Center);
     }
 }
 

@@ -11,8 +11,9 @@ namespace kv {
 
 // ─── Window Configuration ────────────────────────────────────────────────────
 
+// Nonpersisted creation parameters; Window owns the resulting HWND on its creating UI thread.
 struct WindowConfig {
-    std::wstring title       = L"LenteUV";
+    std::wstring title       = L"Image Viewer";
     int          width       = 1280;
     int          height      = 800;
     bool         frameless   = true;
@@ -56,6 +57,12 @@ struct WindowEvents {
     std::function<void(LPARAM)>                       onTrayIconEvent;
     std::function<void(uint16_t)>                     onCommand;
 
+    // UI: true keeps custom viewer/overlay surfaces in client input instead of native caption gestures.
+    std::function<bool(float, float)> onClientHitTest;
+
+    // UI: lets the owner publish its custom client accessibility object; zero falls back to Win32.
+    std::function<LRESULT(WPARAM, LPARAM)> onGetObject;
+
     // Close request: return true to allow close, false to cancel
     std::function<bool()>                             onCloseRequest;
 };
@@ -85,6 +92,8 @@ public:
     SizeU    GetClientSize() const;
     uint32_t GetDpi()        const { return m_dpi; }
     float    GetDpiScale()   const { return DpiScale(m_dpi); }
+    // UI: reports alpha composition for transparent exterior viewer gestures.
+    bool IsTranslucent() const { return m_translucent; }
     bool     IsFullscreen()  const { return m_fullscreen; }
     bool     IsFrameless()   const { return m_frameless; }
     bool     CheckMinimized()  const;
@@ -105,9 +114,11 @@ public:
 private:
     // ── Win32 Message Handling ─────────────────────────────────────────────
     static LRESULT CALLBACK StaticWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+    // UI: translates native messages into owner callbacks, including custom client accessibility.
     LRESULT HandleMessage(UINT msg, WPARAM wp, LPARAM lp);
 
     // ── Hit Testing (frameless window) ────────────────────────────────────
+    // UI: preserves resize borders, then offers custom surfaces before the native caption band.
     LRESULT HitTest(int x, int y) const;
 
     // ── Internal Helpers ──────────────────────────────────────────────────

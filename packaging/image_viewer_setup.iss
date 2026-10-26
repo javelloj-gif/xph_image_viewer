@@ -1,14 +1,14 @@
 ; ==============================================================================
-; lenteuv_setup.iss — Inno Setup Script para LenteUV Image Viewer
+; image_viewer_setup.iss — Inno Setup Script para Image Viewer
 ; ==============================================================================
 ; Autor: xPhang (fork de Sergkruma's image viewer por Sergei Krumas)
 ; Licencia: ver LICENSE (GNU GPL v3)
 ;
 ; Compilar mediante scripts/build_release.ps1 -SkipIcons -Format Installer
-; Resultado: dist/lenteuv_setup_<version>.exe
+; Resultado: dist/image_viewer_setup_<version>.exe
 ; ==============================================================================
 
-#define MyAppName        "LenteUV Image Viewer"
+#define MyAppName        "Image Viewer"
 #ifndef MyAppId
   #define MyAppId "{{D4A9F3B2-8C17-4E5F-A3D6-2B7E9C1F0A84}"
 #endif
@@ -17,16 +17,16 @@
 #endif
 #define MyAppPublisher   "xPhang"
 #define MyAppURL         "https://github.com/javelloj-gif/xph_image_viewer"
-#define MyAppExeName     "lenteuv.exe"
+#define MyAppExeName     "image_viewer.exe"
 #ifndef StageDir
   #error StageDir must be passed by the packaging script
 #endif
-#define MyAppIcon        StageDir + "\lenteuv.ico"
+#define MyAppIcon        StageDir + "\image_viewer.ico"
 #ifndef MyOutputDir
   #error MyOutputDir must be passed by the packaging script
 #endif
 
-; ─── Extensions soportadas por LenteUV ───────────────────────────────────────
+; ─── Extensions soportadas por Image Viewer ───────────────────────────────────────
 ; Se registran en SystemFileAssociations para no romper aplicaciones predeterminadas.
 #define SupportedExts "jpg,jpeg,jfif,png,apng,gif,webp,bmp,ico,tif,tiff,avif,heif,heic,jxr,wdp,hdp,svg,svgz"
 
@@ -52,7 +52,7 @@ SetupIconFile            = {#MyAppIcon}
 
 ; Archivos de salida
 OutputDir                = {#MyOutputDir}
-OutputBaseFilename       = lenteuv_setup_{#MyAppVersion}
+OutputBaseFilename       = image_viewer_setup_{#MyAppVersion}
 
 ; Compresión
 Compression              = lzma2/ultra64
@@ -76,7 +76,7 @@ UninstallDisplayName     = {#MyAppName}
 VersionInfoVersion       = {#MyAppVersion}
 VersionInfoCompany       = {#MyAppPublisher}
 VersionInfoDescription   = {#MyAppName} Installer
-VersionInfoCopyright     = Copyright (C) 2022-2026 xPhang. LenteUV is a fork of Sergkruma's image viewer by Sergei Krumas.
+VersionInfoCopyright     = Copyright (C) 2022-2026 xPhang. Image Viewer is a fork of Sergkruma's image viewer by Sergei Krumas.
 VersionInfoProductName   = {#MyAppName}
 VersionInfoProductVersion= {#MyAppVersion}
 
@@ -97,7 +97,7 @@ Name: "russian";   MessagesFile: "compiler:Languages\Russian.isl"
 ; Opciones que el usuario puede elegir durante la instalación
 Name: "desktopicon";    Description: "Crear acceso directo en el &Escritorio";     GroupDescription: "Accesos directos:"; Flags: unchecked
 Name: "contextmenu";    Description: "Integrar en el &menú contextual del Explorador de archivos"; GroupDescription: "Integración del sistema:"; Flags: checkedonce
-Name: "contextfolder";  Description: "Opción ""Abrir carpeta en LenteUV"" en carpetas";  GroupDescription: "Integración del sistema:"; Flags: checkedonce; Check: WizardIsTaskSelected('contextmenu')
+Name: "contextfolder";  Description: "Opción ""Abrir carpeta en Image Viewer"" en carpetas";  GroupDescription: "Integración del sistema:"; Flags: checkedonce; Check: WizardIsTaskSelected('contextmenu')
 
 [Files]
 ; Fresh staging includes EXE, VC runtime, translations and portable defaults.
@@ -113,11 +113,11 @@ Name: "{app}\user_data\tags"; Flags: uninsneveruninstall
 
 [Icons]
 ; Acceso directo en el Menú de Inicio
-Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\lenteuv.ico"; Comment: "Visualizador de imágenes LenteUV"
+Name: "{group}\{#MyAppName}";           Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\image_viewer.ico"; Comment: "Visualizador de imágenes Image Viewer"
 Name: "{group}\Desinstalar {#MyAppName}"; Filename: "{uninstallexe}";
 
 ; Acceso directo en el Escritorio (opcional, según tarea seleccionada)
-Name: "{autodesktop}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\lenteuv.ico"; Tasks: desktopicon; Comment: "Visualizador de imágenes LenteUV"
+Name: "{autodesktop}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\image_viewer.ico"; Tasks: desktopicon; Comment: "Visualizador de imágenes Image Viewer"
 
 [Registry]
 ; ==============================================================================
@@ -127,101 +127,101 @@ Name: "{autodesktop}\{#MyAppName}";     Filename: "{app}\{#MyAppExeName}"; IconF
 ; ==============================================================================
 
 ; .jpg / .jpeg
-Root: HKCR; Subkey: "SystemFileAssociations\.jpg\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.jpg\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.jpg\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.jpg\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.jpg\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.jpeg\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.jpeg\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.jpeg\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.jpeg\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.jpeg\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.jfif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.jfif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.jfif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.jfif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.jfif\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .png / .apng
-Root: HKCR; Subkey: "SystemFileAssociations\.png\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.png\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.png\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.png\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.png\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.apng\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.apng\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.apng\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.apng\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.apng\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .gif
-Root: HKCR; Subkey: "SystemFileAssociations\.gif\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.gif\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.gif\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.gif\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.gif\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .webp
-Root: HKCR; Subkey: "SystemFileAssociations\.webp\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.webp\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.webp\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.webp\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.webp\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .bmp
-Root: HKCR; Subkey: "SystemFileAssociations\.bmp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.bmp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.bmp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.bmp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.bmp\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .ico
-Root: HKCR; Subkey: "SystemFileAssociations\.ico\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.ico\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.ico\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.ico\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.ico\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .tif / .tiff
-Root: HKCR; Subkey: "SystemFileAssociations\.tif\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.tif\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.tif\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.tif\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.tif\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.tiff\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.tiff\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.tiff\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.tiff\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.tiff\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .avif / .heif / .heic
-Root: HKCR; Subkey: "SystemFileAssociations\.avif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.avif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.avif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.avif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.avif\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.heif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.heif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.heif\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.heif\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.heif\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.heic\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.heic\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.heic\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.heic\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.heic\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .jxr / .wdp / .hdp (JPEG XR)
-Root: HKCR; Subkey: "SystemFileAssociations\.jxr\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.jxr\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.jxr\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.jxr\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.jxr\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.wdp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.wdp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.wdp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.wdp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.wdp\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.hdp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.hdp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.hdp\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.hdp\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.hdp\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; .svg / .svgz
-Root: HKCR; Subkey: "SystemFileAssociations\.svg\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.svg\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.svg\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.svg\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.svg\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
-Root: HKCR; Subkey: "SystemFileAssociations\.svgz\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con LenteUV";                Tasks: contextmenu; Flags: uninsdeletekey
-Root: HKCR; Subkey: "SystemFileAssociations\.svgz\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";     Tasks: contextmenu
+Root: HKCR; Subkey: "SystemFileAssociations\.svgz\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir con Image Viewer";                Tasks: contextmenu; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.svgz\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";     Tasks: contextmenu
 Root: HKCR; Subkey: "SystemFileAssociations\.svgz\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Tasks: contextmenu
 
 ; ==============================================================================
 ; MENÚ CONTEXTUAL — Directorios (clic derecho sobre una carpeta)
 ; ==============================================================================
-Root: HKCR; Subkey: "Directory\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir carpeta en LenteUV";              Tasks: contextfolder; Flags: uninsdeletekey
-Root: HKCR; Subkey: "Directory\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";           Tasks: contextfolder
+Root: HKCR; Subkey: "Directory\shell\LenteUV";          ValueType: string; ValueName: ""; ValueData: "Abrir carpeta en Image Viewer";              Tasks: contextfolder; Flags: uninsdeletekey
+Root: HKCR; Subkey: "Directory\shell\LenteUV";          ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";           Tasks: contextfolder
 Root: HKCR; Subkey: "Directory\shell\LenteUV\command";  ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1""";      Tasks: contextfolder
 
 ; Fondo de carpeta (clic derecho sobre el fondo de una ventana del Explorador)
-Root: HKCR; Subkey: "Directory\Background\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir aquí con LenteUV";              Tasks: contextfolder; Flags: uninsdeletekey
-Root: HKCR; Subkey: "Directory\Background\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\lenteuv.ico"",0";         Tasks: contextfolder
+Root: HKCR; Subkey: "Directory\Background\shell\LenteUV";         ValueType: string; ValueName: ""; ValueData: "Abrir aquí con Image Viewer";              Tasks: contextfolder; Flags: uninsdeletekey
+Root: HKCR; Subkey: "Directory\Background\shell\LenteUV";         ValueType: string; ValueName: "Icon"; ValueData: """{app}\image_viewer.ico"",0";         Tasks: contextfolder
 Root: HKCR; Subkey: "Directory\Background\shell\LenteUV\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%V""";     Tasks: contextfolder
 
 [Run]
@@ -232,7 +232,7 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Iniciar {#MyAppName}"; Flags: n
 ; Eliminar datos del usuario creados en runtime (sesión, favoritos, caché)
 ; Opcional: comentar si se quiere preservar los datos del usuario al desinstalar
 ; Type: filesandordirs; Name: "{userappdata}\LenteUV"
-; (LenteUV guarda user_data/ junto al exe — se elimina automáticamente con los archivos)
+; (Image Viewer guarda user_data/ junto al exe — se elimina automáticamente con los archivos)
 
 ; Eliminar el directorio de instalación si quedó vacío
 Type: dirifempty; Name: "{app}"

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: FolderDataManager
-// Description: Shared folder navigation and persistence for LenteUV's pages.
+// Description: Shared folder navigation and persistence for Image Viewer's pages.
 // Responsibility: Own folder/preview state, selection, session, favorites and history.
 // ============================================================================
 #pragma once

@@ -1,5 +1,30 @@
 # Hoja de ruta
 
+## Lote de producto acordado — 2026-10-25
+
+El mapeo 015–022 sustituye la indicación histórica de elegir el próximo cambio.
+La base 001–014 sigue cerrada; PERF-003-FOLLOWUP e IPC-003-CONCURRENT-01
+conservan seguimiento independiente. No iniciar otra campaña de 003 por inercia.
+Acuerdos y validación: [mapa del lote](changes/product-batch-20261025.md).
+
+| ID | Clasificación y tareas originales | Aceptación principal | Dependencias / estado |
+| --- | --- | --- | --- |
+| 015 | [Preparación: inventario y limpieza](changes/015-preparacion-limpieza/result.md) | Retirar regenerables identificados; preservar datos y dos últimas entregas completas | Completada: 361 archivos / 1,53 GiB; excepciones documentadas |
+| 016 | [Diseño: tareas 3 y 6](changes/016-propuestas-visuales/result.md) | Dock compacto, Outline, barra centrada, activa 117 DIP (+30 %), borde cian sin rótulo | Completado y elegido por el propietario el 2026-10-26; sin implementación C++ |
+| 017 | [Simplificación funcional: tareas 1 y 2](changes/017-simplificacion-funcional/plan.md) | Zoom animado inicial; retirar opciones/features indicadas; doble clic permanente | Completado en alcance: Release/CTest 9/9 y recorridos afectados. Repetición solicitada con recursos liberados solapa rango histórico, mediana aún mayor; comparabilidad limitada; [evidencia](changes/017-simplificacion-funcional/result.md). Base sin volver a ejecutar/compilar |
+| 018 | [Tira y metadatos: tareas 4 y 6](changes/018-tira-metadatos/plan.md) | Base inicial 44/activa 57,2 tras ajuste del propietario; borde cian sin rótulo; barra centrada y multiselección independiente | Implementado sobre 2d19d3d; 9/9 iniciales con 90/117; ajuste 44/57,2: Release y 3/3 suites afectadas, sin nuevas medidas de rendimiento; [evidencia y límites](changes/018-tira-metadatos/result.md). Sin commit; ajuste visual de fuente 13/gap 3 comprobado, empaquetado y aprobado junto con 020 |
+| 019 | [Composición compartida: tarea 7](changes/019-composicion-compartida/result.md) | Visor completo en Waterfall, incluida tira; volver al mismo scroll sin duplicar loader ni estado | Implementado local; pruebas y recorridos acotados registrados |
+| 020 | [Navegación superior: tarea 3](changes/020-navegacion-superior/result.md) | Dock Outline detallado centrado arriba; retirar radial; Viewer contextual | Corrección visual aprobada expresamente por el propietario el 2026-10-26: Release/CTest 9/9, 12 frames WARP y recorrido nativo; fuente 13 original/gap 3 DIP; ZIP e instalador actualizados; sin commit ni nuevas medidas de rendimiento |
+| 021 | [Gestos: tareas 5 y 8](changes/021-gestos/result.md) | Fondo exterior compacta Viewer; hover Waterfall +66,7 | Implementado local; comprobación de franja compacta retomada con la corrección de 020; límites en resultados |
+| 022 | [Neutralización de marca](changes/022-neutralizacion-marca/result.md) | Placeholder Image Viewer; código, recursos y empaquetado neutrales con excepciones de compatibilidad | Implementado local, contratos conservados e inventariados; candidato visual vigente y paquetes en 020; no instalación real ni aceptación universal declaradas |
+
+Orden acordado: 015, propuestas y elección en 016, luego planes independientes de
+017–022 según dependencias. No implementar una variante por defecto ni presentar
+estos criterios como comportamiento actual. Cada cambio funcional tendrá spec,
+plan y result propios al desarrollarse.
+
+## Base histórica aceptada
+
 **Estado vigente, 2026-10-24:** 003 cerrada y aceptada por el propietario, junto
 con los cambios anteriores. Base lista para nuevas modificaciones funcionales.
 [Cierre, portable final y límites aceptados](changes/003-diagnostico-rendimiento/closure.md).
@@ -125,3 +150,10 @@ No se atribuye al candidato nuevo la aceptación funcional histórica de la base
 [Continuidad histórica 014](changes/014-cancelacion-ar005/resume.md): la base y AR-005
 permanecen cerrados; no iniciar otra campaña general.
 No publicar datos, build, dist ni estado de herramientas.
+
+Actualización de cierre de sesión, 2026-10-26: el propietario autoriza el commit
+del trabajo aprobado y su documentación, incluidos los archivos preservados de
+015/016. Este registro sustituye las menciones previas a cambios locales pendientes
+de commit. Se conserva la evidencia acotada de 018–022; no se realizan nuevas
+mediciones durante el cierre. Próxima etapa acordada: revisar picos de uso de GPU,
+todavía sin reproducción, medición ni diagnóstico en esta sesión.

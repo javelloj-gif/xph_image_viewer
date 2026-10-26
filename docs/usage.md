@@ -7,7 +7,7 @@ handlers globales.
 
 ## Abrir imágenes y cambiar de modo
 
-Ejecuta `lenteuv.exe` con la ruta de un archivo o directorio, o arrástralo a la ventana.
+Ejecuta `image_viewer.exe` con la ruta de un archivo o directorio, o arrástralo a la ventana.
 Las carpetas visitadas se guardan en la sesión. La configuración de instancia única
 envía aperturas externas al proceso activo; `--multiple` o `--lite` la omiten.
 
@@ -18,6 +18,15 @@ La tira y Cascada reutilizan automáticamente una caché de miniaturas bajo
 `user_data/cache/thumbnails-v1`, sin opciones adicionales ni cambios de calidad.
 La primera visita todavía necesita generar las miniaturas desde las fotografías.
 
+Desde 018, la tira del visor usa 44 DIP si no hay tamaño guardado. La imagen abierta
+aparece un 30 % mayor (57,2 DIP con base 44), con borde cian; hover y selección múltiple
+son independientes. La selección lleva un check; la separación es de 3 DIP. El nombre/dimensiones/zoom se
+muestran en una barra sobre la tira con la fuente original de 13 unidades cliente. Los nombres largos se truncan; al pasar el
+puntero se muestra el nombre completo y la rueda lo desplaza si el tooltip no cabe.
+La barra y tira permanecen estables mientras se consultan; se ocultan después de
+salir de sus controles. M conserva el control de la información. En Waterfall se
+comparte la misma composición de imagen, tira y metadatos desde 019.
+
 | Entrada | Resultado cuando no la consume un overlay/modo |
 | --- | --- |
 | NUM1 | Ir al visor principal |
@@ -26,14 +35,21 @@ La primera visita todavía necesita generar las miniaturas desde las fotografía
 | NUM4 o 4 | Tablero; al entrar se incorpora la imagen activa si no está ya |
 | O o tecla de tilde | Abrir opciones |
 | F11 o F | Alternar fullscreen/ventana |
-| Doble clic izquierdo | Alternar fullscreen en Viewer y su modal en Waterfall; controles y overlays tienen precedencia |
+| Doble clic izquierdo | Alternar fullscreen en la imagen de Viewer y su modal en Waterfall; controles/overlays preceden y el fondo transparente compacto queda excluido |
 | Escape | Depende del contexto: cierra overlay, deselecciona en Board o sale globalmente |
 | T, también Ctrl+T | Etiquetas/metadatos de la imagen objetivo o selección de Board |
 | Supr | Papelera para imágenes en los modos que lo ofrecen; en Board elimina ítems del lienzo |
 
-El menú radial aparece en la esquina superior izquierda; clic derecho abre el menú
-del modo. La posición `—` permanece gris e inactiva y muestra `Unavailable`. La opción de cierre a bandeja puede ocultar la ventana en vez de terminar
-el proceso. Usa la salida de su menú para asegurar cierre completo.
+Viewer y el modal de Waterfall ofrecen un dock compacto Outline centrado
+en la parte superior. Acerca el puntero a la franja superior (48 DIP) o pulsa Tab.
+Incluye Waterfall, Board, Rotate 90°, Tags, Sort & Filter (futuro, deshabilitado)
+y Settings; muestra nombres al pasar el puntero o dar foco. Tab/Shift+Tab y flechas
+recorren acciones; Enter/Espacio activan y Escape abandona el foco del dock.
+Permanece con hover/foco/overlay y se oculta tras 900 ms fuera, con fade de 180 ms
+si effects está activo. No hay dock en la cuadrícula ni en Board; sus menús
+contextuales ofrecen Viewer, también disponible con NUM1. El radial fue retirado.
+La opción de cierre a bandeja puede ocultar la ventana; usa la salida de su menú
+para asegurar cierre completo.
 
 ## Visor
 
@@ -44,6 +60,7 @@ el proceso. Usa la salida de su menú para asegurar cierre completo.
 - Arrastre izquierdo panea en fullscreen y mueve la ventana en compacto según los cambios previos conservados.
 - A/D desplazan; `0` o NUM0 restablecen vista. R rota 90°, Shift+R invierte el sentido.
 - Espacio pausa/reanuda animación. G alterna tercios, P interpolación pixelada, M información. C/I ya no tienen acción exclusiva en el visor.
+- En Viewer transparente fullscreen, el primer clic simple exterior a los límites transformados de la imagen vuelve a compacto. No se reenvía a otra aplicación; otro clic fuera de la ventana resultante lo recibe Windows normalmente. El fondo compacto no vuelve a fullscreen; la transparencia dentro del bitmap sigue contando como imagen. Controles, overlays, modificadores y gestos activos tienen precedencia.
 - PageUp/PageDown cambian opacidad. Acerca el puntero al borde inferior para la tira de miniaturas.
 
 El modo compacto usa la imagen global para calcular tamaño y contiene un mínimo
@@ -53,8 +70,11 @@ puede depender de la última imagen abierta.
 ## Cascada
 
 En Waterfall, scroll recorre las columnas y el clic
-abre el visor modal; hacer clic fuera regresa a la cuadrícula. El modal reutiliza el
-visor dentro de la misma ventana, sin crear otro proceso.
+abre el visor modal completo, incluida tira y metadatos. Escape o un clic exterior
+libre regresan a la misma carpeta y scroll. Tira, dock y overlays consumen primero
+sus entradas, sin cerrar el modal al utilizarlos. Reutiliza imagen, estado y loader
+dentro de la misma ventana. El hover aumenta el ancho unos 66,7 píxeles cliente,
+con centro y proporción conservados.
 
 ## Tablero y metadatos
 

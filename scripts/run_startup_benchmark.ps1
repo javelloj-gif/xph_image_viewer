@@ -58,9 +58,9 @@ if (!$run.StartsWith("$project\build\", [StringComparison]::OrdinalIgnoreCase)) 
 New-Item -ItemType Directory -Path $run | Out-Null
 $stage = Join-Path $run 'app'
 New-Item -ItemType Directory -Path "$stage\user_data" | Out-Null
-Copy-Item -LiteralPath $exe -Destination "$stage\lenteuv.exe"
+Copy-Item -LiteralPath $exe -Destination "$stage\image_viewer.exe"
 $runtime = @(Get-ChildItem -LiteralPath (Split-Path $exe) -Filter *.dll -File)
-if (!$runtime.Count) { $runtime = @(Get-ChildItem -LiteralPath "$project\dist\lenteuv_qa_002_20261023_sin_library" -Filter *.dll -File) }
+if (!$runtime.Count) { $runtime = @(Get-ChildItem -LiteralPath "$project\dist\lenteuv_003_final_20261024" -Filter *.dll -File) }
 $runtime | Copy-Item -Destination $stage
 Copy-Item -LiteralPath "$project\locales" -Destination "$stage\locales" -Recurse
 $settings = Get-Content -LiteralPath "$project\packaging\default-settings.json" -Raw | ConvertFrom-Json
@@ -96,20 +96,24 @@ foreach ($position in $positions) {
     for ($iteration=-$Warmups; $iteration -lt $Repetitions; ++$iteration) {
         # Empty mode uses a unique disposable cache namespace, never deletes a user's cache.
         $trace = Join-Path $run "trace-$position-$iteration.csv"
-        $start = [Diagnostics.ProcessStartInfo]::new("$stage\lenteuv.exe")
+        $start = [Diagnostics.ProcessStartInfo]::new("$stage\image_viewer.exe")
         $start.UseShellExecute = $false
         $start.WorkingDirectory = $stage
         $start.ArgumentList.Add('--multiple')
         $start.ArgumentList.Add($file.FullName)
-        $start.Environment['LENTEUV_PERF_OUTPUT'] = $trace
-        $start.Environment['LENTEUV_PERF_EXIT_MS'] = if ($Resources) { '15000' } else { '10000' }
-        $start.Environment['LENTEUV_PERF_READY_EXIT_MS'] = if ($Resources) { '0' } else { '250' }
+        $start.Environment['IMAGE_VIEWER_PERF_OUTPUT'] = $trace
+        $start.Environment['IMAGE_VIEWER_PERF_EXIT_MS'] = if ($Resources) { '15000' } else { '10000' }
+        $start.Environment['IMAGE_VIEWER_PERF_READY_EXIT_MS'] = if ($Resources) { '0' } else { '250' }
         if ($iteration -lt 0 -and !$Resources -and $Scenario -eq 'viewer') {
-            $start.Environment['LENTEUV_PERF_EXIT_MS']='3000'
-            $start.Environment['LENTEUV_PERF_READY_EXIT_MS']='0'
+            $start.Environment['IMAGE_VIEWER_PERF_EXIT_MS']='3000'
+            $start.Environment['IMAGE_VIEWER_PERF_READY_EXIT_MS']='0'
         }
-        $start.Environment['LENTEUV_PERF_SCENARIO'] = $Scenario
-        $start.Environment['LENTEUV_CACHE_NAMESPACE'] = if ($Cache -eq 'empty') { "empty-$position-$iteration" } else { 'warm' }
+        $start.Environment['IMAGE_VIEWER_PERF_SCENARIO'] = $Scenario
+        $start.Environment['IMAGE_VIEWER_CACHE_NAMESPACE'] = if ($Cache -eq 'empty') { "empty-$position-$iteration" } else { 'warm' }
+        # Compatibility for explicitly supplied historical executables; neutral names remain primary.
+        foreach ($diagnosticName in @($start.Environment.Keys | Where-Object { $_ -like 'IMAGE_VIEWER_*' })) {
+            $start.Environment[$diagnosticName.Replace('IMAGE_VIEWER_', 'LENTEUV_')] = $start.Environment[$diagnosticName]
+        }
         $syncBefore=[Diagnostics.Stopwatch]::GetTimestamp()
         $syncFileTime=0L
         [StartupBenchmarkNative]::GetSystemTimePreciseAsFileTime([ref]$syncFileTime)
@@ -185,7 +189,7 @@ $summary = foreach ($group in ($rows | Where-Object { !$_.Warmup } | Group-Objec
     [pscustomobject]@{ Position=$group.Name; N=$values.Count; MedianMs=$median; P95Ms=$values[[int][Math]::Ceiling($values.Count*0.95)-1]; MaxMs=$values[-1] }
 }
 $manifest = [pscustomobject]@{
-    ExecutableHash=(Get-FileHash -LiteralPath "$stage\lenteuv.exe").Hash
+    ExecutableHash=(Get-FileHash -LiteralPath "$stage\image_viewer.exe").Hash
     Revision=$SourceRevision; RepositoryHead=(& git -C $project rev-parse HEAD); Dirty=(@(& git -C $project status --porcelain).Count -gt 0)
     Windows=[Environment]::OSVersion.VersionString; LogicalProcessors=[Environment]::ProcessorCount
     Fullscreen=$settings.settings.show_fullscreen[0]

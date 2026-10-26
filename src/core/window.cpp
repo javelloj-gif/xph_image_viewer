@@ -240,6 +240,8 @@ LRESULT Window::HitTest(int x, int y) const {
         return HTCLIENT;
     }
 
+    if (events.onClientHitTest && events.onClientHitTest(static_cast<float>(localX), static_cast<float>(localY))) return HTCLIENT;
+
     int titleBarHeight = DpiScaleInt(32, m_dpi);
     if ((y - rc.top) < titleBarHeight) {
         return HTCAPTION;
@@ -250,6 +252,10 @@ LRESULT Window::HitTest(int x, int y) const {
 
 LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+
+    case WM_GETOBJECT:
+        if (events.onGetObject) { const auto result = events.onGetObject(wp, lp); if (result) return result; }
+        break;
 
     case WM_PAINT: {
         ValidateRect(m_hwnd, nullptr);

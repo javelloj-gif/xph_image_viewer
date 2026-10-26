@@ -18,7 +18,7 @@ Push-Location $ipcRunDirectory
 try {
     if ($Startup) {
         # Explicit native-device smoke only; default CTest remains WARP/hidden and requires no hardware GPU.
-        $startupEndpoint = '\\.\pipe\lenteuv-startup-' + [guid]::NewGuid().ToString('N')
+        $startupEndpoint = '\\.\pipe\image-viewer-startup-' + [guid]::NewGuid().ToString('N')
         & (Join-Path $ipcRunDirectory 'ipc_diagnostic_tests.exe') --ipc-startup $startupEndpoint (Join-Path $ipcRunDirectory 'test/seed.jpg')
     } else {
         & (Join-Path $ipcRunDirectory 'ipc_diagnostic_tests.exe') --ipc-diagnostics

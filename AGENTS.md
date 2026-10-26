@@ -1,4 +1,4 @@
-# LenteUV: entrada para agentes
+# Image Viewer (placeholder): entrada para agentes
 
 Visor de imágenes nativo de Windows en C++20. Tres modos: Viewer, Waterfall
 y Board. Conserva la atribución a Sergei Krumas y xPhang y la licencia

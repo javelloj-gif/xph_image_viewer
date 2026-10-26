@@ -235,7 +235,7 @@ public:
             "stale pre-deletion snapshot cannot resurrect a removed image");
         auto& strip=app.m_thumbnailStrip;
         std::vector<std::wstring> paths; for(int i=0;i<7749;++i) paths.push_back(std::to_wstring(i));
-        strip.SetFileList(paths); strip.m_scrollX=0; strip.m_targetScrollX=-50.0f*7000;
+        strip.SetFileList(paths); strip.m_scrollX=0; strip.m_targetScrollX=strip.GetCenteredScroll(7000);
         const auto destinationRange=strip.GetVisibleRange(800,strip.m_targetScrollX);
         Check(destinationRange.first>6900 && destinationRange.second<7100,"target viewport independent of animated current position");
         strip.m_scrollX=-332349.875f; strip.m_targetScrollX=-332350.0f;

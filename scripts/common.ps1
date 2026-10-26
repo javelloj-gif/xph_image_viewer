@@ -32,7 +32,7 @@ function Get-CMake {
 
 function Get-ProjectVersion {
     $contents = Get-Content -LiteralPath (Join-Path $ProjectRoot 'CMakeLists.txt') -Raw
-    $match = [regex]::Match($contents, '(?s)project\(\s*lenteuv\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)')
+    $match = [regex]::Match($contents, '(?s)project\(\s*image_viewer\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)')
     if (!$match.Success) { throw 'Cannot read project version from CMakeLists.txt.' }
     return $match.Groups[1].Value
 }

@@ -15,13 +15,22 @@
 
 namespace kv {
 
+void ThumbnailStrip::CancelPointerGesture() {
+    m_draggingThumbnails = m_groupSelecting = m_hasDragged = false;
+    m_insertIndex = m_hoveredIndex = -1;
+    m_mouseMoveTimer = 0;
+    m_opacity = m_targetOpacity = 0;
+}
+
 void ThumbnailStrip::Initialize(App* app) {
     m_app = app;
+    m_layoutWidth = GetThumbnailWidth();
     m_scrollX = 0.0f;
     m_targetScrollX = 0.0f;
     m_opacity = 0.0f;
     m_targetOpacity = 0.0f;
     m_selected.clear();
+    m_activeIndex = -1;
     m_mouseMoveTimer = 0.0;
 }
 
@@ -66,6 +75,8 @@ void ThumbnailStrip::SetFileList(const std::vector<std::wstring>& fileList) {
 
     m_thumbnails = std::move(newThumbnails);
     m_selected.assign(m_thumbnails.size(), false);
+    m_activeIndex = -1;
+    RefreshActiveIndex(m_app ? m_app->m_currentIndex : -1);
 }
 
 void ThumbnailStrip::CancelPendingLoads() {
@@ -77,15 +88,13 @@ void ThumbnailStrip::CancelPendingLoads() {
 }
 
 void ThumbnailStrip::SyncSelection(int currentIndex) {
+    RefreshActiveIndex(currentIndex);
     if (m_draggingThumbnails || m_groupSelecting) return;
-
     for (size_t i = 0; i < m_selected.size(); ++i) {
         m_selected[i] = (static_cast<int>(i) == currentIndex);
     }
-
-    // Scroll to center the active item
     if (currentIndex >= 0 && currentIndex < static_cast<int>(m_thumbnails.size())) {
-        m_targetScrollX = -GetThumbnailWidth() * currentIndex;
+        m_targetScrollX = GetCenteredScroll(currentIndex);
     }
 }
 
@@ -97,6 +106,14 @@ bool ThumbnailStrip::HasActiveAnimations() const {
 
 void ThumbnailStrip::Update(double dt) {
     if (m_thumbnails.empty()) return;
+    const int previousActive = m_activeIndex;
+    RefreshActiveIndex(m_app->m_currentIndex);
+    if ((m_activeIndex != previousActive || m_layoutWidth != GetThumbnailWidth()) && m_activeIndex >= 0 && !m_draggingThumbnails && !m_groupSelecting) {
+        m_targetScrollX = GetCenteredScroll(m_activeIndex);
+    }
+    m_layoutWidth = GetThumbnailWidth();
+    const auto [minScroll, maxScroll] = GetScrollLimits();
+    m_targetScrollX = std::clamp(m_targetScrollX, minScroll, maxScroll);
 
     // Update mouse move timer
     if (m_mouseMoveTimer > 0.0) {
@@ -118,7 +135,7 @@ void ThumbnailStrip::Update(double dt) {
     if (GetCursorPos(&pt) && ScreenToClient(m_app->m_window.GetHwnd(), &pt)) {
         auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
         if (pt.x >= 0 && pt.x <= targetSize.width && pt.y >= 0 && pt.y <= targetSize.height) {
-            if (pt.y >= targetSize.height - HEIGHT) {
+            if (pt.y >= GetBounds().top || m_app->m_viewerPage.IsInfoBarHit(static_cast<float>(pt.x), static_cast<float>(pt.y))) {
                 m_targetOpacity = 1.0f;
                 m_mouseMoveTimer = 2.0; // Keep active while hovering
             } else if (m_mouseMoveTimer > 0.0) {
@@ -210,19 +227,88 @@ void ThumbnailStrip::CompleteThumbnail(const ImageRequestToken& request, std::sh
     m_app->m_window.RequestRedraw();
 }
 
+float ThumbnailStrip::GetUiScale() const {
+    return m_app ? m_app->m_window.GetDpiScale() : 1.0f;
+}
+
 float ThumbnailStrip::GetThumbnailWidth() const {
-    if (m_app) {
-        return m_app->m_settings.thumbnail_width;
+    const float width = m_app ? m_app->m_settings.thumbnail_width : THUMBNAIL_WIDTH;
+    return (std::isfinite(width) && width > 0 ? width : THUMBNAIL_WIDTH) * GetUiScale();
+}
+
+void ThumbnailStrip::RefreshActiveIndex(int preferredIndex) {
+    const std::wstring* path = nullptr;
+    if (m_app && m_app->m_animatedImage) path = &m_app->m_animatedImage->filePath;
+    else if (m_app && m_app->m_currentImage) path = &m_app->m_currentImage->filePath;
+    const auto matches = [&](int index) {
+        return path && index >= 0 && index < static_cast<int>(m_thumbnails.size()) && m_thumbnails[index].path == *path;
+    };
+    if (matches(preferredIndex)) { m_activeIndex = preferredIndex; return; }
+    if (matches(m_activeIndex)) return;
+    m_activeIndex = -1;
+    if (path) {
+        auto found = std::find_if(m_thumbnails.begin(), m_thumbnails.end(), [&](const ThumbnailInfo& item) { return item.path == *path; });
+        if (found != m_thumbnails.end()) m_activeIndex = static_cast<int>(found - m_thumbnails.begin());
     }
-    return THUMBNAIL_WIDTH;
 }
 
 RectF ThumbnailStrip::GetThumbnailRect(int index, float windowWidth, float windowHeight) const {
-    float tw = GetThumbnailWidth();
-    float baseX = (windowWidth - tw) / 2.0f + m_scrollX;
-    float x = baseX + tw * index;
-    float y = windowHeight - HEIGHT + 30.0f;
-    return RectF::FromXYWH(x, y, tw, tw);
+    return GetThumbnailRect(index, windowWidth, windowHeight, m_scrollX);
+}
+
+RectF ThumbnailStrip::GetThumbnailRect(int index, float windowWidth, float windowHeight, float scrollX) const {
+    const float width = GetThumbnailWidth();
+    const float extra = (ACTIVE_SCALE - 1.0f) * width;
+    const float offset = (width + THUMBNAIL_GAP * GetUiScale()) * index + ((m_activeIndex >= 0 && index > m_activeIndex) ? extra : 0);
+    const float side = index == m_activeIndex ? ACTIVE_SCALE * width : width;
+    const float bottom = windowHeight - 20.0f * GetUiScale();
+    return RectF::FromXYWH((windowWidth - width) / 2 + scrollX + offset, bottom - side, side, side);
+}
+
+RectF ThumbnailStrip::GetBounds() const {
+    if (!m_app) return {};
+    const auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+    if (m_thumbnails.empty()) return RectF::FromXYWH(0, size.height, size.width, 0);
+    const float side = GetThumbnailWidth() * (m_activeIndex >= 0 ? ACTIVE_SCALE : 1.0f);
+    const float top = std::max(0.0f, size.height - side - 22.0f * GetUiScale());
+    return RectF(0, top, size.width, size.height);
+}
+
+float ThumbnailStrip::GetActiveCenter(float windowWidth) const {
+    return m_activeIndex >= 0 ? GetThumbnailRect(m_activeIndex, windowWidth, 0).Center().x : windowWidth / 2;
+}
+
+float ThumbnailStrip::GetCenteredScroll(int index) const {
+    const auto rect = GetThumbnailRect(index, 0, 0, 0);
+    return -rect.Center().x;
+}
+
+std::pair<float, float> ThumbnailStrip::GetScrollLimits() const {
+    return m_thumbnails.empty() ? std::pair{0.0f, 0.0f} :
+        std::pair{GetCenteredScroll(static_cast<int>(m_thumbnails.size()) - 1), GetCenteredScroll(0)};
+}
+
+int ThumbnailStrip::HitTest(float x, float y) const {
+    if (!GetBounds().Contains(x, y)) return -1;
+    const auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+    const auto [first, end] = GetVisibleRange(size.width);
+    size_t lo = first, hi = end;
+    while (lo < hi) {
+        const size_t mid = lo + (hi - lo) / 2;
+        if (GetThumbnailRect(static_cast<int>(mid), size.width, size.height).right < x) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < end && GetThumbnailRect(static_cast<int>(lo), size.width, size.height).Contains(x, y) ? static_cast<int>(lo) : -1;
+}
+
+int ThumbnailStrip::GetInsertionIndex(float x, float windowWidth) const {
+    size_t lo = 0, hi = m_thumbnails.size();
+    while (lo < hi) {
+        const size_t mid = lo + (hi - lo) / 2;
+        if (GetThumbnailRect(static_cast<int>(mid), windowWidth, 0).Center().x < x) lo = mid + 1;
+        else hi = mid;
+    }
+    return static_cast<int>(lo);
 }
 
 std::pair<size_t, size_t> ThumbnailStrip::GetVisibleRange(float windowWidth) const {
@@ -239,8 +325,7 @@ std::pair<size_t, size_t> ThumbnailStrip::GetVisibleRange(float windowWidth, flo
 
     // Use the actual float geometry at both inclusive edges, avoiding division/rounding drift.
     auto rectAt = [&](size_t index) {
-        const float base=(windowWidth-width)/2.0f+scrollX;
-        return RectF::FromXYWH(base+width*static_cast<int>(index),0,width,width);
+        return GetThumbnailRect(static_cast<int>(index), windowWidth, 0, scrollX);
     };
     size_t first = 0;
     size_t end = count;
@@ -279,23 +364,7 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     float windowWidth = targetSize.width;
     float windowHeight = targetSize.height;
 
-    // 2. Draw filename/metadata text
-    std::wstring labelText;
-    if (m_hoveredIndex >= 0 && m_hoveredIndex < static_cast<int>(m_thumbnails.size())) {
-        std::filesystem::path p(m_thumbnails[m_hoveredIndex].path);
-        labelText = p.filename().wstring();
-    } else if (m_app->m_currentIndex >= 0 && m_app->m_currentIndex < static_cast<int>(m_thumbnails.size())) {
-        std::filesystem::path p(m_thumbnails[m_app->m_currentIndex].path);
-        labelText = p.filename().wstring();
-    }
-
-    if (!labelText.empty()) {
-        RectF labelRect = RectF::FromXYWH(15, windowHeight - HEIGHT + 5, windowWidth - 30, 25);
-        renderer.DrawText(labelText, labelRect, Color::White(0.9f * m_opacity), 12.0f, TextAlign::Center, TextVAlign::Center);
-    }
-
-    // 3. Draw thumbnails with clipping (thumbnails must not spill out of the strip region)
-    renderer.PushClip(RectF::FromXYWH(0, windowHeight - HEIGHT + 30, windowWidth, HEIGHT - 30));
+    renderer.PushClip(GetBounds());
 
     const auto [first, end] = GetVisibleRange(windowWidth);
     m_app->m_stripReadyDrawnThisFrame=first<end && (std::abs(m_scrollX-m_targetScrollX)<0.1f || m_scrollStableFrames>=2) &&
@@ -307,12 +376,9 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
         bool isSelected = m_selected[i];
         bool isHovered = (static_cast<int>(i) == m_hoveredIndex);
 
+        const bool isActive = static_cast<int>(i) == m_activeIndex;
         RectF drawRect = rect;
-        if (isSelected) {
-            drawRect.top -= AUGMENTED_THUBNAIL_INCREMENT;
-        }
-
-        float thumbOpacity = (isHovered || isSelected) ? 1.0f : 0.5f;
+        float thumbOpacity = (isActive || isHovered || isSelected) ? 1.0f : 0.5f;
         thumbOpacity *= m_opacity;
 
         // Draw thumbnail bounding box placeholder
@@ -350,17 +416,24 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
             renderer.DrawText(L"?!", drawRect, Color::FromRGBA(200, 50, 50, static_cast<uint8_t>(200 * thumbOpacity)), 14.0f, TextAlign::Center, TextVAlign::Center);
         }
 
+        if (isActive) {
+            renderer.DrawRect(drawRect, Color::FromRGBA(0, 240, 255, static_cast<uint8_t>(255 * m_opacity)), 2.0f * GetUiScale());
+        }
         if (isSelected) {
-            renderer.DrawRect(drawRect, Color::FromRGBA(0, 180, 255, static_cast<uint8_t>(220 * m_opacity)), 2.0f);
+            const float scale = GetUiScale();
+            const auto badge = RectF::FromXYWH(rect.right - 18 * scale, rect.top + 3 * scale, 15 * scale, 15 * scale);
+            renderer.FillRoundedRect(badge, 3 * scale, 3 * scale, Color::Black(0.8f * m_opacity));
+            renderer.DrawLine({badge.left + 3 * scale, badge.top + 7 * scale}, {badge.left + 6 * scale, badge.top + 10 * scale}, Color::White(m_opacity), 2 * scale);
+            renderer.DrawLine({badge.left + 6 * scale, badge.top + 10 * scale}, {badge.right - 3 * scale, badge.top + 4 * scale}, Color::White(m_opacity), 2 * scale);
         }
     }
 
     // 4. Draw red insertion cursor indicator
     if (m_draggingThumbnails && m_insertIndex >= 0 && m_insertIndex <= static_cast<int>(m_thumbnails.size())) {
         float tw = GetThumbnailWidth();
-        float baseX = (windowWidth - tw) / 2.0f + m_scrollX;
-        float ix = baseX + tw * m_insertIndex;
-        float iy = windowHeight - HEIGHT + 30.0f;
+        const auto insertion = GetThumbnailRect(m_insertIndex, windowWidth, windowHeight);
+        float ix = insertion.left;
+        float iy = insertion.top;
         
         PointF pTop = { ix, iy };
         PointF pBottom = { ix, iy + tw };
@@ -382,16 +455,14 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
 }
 
 bool ThumbnailStrip::IsMouseOver(float x, float y) const {
-    if (m_thumbnails.empty() || m_opacity == 0.0f) return false;
-    auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    return y >= targetSize.height - HEIGHT && y <= targetSize.height;
+    return !m_thumbnails.empty() && m_opacity > 0 && GetBounds().Contains(x, y);
 }
 
 bool ThumbnailStrip::HandleMouseMove(float x, float y, KeyModifiers mods) {
     if (m_thumbnails.empty()) return false;
 
     auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    if (y >= targetSize.height - HEIGHT) {
+    if (GetBounds().Contains(x, y)) {
         m_mouseMoveTimer = 2.0;
         m_targetOpacity = 1.0f;
     }
@@ -404,32 +475,21 @@ bool ThumbnailStrip::HandleMouseMove(float x, float y, KeyModifiers mods) {
     float windowWidth = targetSize.width;
     float windowHeight = targetSize.height;
 
-    float tw = GetThumbnailWidth();
-    float baseX = (windowWidth - tw) / 2.0f + m_scrollX;
-    float relX = x - baseX;
- 
-    // Detect hovered thumbnail
-    m_hoveredIndex = -1;
-    float thumbYStartSelected = windowHeight - HEIGHT + 30.0f - AUGMENTED_THUBNAIL_INCREMENT;
-    float thumbYEnd = windowHeight - HEIGHT + 30.0f + tw;
- 
-    if (y >= thumbYStartSelected && y <= thumbYEnd) {
-        int clickedIndex = static_cast<int>(std::floor(relX / tw));
-        if (clickedIndex >= 0 && clickedIndex < static_cast<int>(m_thumbnails.size())) {
-            m_hoveredIndex = clickedIndex;
-        }
-    }
- 
+    m_hoveredIndex = HitTest(x, y);
+
     if (m_groupSelecting) {
         m_selectionRect.left = std::min(m_selectionStart.x, x);
         m_selectionRect.top = std::min(m_selectionStart.y, y);
         m_selectionRect.right = std::max(m_selectionStart.x, x);
         m_selectionRect.bottom = std::max(m_selectionStart.y, y);
  
-        // Select all thumbnails intersecting selection box
+        // Selection is limited to the same visible client region as pointer hits and drawing.
+        const auto bounds = GetBounds();
+        const auto visibleSelection = RectF(std::max(bounds.left, m_selectionRect.left), std::max(bounds.top, m_selectionRect.top),
+            std::min(bounds.right, m_selectionRect.right), std::min(bounds.bottom, m_selectionRect.bottom));
         for (size_t i = 0; i < m_thumbnails.size(); ++i) {
             RectF r = GetThumbnailRect(static_cast<int>(i), windowWidth, windowHeight);
-            m_selected[i] = m_selectionRect.Intersects(r);
+            m_selected[i] = visibleSelection.Width() > 0 && visibleSelection.Height() > 0 && visibleSelection.Intersects(r);
         }
         m_app->m_window.RequestRedraw();
         return true;
@@ -441,15 +501,14 @@ bool ThumbnailStrip::HandleMouseMove(float x, float y, KeyModifiers mods) {
         }
  
         if (m_hasDragged) {
-            m_insertIndex = static_cast<int>(std::round(relX / tw));
+            m_insertIndex = GetInsertionIndex(x, windowWidth);
             m_insertIndex = std::clamp(m_insertIndex, 0, static_cast<int>(m_thumbnails.size()));
             
             // Adjust scroll dynamically if dragging near edges
             if (x < 60.0f) {
-                m_targetScrollX = std::min(0.0f, m_targetScrollX + 5.0f);
+                m_targetScrollX = std::min(GetScrollLimits().second, m_targetScrollX + 5.0f);
             } else if (x > windowWidth - 60.0f) {
-                float maxScroll = -tw * (m_thumbnails.size() - 1);
-                m_targetScrollX = std::max(maxScroll, m_targetScrollX - 5.0f);
+                m_targetScrollX = std::max(GetScrollLimits().first, m_targetScrollX - 5.0f);
             }
         }
         m_app->m_window.RequestRedraw();
@@ -485,10 +544,7 @@ bool ThumbnailStrip::HandleMouseDown(MouseButton btn, float x, float y, KeyModif
             m_hasDragged = false;
             m_insertIndex = -1;
 
-            auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-            float tw = GetThumbnailWidth();
-            float baseX = (targetSize.width - tw) / 2.0f + m_scrollX;
-            int idx = static_cast<int>(std::floor((x - baseX) / tw));
+            int idx = HitTest(x, y);
             if (idx >= 0 && idx < static_cast<int>(m_thumbnails.size())) {
                 // If the clicked element is not selected yet, clear other selections
                 if (!m_selected[idx]) {
@@ -525,10 +581,7 @@ bool ThumbnailStrip::HandleMouseUp(MouseButton btn, float x, float y, KeyModifie
                 Rearrange(m_insertIndex);
             } else {
                 // Perform select/click navigation
-                auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-                float tw = GetThumbnailWidth();
-                float baseX = (targetSize.width - tw) / 2.0f + m_scrollX;
-                int idx = static_cast<int>(std::floor((x - baseX) / tw));
+                int idx = HitTest(x, y);
                 if (idx >= 0 && idx < static_cast<int>(m_thumbnails.size())) {
                     m_app->LoadImage(m_thumbnails[idx].path);
                 }
@@ -549,9 +602,9 @@ bool ThumbnailStrip::HandleMouseWheel(float delta, float x, float y, KeyModifier
     if (IsMouseOver(x, y)) {
         // Scroll the strip left or right
         float tw = GetThumbnailWidth();
-        float maxScroll = -tw * (m_thumbnails.size() - 1);
+        const auto [minScroll, maxScroll] = GetScrollLimits();
         m_targetScrollX += (delta > 0) ? tw * 2.0f : -tw * 2.0f;
-        m_targetScrollX = std::clamp(m_targetScrollX, maxScroll, 0.0f);
+        m_targetScrollX = std::clamp(m_targetScrollX, minScroll, maxScroll);
         m_app->m_window.RequestRedraw();
         return true;
     }
@@ -570,48 +623,25 @@ void ThumbnailStrip::HandleMouseLeave() {
 
 void ThumbnailStrip::Rearrange(int insertIndex) {
     if (insertIndex < 0 || insertIndex > static_cast<int>(m_thumbnails.size())) return;
-
-    // Collect all selected items' paths
-    std::vector<std::wstring> selectedPaths;
-    for (size_t i = 0; i < m_selected.size(); ++i) {
+    std::vector<size_t> selected, remaining;
+    for (size_t i = 0; i < m_thumbnails.size(); ++i) {
         if (m_selected[i]) {
-            selectedPaths.push_back(m_thumbnails[i].path);
-        }
+            selected.push_back(i);
+        } else remaining.push_back(i);
     }
-
-    if (selectedPaths.empty()) return;
-
-    // Separate selected paths from remaining paths
-    std::vector<std::wstring> remainingPaths;
-    remainingPaths.reserve(m_app->m_fileList.size() - selectedPaths.size());
-    for (const auto& path : m_app->m_fileList) {
-        if (std::find(selectedPaths.begin(), selectedPaths.end(), path) == selectedPaths.end()) {
-            remainingPaths.push_back(path);
-        }
+    if (selected.empty()) return;
+    const auto position = std::clamp(insertIndex, 0, static_cast<int>(remaining.size()));
+    remaining.insert(remaining.begin() + position, selected.begin(), selected.end());
+    std::vector<std::wstring> paths;
+    paths.reserve(remaining.size());
+    int active = -1;
+    for (size_t i = 0; i < remaining.size(); ++i) {
+        paths.push_back(m_thumbnails[remaining[i]].path);
+        if (static_cast<int>(remaining[i]) == m_activeIndex) active = static_cast<int>(i);
     }
-
-    // Build the new list by inserting selectedPaths at insertIndex
-    int clampInsertIndex = std::clamp(insertIndex, 0, static_cast<int>(remainingPaths.size()));
-    
-    std::vector<std::wstring> newFileList;
-    newFileList.reserve(m_app->m_fileList.size());
-    newFileList.insert(newFileList.end(), remainingPaths.begin(), remainingPaths.begin() + clampInsertIndex);
-    newFileList.insert(newFileList.end(), selectedPaths.begin(), selectedPaths.end());
-    newFileList.insert(newFileList.end(), remainingPaths.begin() + clampInsertIndex, remainingPaths.end());
-
-    m_app->m_fileList = newFileList;
-    SetFileList(newFileList);
-
-    // Sync active index
-    if (m_app->m_currentImage) {
-        auto it = std::find(m_app->m_fileList.begin(), m_app->m_fileList.end(), m_app->m_currentImage->filePath);
-        if (it != m_app->m_fileList.end()) {
-            m_app->m_currentIndex = static_cast<int>(std::distance(m_app->m_fileList.begin(), it));
-        }
-    }
-
-    // Reset selection flags
-    std::fill(m_selected.begin(), m_selected.end(), false);
+    m_app->m_fileList = paths;
+    if (active >= 0) m_app->m_currentIndex = active;
+    SetFileList(paths);
     m_draggingThumbnails = false;
     m_app->m_window.RequestRedraw();
 }
@@ -668,14 +698,14 @@ bool ThumbnailStrip::HandleKeyDown(uint32_t vk, KeyModifiers mods) {
     auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
     float windowWidth = targetSize.width;
     float tw = GetThumbnailWidth();
-    float maxScroll = -tw * (m_thumbnails.size() - 1);
+    const auto [minScroll, maxScroll] = GetScrollLimits();
 
     if (vk == VK_PRIOR) { // Page Up
-        m_targetScrollX = std::min(0.0f, m_targetScrollX + (windowWidth - tw * 2.0f));
+        m_targetScrollX = std::min(maxScroll, m_targetScrollX + std::max(tw, windowWidth - tw * 2.0f));
         m_app->m_window.RequestRedraw();
         return true;
     } else if (vk == VK_NEXT) { // Page Down
-        m_targetScrollX = std::max(maxScroll, m_targetScrollX - (windowWidth - tw * 2.0f));
+        m_targetScrollX = std::max(minScroll, m_targetScrollX - std::max(tw, windowWidth - tw * 2.0f));
         m_app->m_window.RequestRedraw();
         return true;
     }

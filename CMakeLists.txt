@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(lenteuv
+project(image_viewer
     VERSION 0.90.0
-    DESCRIPTION "LenteUV Image Viewer — Native C++20"
+    DESCRIPTION "Image Viewer — Native C++20"
     LANGUAGES CXX
 )
 
 if(NOT WIN32 OR NOT MSVC)
-    message(FATAL_ERROR "LenteUV requires Windows and MSVC (Visual Studio 2022 or newer).")
+    message(FATAL_ERROR "Image Viewer requires Windows and MSVC (Visual Studio 2022 or newer).")
 endif()
 include(CTest)
 
@@ -60,6 +60,7 @@ set(SOURCES
     src/board/board_layout_helper.cpp
     src/viewer/viewer_page.cpp
     src/waterfall/waterfall_page.cpp
+    src/ui/dock_icons.cpp
     src/ui/thumbnail_strip.cpp
     src/ui/options_menu.cpp
     src/ui/tagging_modal.cpp
@@ -103,6 +104,8 @@ set(HEADERS
     src/board/board_layout_helper.h
     src/viewer/viewer_page.h
     src/waterfall/waterfall_page.h
+    src/ui/dock_icons.h
+    src/ui/dock_accessibility.h
     src/ui/thumbnail_strip.h
     src/ui/options_menu.h
     src/ui/tagging_modal.h
@@ -172,6 +175,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     # Desktop Window Manager
     dwmapi.lib
 
+    # Native accessibility bridge for the custom drawn viewer dock.
+    oleacc.lib
     # Windows Imaging Component (image decoding)
     cabinet.lib
     winsqlite3.lib
@@ -275,9 +280,9 @@ add_executable(async_preview_tests tests/settings_preferences_tests.cpp tests/st
 target_precompile_headers(async_preview_tests PRIVATE src/common/pch.h)
 target_include_directories(async_preview_tests PRIVATE src)
 target_compile_options(async_preview_tests PRIVATE /W4 /WX /permissive- /utf-8 /MP /EHsc /wd4100)
-get_target_property(LENTEUV_TEST_LINK_LIBRARIES ${PROJECT_NAME} LINK_LIBRARIES)
+get_target_property(IMAGE_VIEWER_TEST_LINK_LIBRARIES ${PROJECT_NAME} LINK_LIBRARIES)
 target_link_libraries(async_preview_tests PRIVATE
-    cabinet.lib winsqlite3.lib ${LENTEUV_TEST_LINK_LIBRARIES})
+    cabinet.lib winsqlite3.lib ${IMAGE_VIEWER_TEST_LINK_LIBRARIES})
 add_test(NAME loader.startup_cache COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
     -File "${CMAKE_SOURCE_DIR}/scripts/run_startup_cache_tests.ps1"
     -Executable "$<TARGET_FILE:async_preview_tests>" -RunRoot "${CMAKE_BINARY_DIR}/test-runs")

@@ -18,10 +18,10 @@
 
 namespace kv {
 
-#define KRUMASSAN_MAX_PATH 2048
+#define EXPLORER_PATH_CAPACITY 2048
 
 HRESULT ShellIntegrator::GetFileListFromActiveExplorerWindow(std::vector<std::wstring>& outFiles, bool fullpaths) {
-    WCHAR szItem[KRUMASSAN_MAX_PATH] = {};
+    WCHAR szItem[EXPLORER_PATH_CAPACITY] = {};
     int SHGDN_value = fullpaths ? SHGDN_FORPARSING : SHGDN_NORMAL;
 
     HWND hwndFind = GetForegroundWindow();
@@ -108,7 +108,7 @@ HRESULT ShellIntegrator::GetFileListFromActiveExplorerWindow(std::vector<std::ws
             hr = psf->GetDisplayNameOf(pidl, SHGDN_value, &str);
             if (SUCCEEDED(hr)) {
                 std::memset(szItem, 0, sizeof(szItem));
-                StrRetToBufW(&str, pidl, szItem, KRUMASSAN_MAX_PATH);
+                StrRetToBufW(&str, pidl, szItem, EXPLORER_PATH_CAPACITY);
                 outFiles.push_back(szItem);
             }
             CoTaskMemFree(pidl);

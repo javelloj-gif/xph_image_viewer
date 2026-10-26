@@ -59,7 +59,12 @@ private:
     void LoadPreviewTexture(int folderIdx, int previewIdx);
     void DrawCheckerboard(Renderer& renderer, const RectF& rect);
     
-    // Spotlight/Enlarged rect helper
+    // UI: opens the hovered occurrence through the shared loader, without moving the grid.
+    void OpenViewer();
+    // UI: returns to retained grid geometry/scroll and cancels strip requests and pointer gestures.
+    void CloseViewer();
+
+    // UI: grows the active preview by 66.6667 pixels horizontally, preserving center/aspect for draw and hits.
     RectF EnlargeActiveItemRect(const RectF& rect) const;
 
     App* m_app = nullptr;

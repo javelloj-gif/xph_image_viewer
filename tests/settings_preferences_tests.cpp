@@ -31,12 +31,12 @@ int RunSettingsPreferencesTests() {
             check(stream.good(), "synthetic settings written");
         };
         kv::Settings missing;
-        check(missing.animated_zoom && !std::filesystem::exists(path), "fresh zoom default");
+        check(missing.animated_zoom && missing.thumbnail_width == 44 && !std::filesystem::exists(path), "fresh zoom default");
         check(!missing.Load() && missing.animated_zoom, "absent file retains default and reports absence");
         check(std::filesystem::exists(path), "absent file saves defaults as before");
         write("{\"settings\": {\"effects\": [false]}}");
         kv::Settings partial;
-        check(partial.Load() && partial.animated_zoom && !partial.effects, "missing zoom key retains true");
+        check(partial.Load() && partial.animated_zoom && partial.thumbnail_width == 44 && !partial.effects, "missing zoom key retains true");
         for (const bool zoom : {false, true}) {
             write(std::string("{\"settings\": {\"animated_zoom\": [") + (zoom ? "true" : "false") +
                 "],\"effects\": [false],\"thumbnail_width\": [73],\"window_opacity\": [0.625],"
@@ -57,11 +57,18 @@ int RunSettingsPreferencesTests() {
                 restored.settings_window_opacity == 0.75f && restored.ui_lang == L"es" && restored.sort_mode == 3,
                 "current preferences survive legacy round trip");
         }
+        for (const int width : {30, 44, 50, 73, 90, 100}) {
+            write("{\"settings\": {\"thumbnail_width\": [" + std::to_string(width) + "]}}");
+            kv::Settings sized;
+            check(sized.Load() && sized.thumbnail_width == width && sized.Save(), "saved thumbnail size respected");
+            kv::Settings roundTrip;
+            check(roundTrip.Load() && roundTrip.thumbnail_width == width, "saved thumbnail size round trip");
+        }
         const auto packaged = read(root / "default-settings.json");
         check(!packaged.empty(), "packaging fixture available");
         write(packaged);
         kv::Settings defaults;
-        check(defaults.Load() && defaults.animated_zoom && defaults.effects && defaults.thumbnail_width == 50,
+        check(defaults.Load() && defaults.animated_zoom && defaults.effects && defaults.thumbnail_width == 44,
             "packaged zoom default with existing effects and thumbnail size");
         check(defaults.Save() && read(root / "default-settings.json") == packaged, "packaging source copy untouched");
         for (const auto* key : {"doubleclick_toggle", "desaturated_corner_buttons_and_corner_menus",

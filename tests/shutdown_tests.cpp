@@ -92,7 +92,7 @@ public:
 
     // Tests idle/immediate/silent/disconnected/posted/repeated/legacy-sentinel and WM_QUIT-preserving shutdown.
     static void Ipc(int mode) {
-        const auto pipe = L"\\\\.\\pipe\\lenteuv-shutdown-" + std::to_wstring(GetCurrentProcessId());
+        const auto pipe = L"\\\\.\\pipe\\image-viewer-shutdown-" + std::to_wstring(GetCurrentProcessId());
         HWND hwnd = CreateWindowExW(0, L"STATIC", L"shutdown-tests", 0, 0, 0, 0, 0,
             HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);
         Check(hwnd != nullptr, "shutdown HWND");
@@ -140,7 +140,7 @@ public:
 
     // Exercises a real private pipe with no reader, disconnection, late drain and connection+write sharing one budget.
     static void ClientBudget(int mode) {
-        const auto name = L"\\\\.\\pipe\\lenteuv-client-budget-" + std::to_wstring(GetCurrentProcessId());
+        const auto name = L"\\\\.\\pipe\\image-viewer-client-budget-" + std::to_wstring(GetCurrentProcessId());
         const auto create = [&] {
             return CreateNamedPipeW(name.c_str(), PIPE_ACCESS_INBOUND, PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                 1, 0, 64, 0, nullptr);

@@ -221,13 +221,19 @@ void BoardLayoutHelper::ShowContextMenu(float screenX, float screenY) {
         AppendMenuW(hMenu, MF_STRING, 11, L"Save Board (Ctrl+S)");
         AppendMenuW(hMenu, MF_STRING, 13, L"Deselect All (Esc)");
         AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
+        AppendMenuW(hMenu, MF_STRING, 14, L"Viewer (NUM1)");
         AppendMenuW(hMenu, MF_STRING, 6, L"Settings... (O)");
 
         int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                       pt.x, pt.y, 0, m_page->m_app->m_window.GetHwnd(), nullptr);
         DestroyMenu(hMenu);
 
-        if (selected == 1) {
+        if (selected == 14) {
+            if (clickedIdx >= 0 && m_page->m_items[clickedIdx].type == BoardItemType::Image) {
+                m_page->m_app->LoadImage(m_page->m_items[clickedIdx].filePath);
+            }
+            m_page->m_app->SetPage(Page::Viewer);
+        } else if (selected == 1) {
             m_page->StartLinking(clickedIdx);
         } else if (selected == 2) {
             for (auto& item : m_page->m_items) item.selected = false;

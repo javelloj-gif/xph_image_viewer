@@ -1,167 +1,67 @@
+"""Generate the original neutral photo-frame placeholder as a multi-band Windows ICO.
+
+Uses only Python's standard library. Geometry mirrors assets/branding/image_viewer.svg;
+no historical bitmap or third-party artwork is imported. Run from any working directory.
 """
-generate_icons.py — LenteUV Icon Generator
-===========================================
-Genera el archivo lenteuv.ico multibanda para Windows desde la imagen de referencia
-de alta resolución o, en su defecto, desde el SVG vectorial (requiere cairosvg).
-
-Estrategia de renderizado (en orden de prioridad):
-  1. PNG de referencia de alta resolución (assets/branding/lenteuv.png) — Fidelidad 1:1 garantizada
-  2. cairosvg — Renderizado vectorial perfecto desde el SVG
-  3. Error explícito — Se informa al usuario que falta la fuente de imagen
-
-Uso:
-  python scripts/generate_icons.py
-"""
-
-import os
-import sys
 from pathlib import Path
+import struct
 
-# ─── Rutas ─────────────────────────────────────────────────────────────────────
-SCRIPT_DIR    = Path(__file__).resolve().parent
-PROJECT_ROOT  = SCRIPT_DIR.parent
-SVG_PATH      = PROJECT_ROOT / "assets" / "branding" / "lente_uv.svg"
-PNG_REF_PATH  = PROJECT_ROOT / "assets" / "branding" / "lenteuv.png"
-OUTPUT_ICO    = PROJECT_ROOT / "src" / "resources" / "lenteuv.ico"
-ICO_SIZES     = [16, 32, 48, 256]
-
-def banner(msg):
-    print(f"\n{'=' * 60}")
-    print(f"  {msg}")
-    print(f"{'=' * 60}")
-
-def load_source_image():
-    """
-    Carga la imagen fuente de alta resolución para el ícono.
-    Prioridad: PNG de referencia > cairosvg (SVG) > Error
-    """
-    from PIL import Image
-
-    # ── Prioridad 1: PNG de referencia (assets/branding/lenteuv.png) ─────────────────────
-    if PNG_REF_PATH.exists():
-        print(f"\n[Source] Usando PNG de referencia de alta resolucion:")
-        print(f"         {PNG_REF_PATH}")
-        img = Image.open(PNG_REF_PATH).convert("RGBA")
-        print(f"         Tamaño original: {img.width}x{img.height} px, modo: {img.mode}")
-        return img
-
-    # ── Prioridad 2: cairosvg → SVG a PNG de alta resolución ─────────────────
-    try:
-        import cairosvg
-        import io
-        print(f"\n[Source] cairosvg disponible — renderizando desde SVG:")
-        print(f"         {SVG_PATH}")
-        png_bytes = cairosvg.svg2png(
-            url=str(SVG_PATH),
-            output_width=512,
-            output_height=512,
-        )
-        img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-        print(f"         Renderizado: {img.width}x{img.height} px")
-        return img
-    except ImportError:
-        pass
-
-    # ── Sin fuente disponible → Error informativo ─────────────────────────────
-    print("\n[ERROR] No se encontró ninguna fuente de imagen para el ícono.")
-    print(f"  Falta: {PNG_REF_PATH}")
-    print(f"  Falta: cairosvg (instala con 'pip install cairosvg')")
-    print()
-    print("  Soluciones:")
-    print("    1. Coloca 'assets/branding/lenteuv.png' en la raíz del proyecto (recomendado)")
-    print("    2. Instala cairosvg: pip install cairosvg")
-    sys.exit(1)
+ROOT = Path(__file__).resolve().parent.parent
+OUTPUT = ROOT / "src/resources/image_viewer.ico"
+SIZES = (16, 32, 48, 256)
 
 
-def make_ico_band(source_img, size):
-    """
-    Genera una banda del ícono al tamaño indicado con calidad máxima.
-    Usa redimensionado Lanczos (bicúbico de 8 lóbulos) para máxima nitidez.
-    Para 256px se preserva como PNG dentro del ICO (compresión sin pérdida).
-    """
-    from PIL import Image
-
-    # El tamaño de origen puede no ser cuadrado — hacemos fit cuadrado con padding
-    w, h = source_img.size
-    if w != h:
-        side = max(w, h)
-        square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
-        offset_x = (side - w) // 2
-        offset_y = (side - h) // 2
-        square.paste(source_img, (offset_x, offset_y), source_img)
-        source_img = square
-
-    return source_img.resize((size, size), Image.LANCZOS)
+def inside_triangle(x, y, vertices):
+    """Test a sample against a filled triangle in the icon's original 64-unit coordinates."""
+    sides = []
+    for a, b in zip(vertices, vertices[1:] + vertices[:1]):
+        sides.append((x-a[0])*(b[1]-a[1]) - (y-a[1])*(b[0]-a[0]))
+    return all(v >= 0 for v in sides) or all(v <= 0 for v in sides)
 
 
-def write_ico(bands, output_path):
-    """
-    Escribe el archivo .ico multibanda. Inno Setup y Windows esperan las bandas
-    en orden de mayor a menor tamaño para la correcta representación en el
-    Explorador de archivos, la barra de tareas y la lista de programas.
-    """
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+def sample(x, y):
+    """Return RGBA for one original frame/mountain/sun sample; outside is transparent."""
+    if not (4 <= x <= 60 and 4 <= y <= 60):
+        return (0, 0, 0, 0)
+    # Rounded dark tile; maintain the same geometry at every ICO resolution.
+    cx, cy = min(52, max(12, x)), min(52, max(12, y))
+    if (x-cx)**2 + (y-cy)**2 > 64:
+        return (0, 0, 0, 0)
+    color = (21, 28, 36, 255)
+    if 10.5 <= x <= 53.5 and 12.5 <= y <= 51.5 and not (13.5 < x < 50.5 and 15.5 < y < 48.5):
+        color = (0, 232, 240, 255)
+    if inside_triangle(x, y, [(15,46),(27,29),(40,46)]) or inside_triangle(x, y, [(31,46),(42,33),(50,46)]):
+        color = (230, 237, 243, 255)
+    if (x-43)**2 + (y-24)**2 <= 16:
+        color = (0, 232, 240, 255)
+    return color
 
-    # Ordenar de mayor a menor (256 → 16)
-    sizes_desc = sorted(bands.keys(), reverse=True)
-    imgs_in_order = [bands[s] for s in sizes_desc]
 
-    # Pillow necesita que la lista sea [img_grande, ..., img_pequeña]
-    # y el primer elemento es el "principal"
-    imgs_in_order[0].save(
-        str(output_path),
-        format="ICO",
-        sizes=[(img.width, img.height) for img in imgs_in_order],
-        append_images=imgs_in_order[1:],
-    )
+def make_band(size):
+    """Encode one 32-bit bottom-up DIB plus AND mask, with four-sample edge antialiasing."""
+    pixels = bytearray()
+    for row in reversed(range(size)):
+        for col in range(size):
+            colors = [sample((col+dx)*64/size, (row+dy)*64/size) for dx,dy in ((.25,.25),(.75,.25),(.25,.75),(.75,.75))]
+            alpha = sum(c[3] for c in colors)
+            rgb = [round(sum(c[ch]*c[3] for c in colors)/alpha) if alpha else 0 for ch in range(3)]
+            pixels.extend((rgb[2],rgb[1],rgb[0],round(alpha/4)))
+    mask = bytes(((size+31)//32)*4*size)
+    header = struct.pack('<IiiHHIIiiII',40,size,size*2,1,32,0,len(pixels),0,0,0,0)
+    return header + pixels + mask
 
 
 def main():
-    banner("LenteUV Image Viewer -- Icon Generator")
-    print(f"\n  SVG source  : {SVG_PATH}")
-    print(f"  PNG ref     : {PNG_REF_PATH}")
-    print(f"  Output ICO  : {OUTPUT_ICO}")
-    print(f"  Sizes       : {ICO_SIZES}")
-
-    # Verificar que Pillow está instalado
-    try:
-        from PIL import Image
-    except ImportError:
-        print("\n[ERROR] Pillow no está instalado.")
-        print("  Instala con: pip install Pillow")
-        sys.exit(1)
-
-    # Cargar imagen fuente
-    source = load_source_image()
-
-    # Generar cada banda
-    print("\n[Generando bandas ICO]")
-    bands = {}
-    for size in ICO_SIZES:
-        band = make_ico_band(source, size)
-        bands[size] = band
-        print(f"  [{size:>3}x{size:<3}] OK")
-
-    # Escribir el ICO
-    print(f"\n[Escribiendo] {OUTPUT_ICO}")
-    write_ico(bands, OUTPUT_ICO)
-
-    # Verificar resultado
-    from PIL import Image as PILImage
-    result = PILImage.open(str(OUTPUT_ICO))
-    file_size = OUTPUT_ICO.stat().st_size
-
-    print(f"\n[OK] ICO generado exitosamente:")
-    print(f"     Ruta      : {OUTPUT_ICO}")
-    print(f"     Tamaño    : {file_size:,} bytes")
-    print(f"     Formato   : {result.format}")
-    print(f"     Modo      : {result.mode}")
-    print(f"     Dimensión : {result.size[0]}x{result.size[1]} px (banda activa)")
-    print()
-    print("  Siguiente paso: recompilar lenteuv.exe")
-    print("  cmake --build --preset release")
-    print()
+    """Write all four bands deterministically; only the neutral application ICO is replaced."""
+    bands = [make_band(size) for size in SIZES]
+    offset = 6 + 16*len(bands)
+    directory = bytearray(struct.pack('<HHH',0,1,len(bands)))
+    for size, band in zip(SIZES,bands):
+        directory.extend(struct.pack('<BBBBHHII',size%256,size%256,0,0,1,32,len(band),offset))
+        offset += len(band)
+    OUTPUT.write_bytes(directory + b''.join(bands))
+    print(f"Generated {OUTPUT} ({', '.join(map(str,SIZES))} px)")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

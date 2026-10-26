@@ -34,6 +34,22 @@ ampliarlos solo cuando el cambio lo requiera.
 Consultar la hoja de ruta para prioridad y estado. Un requisito registrado no significa
 que esté implementado ni que sus decisiones pendientes se hayan resuelto.
 
+## Lote de producto 2026-10-25
+
+- [Acuerdos y mapa 015–022](product-batch-20261025.md).
+- [015: Preparación y limpieza](015-preparacion-limpieza/spec.md).
+- [016: Propuestas visuales](016-propuestas-visuales/spec.md).
+- [017: Simplificación funcional](017-simplificacion-funcional/result.md), implementada y comprobada; commit 2d19d3d y límites de comparación documentados.
+- [018: Tira y metadatos](018-tira-metadatos/result.md), implementado y comprobado; Release/CTest 9/9, tamaños iniciales ajustados a 44/57,2, barra y límites documentados.
+
+- [019: Composición compartida](019-composicion-compartida/result.md).
+- [020: Navegación superior](020-navegacion-superior/result.md).
+- [021: Gestos](021-gestos/result.md).
+- [022: Neutralización de marca](022-neutralizacion-marca/result.md).
+
+019–022 se implementan secuencialmente por autorización expresa del propietario;
+los resultados distinguen cada candidato y la validación conjunta final.
+
 - [013: Cierre de la refactorización base](013-cierre-base/spec.md).
 
 - [014: Completar cancelación AR-005](014-cancelacion-ar005/spec.md).

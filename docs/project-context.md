@@ -1,6 +1,20 @@
 > Actualización 2026-10-23: [014](changes/014-cancelacion-ar005/result.md) completa AR-005 con cancelación cooperativa por consumidor/WIC/escáner y envío IPC con presupuesto total. El hilo conserva sus dependencias hasta completar la operación activa; no se fuerza ni detacha. La base está lista para nuevos cambios funcionales.
 
-# Contexto técnico de LenteUV
+# Contexto técnico de Image Viewer (placeholder)
+
+## Nombre provisional y lote de producto — 2026-10-25
+
+**Image Viewer / image_viewer son placeholders**, no nombre definitivo. Desde 022,
+CMake/EXE, títulos, About, mensajes, icono y empaquetado activos usan esos nombres.
+Se preservan Sergei Krumas, xPhang y licencia. Las excepciones compatibles (datos,
+pipe, identidad Windows, registro/instalación y diagnósticos) están inventariadas
+en [compatibility.md](changes/022-neutralizacion-marca/compatibility.md).
+No se migran formatos ni rutas; entregas y documentación históricas conservan identidad.
+
+El [lote 015–022](changes/product-batch-20261025.md) tiene 017 confirmado y 018–022
+implementados en el árbol local; consultar resultados para ejecución y límites,
+sin confundir build con aceptación UX o rendimiento. Los apartados históricos
+siguientes conservan la fecha de su evidencia.
 
 **Estado vigente 2026-10-24:** [003 cerrada y aceptada](changes/003-diagnostico-rendimiento/closure.md),
 junto con las tareas anteriores; base lista para nuevas modificaciones funcionales.
@@ -31,7 +45,7 @@ El código es la fuente de verdad del comportamiento actual. Los planes antiguos
 
 ## Producto, procedencia y plataforma
 
-**Usuario:** visor inspirado en Picasa, basado en el proyecto de Sergei Krumas y migrado posteriormente a C++ mediante asistencia de agentes. Este fork se presenta como LenteUV; las cabeceras atribuyen sus extensiones a xPhang.
+**Usuario:** visor inspirado en Picasa, basado en el proyecto de Sergei Krumas y migrado posteriormente a C++ mediante asistencia de agentes. El placeholder actual es Image Viewer; las cabeceras atribuyen sus extensiones a xPhang.
 
 **Código:** aplicación de escritorio exclusiva de Windows. C++20, namespace `kv`, CMake y MSVC. El proyecto declara versión 0.90.0 y Windows 10 1903+ (18362); comprobar disponibilidad efectiva de las interfaces DirectX en cada sistema objetivo. `LICENSE` contiene GNU GPL versión 3; conservar atribuciones y no deducir otra licencia de comentarios antiguos del instalador. El recurso de versión Windows conserva una numeración histórica distinta, registrada como deuda técnica.
 
@@ -86,9 +100,9 @@ pendiente se intenta el directorio de trabajo. Tras contenido inicial y timer in
 el callback IPC definitivo y aplica rutas retenidas; los secundarios evitan los
 servicios pesados y conservan errores 005.
 
-`Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Waterfall=5; el valor retirado 4 no tiene enumerador. Los atajos de cambio de modo NO corresponden directamente a esos valores. NUM2/2 quedan reservados y la posición radial — / Unavailable está inactiva. No hay diálogo ni migración añadidos para preferencias antiguas; 4 ya no designa un modo soportado. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las tres páginas funcionales.
+`Page` conserva valores persistidos: Start=1, Viewer=2, Board=3, Waterfall=5; el valor retirado 4 no tiene enumerador. Los atajos de cambio de modo NO corresponden directamente a esos valores. NUM2/2 quedan reservados; el radial se retiró en 020. No hay diálogo ni migración añadidos para preferencias antiguas; 4 ya no designa un modo soportado. Start permanece en el enum/opciones, pero `DrawViewerContent` solo dibuja las tres páginas funcionales.
 
-`App::Run` vacía mensajes mediante `PeekMessageW`, actualiza/renderiza y espera hasta 16 ms cuando no considera necesaria animación continua. No es un renderer que duerma indefinidamente hasta invalidación. `RenderFrame` limita `dt`, actualiza animaciones y página, procesa cargas pendientes, dibuja el contenido, overlays y menú radial, y presenta. `WindowEvents` convierte mensajes nativos en llamadas a `App`; los handlers ofrecen primero eventos a overlays y páginas. Un handler puede consumir una tecla antes del switch global.
+`App::Run` vacía mensajes mediante `PeekMessageW`, actualiza/renderiza y espera hasta 16 ms cuando no considera necesaria animación continua. No es un renderer que duerma indefinidamente hasta invalidación. `RenderFrame` limita `dt`, actualiza animaciones y página, procesa cargas pendientes, dibuja el contenido, overlays y dock, y presenta. `WindowEvents` convierte mensajes nativos en llamadas a `App`; los handlers ofrecen primero eventos a overlays y páginas. Un handler puede consumir una tecla antes del switch global.
 
 `SingleInstanceIpc` usa `\\.\pipe\lenteuv`, rutas UTF-8 y un hilo servidor que entrega la apertura mediante mensaje a la ventana (`WM_USER + 4501`). La comprobación inicial hace un sondeo de la pipe; no hay un mutex de elección de propietario. No asumir ausencia de carreras entre arranques simultáneos. El receptor normaliza la ruta, distingue carpeta/archivo, cambia de página, restaura y solicita primer plano. Una ruta vacía se ignora.
 
@@ -134,7 +148,7 @@ plazo universal para una llamada ya iniciada. Desde 014, stop_token y lease déb
 **Código:** consultar la [guía de uso](usage.md) para la matriz operativa. Las selecciones de miniaturas, imagen actual, hover de cascada e ítems del tablero son estados distintos.
 
 - **Viewer:** fondo compuesto con alfa, imagen estática/animada, metadatos y tira inferior que aparece al acercar el puntero. `ViewerPage` implementa zoom, paneo, región con Ctrl+clic y menú contextual. `1` de la fila superior alterna ajuste/1:1; NUM1 cambia a Viewer en el handler global. La rueda usa `zoom_on_mousewheel` para intercambiar zoom y navegación con Ctrl. Arriba/abajo se consumen como zoom en esta página. El código local previo a la reforma usa arrastre izquierdo de ventana en compacto y paneo en fullscreen.
-- **Waterfall:** miniaturas en columnas y scroll suavizado. El clic carga la imagen mediante `App::LoadImage` y activa `m_viewerModal`: no crea una aplicación secundaria ni un proceso. El clic externo regresa a la cuadrícula. El modo modal reutiliza el visor y tiene sus propias reglas de teclas.
+- **Waterfall:** miniaturas en columnas y scroll suavizado. El clic carga la imagen mediante `App::LoadImage` y activa `m_viewerModal`: no crea una aplicación secundaria ni un proceso. Escape/clic externo libre regresan a la cuadrícula conservando ambos offsets de scroll. App::DrawViewerComposition comparte imagen, metadatos y tira; IsViewerActive identifica ambos hosts. Entradas de tira/dock preceden al cierre exterior; OpenViewer/CloseViewer gestionan selección y consumidores sin otro loader.
 - **Board:** cámara en coordenadas de mundo, imágenes, notas, nodos y enlaces. Alt+clic derecho inicia conexión; menús nativos añaden/configuran ítems. Ctrl+F abre búsqueda; Ctrl+L genera catálogo de tags si no existe; Ctrl+Shift+L trae imágenes del directorio. El catálogo `xmpTags.json` alimenta sugerencias: no es una base de rutas de imágenes. Los formatos y selección tienen gestores separados.
 
 **Usuario:** se desea ajuste al contorno de imagen en compacto. **Código:** `AdjustWindowToImage` depende de la imagen global actual, impone mínimos de 512 y limita al área del monitor. `OnResize` detecta salida de fullscreen y lo llama. Sin imagen retorna sin ajuste; en otros modos puede usar una imagen anterior. No cambiar ese criterio durante tareas de estructura.
@@ -250,10 +264,21 @@ Los inyectores preservan el contenido binario salvo la sección de metadatos que
 
 Desde 017, `animated_zoom=true` en código y paquete cuando falta la preferencia;
 los valores guardados se respetan junto con `effects`. El doble clic izquierdo en
-Viewer/modal Waterfall siempre alterna fullscreen después de controles/overlays.
+Viewer/modal Waterfall alterna fullscreen después de controles/overlays; desde 021 el exterior transparente de Viewer se consume para compactar y no vuelve a fullscreen.
 Se retiraron desaturación, inversión, esquinas y fondo opcional de tira, sus
 controles y atajos exclusivos C/I. Las cuatro claves persistidas retiradas se
 ignoran al cargar y desaparecen al guardar sin migrar rutas ni formatos.
+
+Desde 018, thumbnail_width=44 sin preferencia (código/paquete/fallback); valor
+guardado respetado, activa al 130 % y borde cian 2 DIP independientemente de selección
+y hover. ThumbnailStrip mantiene geometría O(1) de slots y búsquedas binarias;
+misma geometría en dibujo/clip/hit/scroll, selección de caja limitada al cliente y
+reordenación por ocurrencias. Convierte DIP a píxeles localmente mediante DPI de
+Window; no cambia las coordenadas globales ni resolución de previews 100/200.
+ViewerPage ubica su barra con la envolvente real, margen 12 DIP y ancho acotado;
+nombre elidido con tooltip envuelto, conservando campos técnicos. Hover en tira/
+barra/tooltip mantiene controles estables. ApplyLoadedImage sincroniza la identidad
+de tira también al aplicar animaciones. Waterfall modal comparte esta composición desde 019.
 
 Para cambiar esta tabla, buscar el identificador en todas las fuentes: carga/guardado y construcción de controles no cuentan como consumidor funcional.
 
@@ -319,3 +344,34 @@ antes de favoritos/WIC/XMP/overlays, con HWND oculto y callback temporal de ruta
 Release/CTest 5/5 y diez escenarios nativos automatizados pasados; revisión visual
 de usuario pendiente. Se omite trabajo, pero la muestra temporal no demuestra
 aceleración. Errores 005/RAII/endpoint conservados; sin ACK ni rediseño de cierre.
+
+
+## Contratos del dock y gesto exterior — 019–022
+
+App conserva un solo ViewerPage, ThumbnailStrip e ImageLoader. Dibujo y Update
+usan IsViewerActive; el grid permanece dueño de carpeta y scroll. Al salir del
+modal se cancelan gestos/solicitudes de tira sin descartar texturas listas. Los
+leases, ProcessPendingTextures, caché 100/200 y prioridades siguen intactos.
+
+Dock: centrado superior, geometría local DIP→cliente, celdas 44 DIP, filas según ancho, glifos Outline detallados de 28 DIP
+con primitivas D2D, tooltip y foco de teclado. MSAA expone toolbar/seis hijos con
+nombres/roles/estados/acciones mediante WM_GETOBJECT. El proveedor solo conserva
+una referencia débil al estado del dueño; tras destruir App no accede a sus campos.
+Callbacks COM/Window y GPU continúan en UI; oleacc es biblioteca del sistema.
+
+Window::HitTest mantiene los bordes de resize; en el cliente del visor/overlays
+ofrece onClientHitTest antes de la franja HTCAPTION. Evita que caption doble clic
+robe botones o maximice el exterior compacto. Grid/Board conservan caption nativo.
+El gesto exterior consulta límites inversos de imagen, no alfa; solo Viewer con
+composición transparente y window_opacity<1. Cambia fullscreen por la ruta existente,
+consume press/release y no reenvía entradas a otras ventanas. El doble clic sobre
+imagen cancela un arrastre pendiente antes de cambiar geometría.
+
+
+Corrección visual posterior: DockIcons conserva paths/estilo por factory D2D,
+reconstruye al cambiar factory y restaura el transform del contexto. Su propiedad
+es de App y solo se usa en UI; no comparte estado con loader/caché. Referencia
+exacta de imagen en 016/concepts/outline.png; nueva ubicación superior centrada
+por instrucción del propietario. Metadatos conservan 13 unidades cliente originales
+sin multiplicación por DPI y la tira usa gap 3 DIP. Ver [020](changes/020-navegacion-superior/result.md)
+para ejecución, capturas y límites, sin atribución de rendimiento al nuevo hash.

@@ -33,14 +33,18 @@ foreach ($variant in $Variants) {
         $run=Join-Path $root "$variant-$($image.Position)"
         Copy-Item -LiteralPath "$source\app" -Destination $run -Recurse
         $trace=Join-Path $run 'reuse-trace.csv'
-        $start=[Diagnostics.ProcessStartInfo]::new("$run\lenteuv.exe")
+        $start=[Diagnostics.ProcessStartInfo]::new("$run\image_viewer.exe")
         $start.UseShellExecute=$false; $start.WorkingDirectory=$run
         $start.ArgumentList.Add('--multiple'); $start.ArgumentList.Add((Join-Path $Images $image.Name))
-        $start.Environment['LENTEUV_PERF_OUTPUT']=$trace
-        $start.Environment['LENTEUV_PERF_SCENARIO']='waterfall'
-        $start.Environment['LENTEUV_PERF_EXIT_MS']=([Math]::Max(60,$PreparationSeconds+40)*1000).ToString()
-        $start.Environment['LENTEUV_PERF_READY_EXIT_MS']='0'
-        $start.Environment['LENTEUV_CACHE_NAMESPACE']='warm'
+        $start.Environment['IMAGE_VIEWER_PERF_OUTPUT']=$trace
+        $start.Environment['IMAGE_VIEWER_PERF_SCENARIO']='waterfall'
+        $start.Environment['IMAGE_VIEWER_PERF_EXIT_MS']=([Math]::Max(60,$PreparationSeconds+40)*1000).ToString()
+        $start.Environment['IMAGE_VIEWER_PERF_READY_EXIT_MS']='0'
+        $start.Environment['IMAGE_VIEWER_CACHE_NAMESPACE']='warm'
+        # Compatibility for explicitly supplied historical executables; neutral names remain primary.
+        foreach ($diagnosticName in @($start.Environment.Keys | Where-Object { $_ -like 'IMAGE_VIEWER_*' })) {
+            $start.Environment[$diagnosticName.Replace('IMAGE_VIEWER_', 'LENTEUV_')] = $start.Environment[$diagnosticName]
+        }
         $child=[Diagnostics.Process]::Start($start)
         $demands=@()
         try {

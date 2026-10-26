@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: SingleInstanceIpc
-// Description: Named-pipe discovery and path forwarding for LenteUV.
+// Description: Named-pipe discovery and path forwarding for Image Viewer.
 // Responsibility: Own the server thread and expose delivery stages without acknowledging image application.
 // ============================================================================
 #pragma once

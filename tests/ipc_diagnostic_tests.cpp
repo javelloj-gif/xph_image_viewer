@@ -61,12 +61,12 @@ public:
         exe = executable;
         root = exe.parent_path();
         Check(std::filesystem::is_directory(root / "user_data"), "isolated user_data required");
-        pipe = L"\\\\.\\pipe\\lenteuv-diagnostic-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64());
+        pipe = L"\\\\.\\pipe\\image-viewer-diagnostic-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64());
         app.m_ipc.m_pipeName = pipe;
         WNDCLASSW windowClass = {};
         windowClass.lpfnWndProc = Window::StaticWndProc;
         windowClass.hInstance = GetModuleHandleW(nullptr);
-        windowClass.lpszClassName = L"LenteUV-IpcDiagnostic";
+        windowClass.lpszClassName = L"ImageViewer-IpcDiagnostic";
         Check(RegisterClassW(&windowClass) != 0, "message-only class");
         Check(CreateWindowExW(0, windowClass.lpszClassName, L"IPC diagnostic", 0,
             0, 0, 0, 0, HWND_MESSAGE, nullptr, windowClass.hInstance, &app.m_window) != nullptr, "message-only receiver");
@@ -390,7 +390,7 @@ public:
     // Launches only an isolated extracted product EXE, switches the remaining modes and checks graceful process exit.
     static int PackagedCases(const std::filesystem::path& executable, const std::filesystem::path& image) {
         const auto root = executable.parent_path();
-        Check(executable.filename() == L"lenteuv.exe" && image.parent_path() == root / L"test" &&
+        Check((executable.filename() == L"image_viewer.exe" || executable.filename() == L"lenteuv.exe") && image.parent_path() == root / L"test" &&
             std::filesystem::is_directory(root / L"user_data"), "package smoke requires owned EXE/test/user_data staging");
         for (const auto* flag : {L"--multiple", L"--lite"}) {
             std::wstring command = L"\"" + executable.wstring() + L"\" " + flag + L" --windowed \"" + image.wstring() + L"\"";
@@ -468,7 +468,7 @@ public:
             return 0;
         }
         if (mode == L"--ipc-multiple") {
-            wchar_t name[] = L"lenteuv.exe", multiple[] = L"--multiple", lite[] = L"--lite";
+            wchar_t name[] = L"image_viewer.exe", multiple[] = L"--multiple", lite[] = L"--lite";
             wchar_t* flags[] = {name, multiple};
             Check(App::ParseCommandLine(2, flags).multiple, "multiple flag");
             flags[1] = lite;
@@ -555,7 +555,7 @@ private:
             AppConfig config;
             config.initialFilePath = path;
             if (scenario == 2 || scenario == 3) {
-                wchar_t name[] = L"lenteuv.exe", multiple[] = L"--multiple", lite[] = L"--lite";
+                wchar_t name[] = L"image_viewer.exe", multiple[] = L"--multiple", lite[] = L"--lite";
                 wchar_t* flags[] = {name, scenario == 2 ? multiple : lite};
                 config = App::ParseCommandLine(2, flags);
                 config.initialFilePath = path;

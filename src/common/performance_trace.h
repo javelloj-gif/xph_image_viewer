@@ -10,7 +10,7 @@
 
 namespace kv {
 // Optional bounded process-local QPC recorder. Never performs file I/O in an event path.
-// Enable before launch with LENTEUV_PERF_OUTPUT; exports on normal exit.
+// Enable before launch with IMAGE_VIEWER_PERF_OUTPUT; exports on normal exit.
 class PerformanceTrace {
 public:
     // First access resolves the diagnostic environment once; no product preference is persisted.
@@ -40,10 +40,16 @@ public:
             out << "0," << m_frequency << ",0,trace.dropped,0," << m_dropped << '\n';
         } catch (...) { }
     }
-    // Diagnostics-only environment value; used by isolated native benchmark sessions.
+    // Diagnostics-only: neutral names take precedence; absent values accept the historical diagnostic alias.
     static std::wstring Environment(const wchar_t* name) {
         wchar_t value[32768]{};
-        const DWORD count = GetEnvironmentVariableW(name, value, 32768);
+        SetLastError(ERROR_SUCCESS); // Empty-but-present values must not inherit an earlier missing-variable error.
+        DWORD count = GetEnvironmentVariableW(name, value, 32768);
+        const std::wstring requested(name);
+        if (!count && GetLastError() == ERROR_ENVVAR_NOT_FOUND && requested.starts_with(L"IMAGE_VIEWER_")) {
+            const auto legacy = L"LENTEUV_" + requested.substr(13);
+            count = GetEnvironmentVariableW(legacy.c_str(), value, 32768);
+        }
         return count && count < 32768 ? std::wstring(value, count) : std::wstring{};
     }
     // Read-only diagnostic state; normal product runs do not activate benchmark input/exit.
@@ -65,12 +71,12 @@ private:
     // Resolves an absolute output only; malformed/relative paths leave tracing disabled.
     PerformanceTrace() {
         try {
-            m_path = Environment(L"LENTEUV_PERF_OUTPUT");
+            m_path = Environment(L"IMAGE_VIEWER_PERF_OUTPUT");
             m_enabled = !m_path.empty() && m_path.is_absolute();
             if (m_enabled) {
-                m_scenario=Environment(L"LENTEUV_PERF_SCENARIO");
-                m_exitMs=wcstoull(Environment(L"LENTEUV_PERF_EXIT_MS").c_str(),nullptr,10);
-                m_readyExitMs=wcstoull(Environment(L"LENTEUV_PERF_READY_EXIT_MS").c_str(),nullptr,10);
+                m_scenario=Environment(L"IMAGE_VIEWER_PERF_SCENARIO");
+                m_exitMs=wcstoull(Environment(L"IMAGE_VIEWER_PERF_EXIT_MS").c_str(),nullptr,10);
+                m_readyExitMs=wcstoull(Environment(L"IMAGE_VIEWER_PERF_READY_EXIT_MS").c_str(),nullptr,10);
             }
             LARGE_INTEGER f; QueryPerformanceFrequency(&f); m_frequency = f.QuadPart;
             if (m_enabled) m_events.reserve(8192);

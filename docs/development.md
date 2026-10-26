@@ -39,26 +39,29 @@ y crea `user_data/` junto al ejecutable sin sobrescribir datos existentes. El IC
 versionado permite compilar sin Python. Para regenerarlo:
 
 ```powershell
-python -m pip install Pillow
 python scripts/generate_icons.py
 ```
 
-El generador prefiere `assets/branding/lenteuv.png`; CairoSVG es opcional para la fuente
-SVG si falta el PNG. Revisa el diff del ICO antes de confirmarlo.
+El generador neutral usa solo la biblioteca estándar de Python y la geometría original
+de `assets/branding/image_viewer.svg`; produce bandas 16/32/48/256. Revisa el diff del ICO antes de confirmarlo.
 
 ## Tests aislados
 
 La configuración actual contiene nueve suites. `settings.preferences` usa
 `run_settings_preferences_tests.ps1` y el modo `--settings-preferences-tests` del
 harness productivo, con EXE/defaults copiados, marcador y user_data propios.
-Antes de escribir verifica la resolución desde el EXE. Sus 30 checks cubren ausencia,
-clave omitida, true/false explícitos, round trip antiguo y defaults del paquete;
+Antes de escribir verifica la resolución desde el EXE. Sus 48 checks cubren ausencia,
+clave omitida, true/false explícitos, round trip antiguo y defaults del paquete/tamaños guardados;
 36 checks adicionales ejercitan entradas y animaciones reales sobre ventana oculta
-propia (sin App::Initialize). No sustituyen el recorrido visual nativo.
+propia (sin App::Initialize). ui.async_previews incorpora 3899 checks adicionales
+de 018: geometría/entradas, estado activo, duplicados, barra y truncamiento, con
+96/144/192 DPI y clientes 320/480/736/1024 DIP. El snapshot WARP usa el contexto a
+96 DPI como producción y escala la ventana simulada; no mezcla píxeles de cliente
+con DPI del target. Estas pruebas no sustituyen el recorrido visual nativo.
 
 La suite `loader.startup_cache` usa
 `run_startup_cache_tests.ps1`, otro EXE aislado y copias propias de fixtures/datos.
-Sus 94 comprobaciones cubren píxeles exactos entre generación y persistencia,
+Sus 100 comprobaciones actuales cubren píxeles exactos entre generación y persistencia,
 variantes, firmas, Unicode, corrupción, cuotas/LRU, lectura entre procesos,
 prioridades/cancelación, snapshots y sesión pendiente. WIC/WARP comprueban entrega
 en UI; no certifican presentación nativa ni un plazo de 100 ms.
@@ -66,8 +69,8 @@ en UI; no certifican presentación nativa ni un plazo de 100 ms.
 Para medir arranque usa `scripts/run_startup_benchmark.ps1` o la matriz secuencial
 `scripts/run_startup_comparison.ps1`. Ambos requieren un RunRoot nuevo bajo build,
 leen los originales y crean datos/cachés propios junto a una copia del EXE.
-La instrumentación QPC se activa con `LENTEUV_PERF_OUTPUT` absoluto y exporta al
-salir; por defecto está desactivada. Las variables LENTEUV_PERF_* de escenario,
+La instrumentación QPC se activa con `IMAGE_VIEWER_PERF_OUTPUT` absoluto y exporta al
+salir; por defecto está desactivada. Las variables IMAGE_VIEWER_PERF_* de escenario,
 duración y salida son del ejecutor, sin preferencias ni opciones visuales nuevas.
 Cada ejecución guarda CSV, manifest, hashes/configuración y trazas localmente.
 No ejecutar builds u otras pruebas intensivas simultáneamente con la medición.
@@ -222,8 +225,8 @@ Los defaults de `packaging/default-settings.json` conservan las decisiones del Z
 anterior, sin BOM; `session.txt` nace vacío. No se incluyen muestras ni caches/logs.
 ZIP e instalador usan el mismo staging. Los resultados van a:
 
-- `dist/lenteuv_portable_<versión>.zip`
-- `dist/lenteuv_setup_<versión>.exe`
+- `dist/image_viewer_portable_<versión>.zip`
+- `dist/image_viewer_setup_<versión>.exe`
 
 Inno Setup 6 mantiene AppId/tareas/asociaciones del instalador anterior. Compilar el
 instalador no lo instala. Probar instalación/desinstalación en una ubicación aislada
@@ -304,7 +307,7 @@ imagen sintética BMP de 64 MiB; 314 checks. No modificar fixtures ni usar datos
 
 Pruebas y portable final en [014/result](changes/014-cancelacion-ar005/result.md).
 Para comprobar el producto empaquetado en una copia aislada, el harness admite
---ipc-package <lenteuv.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
+--ipc-package <image_viewer.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
 Lanza solo sus hijos con --multiple/--lite, recorre los tres modos restantes y envía NUM2 reservado por mensajes a
 su HWND/PID y solicita cierre normal. El watchdog solo limpia sus propios hijos.
 Conservar otra extracción limpia para el usuario. No certifica UX visual universal.
@@ -337,3 +340,29 @@ no se entregan hasta ProcessPending en principal tras inicialización correcta.
 No ejecutar harness ni benchmarks antes de una primera apertura coordinada.
 Los nuevos cambios funcionales tienen alcance propio; no repetir campañas de 003
 ni borrar datos/artefactos por inercia.
+
+
+## Cierre 019–022 (2026-10-26)
+
+El target/EXE actual es `image_viewer` / `image_viewer.exe`. Packaging usa
+`packaging/image_viewer_setup.iss`, `src/resources/image_viewer.ico` y prefijos
+`image_viewer_`. El generador neutral funciona con Python estándar; no necesita
+Pillow ni CairoSVG. Recursos antiguos archivados en 022/history, fuera del build.
+
+Nueve suites conservadas. Regresiones adicionales cubren composición modal,
+precedencia y scroll retenido, dock responsive/foco/acciones/MSAA/lifetime,
+exterior rotado/transparente y hit testing Win32 de caption/resize. Ver comandos,
+hashes y resultados reales en [022](changes/022-neutralizacion-marca/result.md).
+La validación nueva usa únicamente candidatos; no recompila ni ejecuta bases.
+
+Los nombres IMAGE_VIEWER_* de diagnóstico tienen precedencia sobre alias LENTEUV_*.
+Vacío explícito no activa alias; los scripts genéricos publican ambos para admitir
+EXE históricos suministrados expresamente. Los scripts dedicados de ETW 003 y
+las rutas históricas siguen como evidencia compatible; no ejecutarlos por inercia.
+
+
+Corrección visual de 020: modo optativo `async_preview_tests.exe --dock-snapshot
+<archivo.bgra>` genera 12 frames WARP (320/801 píxeles, 96/144 DPI, reposo/hover/modal)
+y comprueba font original, geometrías/reutilización y transform restaurado. No es
+benchmark. Los glifos detallados están en ui/dock_icons.*, sin recursos de terceros.
+Release/CTest y paquetes de esta corrección: [resultado 020](changes/020-navegacion-superior/result.md).

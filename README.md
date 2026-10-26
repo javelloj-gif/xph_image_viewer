@@ -1,4 +1,4 @@
-# LenteUV Image Viewer
+# Image Viewer (placeholder)
 
 Visor de imágenes para Windows inspirado en Picasa, derivado del
 [image_viewer de Sergei Krumas](https://github.com/sergkrumas/image_viewer),
@@ -18,7 +18,7 @@ CMake 3.21+ y PowerShell. Desde esta carpeta:
 cmake --preset windows-x64
 cmake --build --preset release
 ctest --preset release
-./build/windows-x64/bin/Release/lenteuv.exe ./tests/fixtures/linux.png
+./build/windows-x64/bin/Release/image_viewer.exe ./tests/fixtures/linux.png
 ```
 
 También: `./scripts/build.ps1 -Configuration Release -Test`.

@@ -212,7 +212,7 @@ void OptionsMenu::BuildControls() {
         // Info Label
         ControlItem appLabel;
         appLabel.type = ControlItem::Label;
-        appLabel.label = L"LenteUV — Native C++20 Version";
+        appLabel.label = L"Image Viewer — Native C++20 Version";
         appLabel.rect = RectF::FromXYWH(contentLeft, currentY, bounds.Width() - 60.0f, 30.0f);
         m_controls.push_back(appLabel);
         currentY += rowHeight * 1.5f;

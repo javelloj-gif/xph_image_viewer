@@ -1,5 +1,6 @@
 #include "common/pch.h"
 #include "core/app.h"
+#include "common/performance_trace.h"
 #include "board/board_tag_scanner.h"
 #include <iostream>
 #include <stdexcept>
@@ -880,8 +881,8 @@ public:
         else renderer.DrawText(label, labelRect, Color::White(), 13.5f, TextAlign::Center, TextVAlign::Center);
     }
 
-    // Writes real text, strip/overlay or grid pixels for before/after comparison on WARP without a swapchain.
-    int VisualSnapshot(const std::filesystem::path& output, bool grids = false, bool textOnly = false, bool reference = false) {
+    // Writes production text, strip/overlay, dock/icon or grid pixels on WARP; checks reference geometry/text contracts.
+    int VisualSnapshot(const std::filesystem::path& output, bool grids = false, bool textOnly = false, bool reference = false, bool dock = false) {
         auto& renderer = app.m_renderer;
         ComPtr<ID3D11Device> d3d;
         Check(SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr,
@@ -912,6 +913,7 @@ public:
         app.m_currentIndex = 3;
         app.m_fileList.clear();
         for (int i = 0; i < 120; ++i) app.m_fileList.push_back(L"synthetic/Imagen Ω " + std::to_wstring(i) + L".png");
+        app.m_currentImage->filePath = app.m_fileList[3];
         app.m_thumbnailStrip.SetFileList(app.m_fileList);
         std::vector<uint32_t> colors(64 * 32);
         for (size_t i = 0; i < colors.size(); ++i)
@@ -952,12 +954,13 @@ public:
                 renderer.m_width = width;
                 renderer.m_height = 480;
                 const auto properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET,
-                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), dpi, dpi);
+                    D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED), 96, 96);
                 renderer.m_renderTarget.Reset();
                 Check(SUCCEEDED(context->CreateBitmap(D2D1::SizeU(width, 480), nullptr, 0,
                     properties, &renderer.m_renderTarget)), "snapshot target");
                 context->SetTarget(renderer.m_renderTarget.Get());
-                context->SetDpi(dpi, dpi);
+                context->SetDpi(96, 96);
+                app.m_window.m_dpi = static_cast<uint32_t>(dpi);
                 auto readProperties = properties;
                 readProperties.bitmapOptions = D2D1_BITMAP_OPTIONS_CPU_READ | D2D1_BITMAP_OPTIONS_CANNOT_DRAW;
                 ComPtr<ID2D1Bitmap1> readable;
@@ -985,7 +988,7 @@ public:
                         Check(app.m_folderData.CompletePreview(preview.pendingRequest, progressive), "snapshot progressive completion");
                     }
                     renderer.BeginFrame();
-                    renderer.Clear(Color::Transparent());
+                    renderer.Clear(dock ? Color::FromHex(0x10171b) : Color::Transparent());
                     if (textOnly) {
                         DrawTextProbe(renderer, state, reference);
                     } else if (grids) {
@@ -996,7 +999,29 @@ public:
                         app.m_waterfallPage.DrawPreviewsGrid(renderer, rect);
                     } else {
                         strip.Draw(renderer);
+                        if (dock) {
+                            renderer.m_textFormats.clear();
+                            app.m_viewerPage.m_metadataOpacity = 1;
+                        }
                         app.m_viewerPage.DrawOverlayInfo(renderer);
+                        if (dock) {
+                            Check(std::any_of(renderer.m_textFormats.begin(), renderer.m_textFormats.end(), [](const auto& entry) { return entry.size == 13.0f; }), "metadata retains original 13-unit font at every window DPI");
+                            Check(std::all_of(renderer.m_textFormats.begin(), renderer.m_textFormats.end(), [](const auto& entry) { return entry.size <= 13.0f; }), "metadata text is not enlarged by window DPI");
+                            app.m_dockOpacity = 1;
+                            app.m_dockHovered = state == 1 ? 1 : (state == 2 ? 2 : -1);
+                            app.m_dockFocus = -1;
+                            app.DrawDock();
+                            auto retained = app.m_dockIcons.m_outlines[0];
+                            D2D1_MATRIX_3X2_F before, after;
+                            context->GetTransform(&before);
+                            Check(app.m_dockIcons.Draw(renderer, 0, RectF::FromXYWH(0, 100, 64, 64), Color::White()), "reference icon draws at inspection scale");
+                            context->GetTransform(&after);
+                            Check(std::memcmp(&before, &after, sizeof(before)) == 0 && app.m_dockIcons.m_outlines[0] == retained, "icon draws preserve transforms and reuse factory geometry");
+                            for (const auto& geometry : app.m_dockIcons.m_outlines) {
+                                D2D1_RECT_F bounds{};
+                                Check(SUCCEEDED(geometry->GetBounds(nullptr, &bounds)) && bounds.left >= 0 && bounds.top >= 0 && bounds.right <= 32 && bounds.bottom <= 32, "all reference outlines fit their design canvas");
+                            }
+                        }
                     }
                     Check(SUCCEEDED(context->EndDraw()), "snapshot drawing");
                     Check(SUCCEEDED(readable->CopyFromBitmap(nullptr, renderer.m_renderTarget.Get(), nullptr)), "snapshot copy");
@@ -1437,16 +1462,283 @@ public:
         app.OnMouseDoubleClick(MouseButton::Left, 400, 300, {});
         Check(app.m_window.IsFullscreen(), "Settings consumes double click before viewer");
         app.m_optionsMenu.Hide();
-        app.m_radialMenuProgress = 1;
-        app.OnMouseDoubleClick(MouseButton::Left, 100, 100, {});
-        Check(app.m_window.IsFullscreen(), "radial consumes double click before viewer");
-        app.m_radialMenuProgress = 0;
+        app.m_dockOpacity = 1;
+        const auto dockCell = app.GetDockButtonRect(0).Center();
+        app.OnMouseDoubleClick(MouseButton::Left, dockCell.x, dockCell.y, {});
+        Check(app.m_window.IsFullscreen(), "dock consumes double click before viewer");
+        app.m_dockOpacity = 0;
         viewer.OnMouseDoubleClick(MouseButton::Right, 400, 300, {});
         Check(app.m_window.IsFullscreen(), "right double click does not toggle fullscreen");
+        viewer.m_leftButtonDown = true;
         viewer.OnMouseDoubleClick(MouseButton::Left, 400, 300, {});
+        Check(!viewer.m_leftButtonDown, "fullscreen transition cancels stale image drag");
         Check(!app.m_window.IsFullscreen(), "left double click always toggles viewer");
         std::cout << "viewer control checks: " << checks << '\n';
         return 0;
+    }
+
+    // Exercises actual strip/metadata geometry and input across saved sizes/DPI, without decoding or personal data.
+    void StripPresentationRegressions() {
+        const int checksBefore = checks;
+        auto& strip = app.m_thumbnailStrip;
+        auto& viewer = app.m_viewerPage;
+        viewer.Initialize(&app);
+        app.m_animatedImage.reset();
+        app.m_currentImage = std::make_shared<ImageData>();
+        app.m_currentPage = Page::Viewer;
+        app.m_fileList = {L"p0", L"p1", L"p2", L"p3", L"p4", L"p5", L"p6"};
+        strip.m_opacity = 1;
+        strip.m_draggingThumbnails = false;
+        strip.m_groupSelecting = false;
+        for (const auto dpi : {96u, 144u, 192u}) {
+            app.m_window.m_dpi = dpi;
+            const float scale = dpi / 96.0f;
+            for (const float base : {30.0f, 44.0f, 50.0f, 73.0f, 90.0f, 100.0f}) {
+                app.m_settings.thumbnail_width = base;
+                for (const auto width : {320u, 480u, 736u, 1024u}) {
+                    app.m_renderer.m_width = static_cast<uint32_t>(width * scale);
+                    app.m_renderer.m_height = static_cast<uint32_t>(480 * scale);
+                    const auto size = app.m_renderer.GetTargetSize().ToFloat();
+                    for (const int active : {0, 3, 6}) {
+                        app.m_currentIndex = active;
+                        app.m_currentImage->filePath = app.m_fileList[active];
+                        strip.SetFileList(app.m_fileList);
+                        strip.SyncSelection(active);
+                        strip.m_scrollX = strip.m_targetScrollX;
+                        auto rect = strip.GetThumbnailRect(active, size.width, size.height);
+                        Check(std::abs(rect.Width() - 1.3f * base * scale) < 0.001f && std::abs(rect.Height() - rect.Width()) < 0.001f, "active square honors DIP scale and saved size");
+                        Check(std::abs(rect.Center().x - size.width / 2) < 0.01f, "navigation centers active geometry");
+                        Check(strip.HitTest(rect.Center().x, rect.top + 1) == active, "enlarged top of active thumbnail is clickable");
+                        strip.m_selected.assign(7, false);
+                        strip.m_selected[(active + 1) % 7] = true;
+                        strip.m_hoveredIndex = (active + 2) % 7;
+                        auto unchanged = strip.GetThumbnailRect(active, size.width, size.height);
+                        Check(unchanged.Width() == rect.Width() && unchanged.left == rect.left, "hover and multi-selection do not change active geometry");
+                        Check(strip.HandleMouseDoubleClick(MouseButton::Left, rect.Center().x, rect.top + 1, {}), "strip consumes double click over enlarged active area");
+                        Check(!strip.HandleMouseDoubleClick(MouseButton::Left, rect.Center().x, strip.GetBounds().top - 1, {}), "strip does not consume outside visible envelope");
+                        for (int i = 0; i < 6; ++i) {
+                            auto left = strip.GetThumbnailRect(i, size.width, size.height);
+                            auto right = strip.GetThumbnailRect(i + 1, size.width, size.height);
+                            Check(std::abs(right.left - left.right - 3 * scale) < 0.001f, "neighbor thumbnails use the requested half gap at every DPI");
+                        }
+                        const auto bar = viewer.GetInfoBarRect(10000 * scale, 30 * scale);
+                        Check(bar.left >= 0 && bar.right <= size.width && bar.bottom <= strip.GetBounds().top - 12 * scale + 0.001f, "metadata bounds preserve client and 12 DIP separation");
+                        Check(std::abs(bar.Center().x - rect.Center().x) < 0.01f, "metadata aligns with centered active image");
+                        for (const float shift : {-345.125f, 0.0f, 720.75f}) {
+                            strip.m_scrollX = shift * scale;
+                            const auto [first, end] = strip.GetVisibleRange(size.width);
+                            std::vector<size_t> reference, bounded;
+                            for (size_t i = 0; i < 7; ++i) {
+                                const auto r = strip.GetThumbnailRect(static_cast<int>(i), size.width, size.height);
+                                if (r.right >= 0 && r.left <= size.width) reference.push_back(i);
+                            }
+                            for (size_t i = first; i < end; ++i) bounded.push_back(i);
+                            Check(reference == bounded, "active-width visible interval matches full traversal");
+                        }
+                        app.m_currentPage = Page::Waterfall;
+                        const auto modalBar = viewer.GetInfoBarRect(100, 30 * scale);
+                        Check(std::abs(modalBar.bottom - (size.height - 15 * scale)) < 0.01f, "Waterfall modal reserves no nonexistent strip");
+                        app.m_currentPage = Page::Viewer;
+                    }
+                }
+            }
+        }
+        app.m_window.m_dpi = 96;
+        app.m_renderer.m_width = 800; app.m_renderer.m_height = 600;
+        app.m_settings.thumbnail_width = 90;
+        app.m_currentImage->filePath = L"p3";
+        app.m_currentIndex = 5;
+        strip.RefreshActiveIndex(5);
+        Check(strip.m_activeIndex == 3, "pending requested index does not replace presented original");
+        app.m_currentImage->filePath = L"p5";
+        strip.RefreshActiveIndex(5);
+        Check(strip.m_activeIndex == 5, "successful apply changes active occurrence");
+        app.m_fileList = {L"duplicate", L"other", L"duplicate"};
+        app.m_currentImage->filePath = L"duplicate"; app.m_currentIndex = 2;
+        strip.SetFileList(app.m_fileList);
+        Check(strip.m_activeIndex == 2, "duplicate paths select exactly the preferred occurrence");
+        strip.m_selected = {true, false, false};
+        strip.Rearrange(3);
+        Check(app.m_fileList == std::vector<std::wstring>{L"other", L"duplicate", L"duplicate"} && strip.m_activeIndex == 1, "reorder preserves duplicate count and presented occurrence");
+        KeyModifiers selectionMods{}; selectionMods.ctrl = true;
+        strip.m_scrollX = strip.GetCenteredScroll(1);
+        Check(strip.HandleMouseDown(MouseButton::Left, 350, 465, selectionMods), "selection box begins in shared strip area");
+        strip.HandleMouseMove(790, 599, selectionMods);
+        strip.HandleMouseUp(MouseButton::Left, 790, 599, selectionMods);
+        Check(strip.m_activeIndex == 1 && std::any_of(strip.m_selected.begin(), strip.m_selected.end(), [](bool selected) { return selected; }), "real group gesture preserves active image while selecting thumbnails");
+        const auto limits = strip.GetScrollLimits();
+        strip.m_scrollX = limits.second;
+        strip.m_targetScrollX = limits.second;
+        auto rect = strip.GetThumbnailRect(0, 800, 600);
+        strip.HandleMouseWheel(100, rect.Center().x, rect.Center().y, {});
+        Check(strip.m_targetScrollX == limits.second, "wheel clamps to first centered occurrence");
+        for (int tick = 0; tick < 8; ++tick) strip.HandleMouseWheel(-1, rect.Center().x, rect.Center().y, {});
+        Check(strip.m_targetScrollX == limits.first, "wheel clamps to last centered occurrence");
+        TextFactory();
+        const std::wstring longName = L"Imagen \u03a9 \U0001F642 " + std::wstring(120, L'W') + L".png";
+        const auto fitted = viewer.FitInfoName(app.m_renderer, longName, 120, 13);
+        Check(fitted != longName && app.m_renderer.MeasureText(fitted, 13).x <= 120, "long Unicode filename fits available width");
+        strip.SetFileList({});
+        Check(strip.HitTest(10, 590) == -1 && strip.GetVisibleRange(800) == std::pair<size_t,size_t>{0,0}, "empty strip has no hit or visible range");
+        std::cout << "strip presentation checks added: " << checks - checksBefore << '\n';
+    }
+
+    // Exercises modal control precedence and return to the retained grid through production App handlers.
+    void SharedViewerRegressions() {
+        app.m_viewerPage.Initialize(&app);
+        app.m_renderer.m_width = 800; app.m_renderer.m_height = 600; app.m_window.m_dpi = 96;
+        app.m_currentPage = Page::Waterfall;
+        auto& grid = app.m_waterfallPage; auto& strip = app.m_thumbnailStrip; auto& viewer = app.m_viewerPage;
+        grid.m_viewerModal = true;
+        grid.m_scrollOffset = -347.5f; grid.m_targetScrollOffset = -360;
+        const int folder = app.m_currentFolderIdx;
+        app.m_fileList = {L"shared-a", L"shared-b"};
+        strip.SetFileList(app.m_fileList); strip.m_opacity = strip.m_targetOpacity = 1;
+        Check(app.IsViewerActive(), "Waterfall modal hosts the shared viewer");
+        Check(viewer.GetInfoBarRect(200, 28).bottom <= strip.GetBounds().top - 12, "modal metadata reserves strip envelope");
+        viewer.m_metadataOpacity = 1; viewer.m_infoBarRect = RectF::FromXYWH(200, 400, 250, 30);
+        app.OnMouseDown(MouseButton::Left, 220, 410, {});
+        Check(grid.m_viewerModal && !viewer.m_leftButtonDown, "metadata press does not dismiss modal or start image drag");
+        KeyModifiers ctrl; ctrl.ctrl = true;
+        app.OnMouseDown(MouseButton::Left, 100, 590, ctrl);
+        Check(grid.m_viewerModal && strip.m_groupSelecting, "strip selection precedes exterior close");
+        app.OnMouseMove(700, 590, ctrl); app.OnMouseUp(MouseButton::Left, 700, 590, ctrl);
+        Check(grid.m_viewerModal && !strip.m_groupSelecting, "strip release reaches owner in modal host");
+        app.OnKeyDown(VK_ESCAPE, {});
+        Check(!grid.m_viewerModal && !app.IsViewerActive(), "Escape returns to grid");
+        Check(app.m_currentPage == Page::Waterfall && app.m_currentFolderIdx == folder && grid.m_scrollOffset == -347.5f && grid.m_targetScrollOffset == -360, "exit retains folder and scroll offsets");
+        grid.m_viewerModal = true; viewer.m_leftButtonDown = true;
+        app.OnMouseDown(MouseButton::Left, 0, 100, {});
+        Check(grid.m_viewerModal, "active image gesture prevents exterior dismissal");
+        viewer.CancelPointerGesture(); app.OnMouseDown(MouseButton::Left, 0, 100, {});
+        Check(!grid.m_viewerModal, "unclaimed exterior press returns to grid");
+        strip.CancelPendingLoads(); strip.SetFileList({}); app.m_currentPage = Page::Viewer;
+    }
+
+    // Checks responsive target sizes, effects/autohide, commands and keyboard/control precedence.
+    void DockRegressions() {
+        app.m_currentPage = Page::Viewer;
+        app.m_settings.effects = false;
+        app.m_waterfallPage.m_viewerModal = false;
+        for (const auto dpi : {96u, 144u, 192u}) {
+            app.m_window.m_dpi = dpi;
+            for (const auto width : {320u, 480u, 736u, 1024u}) {
+                app.m_renderer.m_width = width; app.m_renderer.m_height = 800;
+                const auto bounds = app.GetDockBounds();
+                Check(std::abs(bounds.Center().x - width / 2.0f) < 0.001f, "dock is centered at every width and DPI");
+                const auto tooltip = app.GetDockTooltipRect();
+                Check(tooltip.left >= 0 && tooltip.right <= width && std::abs(tooltip.Center().x-width/2.0f)<0.001f, "dock tooltip stays centered and inside client");
+                for (int i = 0; i < 6; ++i) {
+                    const auto cell = app.GetDockButtonRect(i);
+                    Check(cell.left >= bounds.left && cell.right <= bounds.right && cell.top >= bounds.top && cell.bottom <= bounds.bottom, "dock targets fit responsive bounds");
+                    Check(cell.Width() >= 44 * dpi / 96.0f && bounds.right <= width, "dock maintains 44 DIP target and client bounds");
+                }
+            }
+        }
+        app.m_window.m_dpi = 96; app.m_renderer.m_width = 800;
+        app.m_mouseX = app.GetDockBounds().Center().x; app.m_mouseY = 10;
+        app.UpdateDock(0.1);
+        Check(app.m_dockOpacity == 1, "top band reveals dock without effects");
+        app.m_mouseX = 500; app.m_mouseY = 500; app.UpdateDock(0.8);
+        Check(app.m_dockOpacity == 1, "dock retains 900 ms grace");
+        app.UpdateDock(0.11);
+        Check(app.m_dockOpacity == 0 && app.HitDock(30,30) < 0, "hidden dock does not intercept");
+        app.HandleDockKey(VK_TAB, {});
+        Check(app.m_dockFocus == 0 && app.m_dockOpacity == 1, "Tab reveals named dock focus");
+        const auto rotation = app.m_viewerPage.m_rotation;
+        app.InvokeDock(4);
+        Check(app.m_currentPage == Page::Viewer && app.m_viewerPage.m_rotation == rotation && !app.m_optionsMenu.IsVisible(), "future filter is inert");
+        app.m_dockFocus = 2; app.HandleDockKey(VK_RETURN, {});
+        Check(app.m_viewerPage.m_rotation == rotation + 90, "focused rotate invokes existing image command");
+        const auto objectResult = app.GetDockAccessibleObject(0, OBJID_CLIENT);
+        ComPtr<IAccessible> accessible;
+        Check(SUCCEEDED(ObjectFromLresult(objectResult, IID_IAccessible, 0, reinterpret_cast<void**>(accessible.GetAddressOf()))), "Windows MSAA bridge exposes dock object");
+        VARIANT child{}; child.vt = VT_I4; child.lVal = 5;
+        BSTR name = nullptr;
+        Check(SUCCEEDED(accessible->get_accName(child, &name)) && std::wstring(name).find(L"Sort & Filter") != std::wstring::npos, "disabled icon has accessible name");
+        SysFreeString(name);
+        VARIANT state{};
+        Check(SUCCEEDED(accessible->get_accState(child, &state)) && (state.lVal & STATE_SYSTEM_UNAVAILABLE), "MSAA marks future action unavailable");
+        Check(accessible->accDoDefaultAction(child) == S_FALSE, "MSAA cannot invoke future action");
+        app.m_dockAccessibleState.reset();
+        Check(accessible->get_accState(child, &state) == CO_E_OBJNOTCONNECTED, "MSAA external references cannot outlive owner state");
+        app.m_dockFocus = -1; app.m_waterfallPage.m_viewerModal = true; app.m_currentPage = Page::Waterfall;
+        app.m_dockOpacity = 1;
+        const auto cell = app.GetDockButtonRect(4).Center();
+        app.OnMouseDown(MouseButton::Left, cell.x, cell.y, {}); app.OnMouseUp(MouseButton::Left, cell.x, cell.y, {});
+        Check(app.m_waterfallPage.m_viewerModal, "disabled dock press cannot dismiss modal");
+        app.InvokeDock(0);
+        Check(app.m_currentPage == Page::Waterfall && !app.m_waterfallPage.m_viewerModal, "Waterfall dock returns to grid");
+        app.UpdateDock(1);
+        Check(app.m_dockOpacity == 0, "grid has no dock");
+        app.m_currentPage = Page::Board; app.UpdateDock(1);
+        Check(app.m_dockOpacity == 0 && !app.HandleDockKey(VK_TAB, {}), "Board has no dock input");
+        app.m_currentPage = Page::Viewer; app.m_dockFocus = -1; app.m_dockOpacity = 0;
+    }
+
+    // Exercises transformed bounds rather than bitmap alpha and excludes controls/gestures from compacting.
+    void ExteriorGestureRegressions() {
+        auto& viewer = app.m_viewerPage;
+        app.m_currentPage = Page::Viewer; app.m_waterfallPage.m_viewerModal = false;
+        app.m_renderer.m_width = 800; app.m_renderer.m_height = 600;
+        app.m_currentImage = std::make_shared<ImageData>(); app.m_animatedImage.reset();
+        app.m_currentImage->width = 200; app.m_currentImage->height = 100;
+        app.m_window.m_translucent = true; app.m_settings.window_opacity = 0.5f;
+        viewer.ResetView(); viewer.m_metadataOpacity = 0;
+        Check(!viewer.IsExteriorPress(400,300,{}), "transparent bitmap interior counts as image bounds");
+        Check(viewer.IsExteriorPress(0,200,{}), "transparent exterior qualifies in standalone Viewer");
+        viewer.m_rotation = 90;
+        Check(viewer.IsPointOverImage(400,390) && !viewer.IsPointOverImage(490,300), "inverse rotation matches real image rather than bounding alpha");
+        viewer.m_pan = {20,30}; viewer.m_zoom = 2;
+        Check(viewer.IsPointOverImage(420,330), "pan and zoom preserve image hit");
+        viewer.CancelPointerGesture(); app.m_window.m_fullscreen = true;
+        viewer.OnMouseDown(MouseButton::Left,0,200,{});
+        Check(!app.m_window.IsFullscreen() && viewer.m_exteriorPress && !viewer.m_leftButtonDown, "first exterior click compacts and consumes image gesture");
+        viewer.OnMouseUp(MouseButton::Left,0,200,{});
+        viewer.OnMouseDoubleClick(MouseButton::Left,0,200,{});
+        Check(!app.m_window.IsFullscreen() && !viewer.m_exteriorPress, "compact exterior double click never reenters fullscreen");
+        viewer.m_leftButtonDown = true;
+        Check(!viewer.IsExteriorPress(0,200,{}), "active image drag excludes compacting");
+        viewer.CancelPointerGesture();
+        viewer.m_metadataOpacity = 1; viewer.m_infoBarRect = RectF::FromXYWH(0,190,100,30);
+        Check(!viewer.IsExteriorPress(0,200,{}), "metadata surface excludes compacting");
+        viewer.m_metadataOpacity = 0;
+        app.m_currentPage = Page::Waterfall;
+        Check(!viewer.IsExteriorPress(0,200,{}), "Waterfall retains modal return semantics");
+        app.m_currentPage = Page::Viewer; app.m_settings.window_opacity = 1;
+        Check(!viewer.IsExteriorPress(0,200,{}), "opaque background excluded");
+        app.m_settings.window_opacity = 0.5f; app.m_window.m_translucent = false;
+        Check(!viewer.IsExteriorPress(0,200,{}), "opaque window composition excluded");
+        app.m_window.m_translucent = true;
+        const auto original = RectF::FromXYWH(30,50,120,80);
+        const auto grown = app.m_waterfallPage.EnlargeActiveItemRect(original);
+        Check(std::abs(grown.Width()-original.Width()-200.0f/3.0f)<0.001f && std::abs(grown.Width()/grown.Height()-1.5f)<0.001f && grown.Center().x==original.Center().x && grown.Center().y==original.Center().y, "hover adds 66.6667 preserving aspect and center");
+        viewer.ResetView();
+    }
+
+    // Preserves diagnostic aliases for historical scripts while giving neutral names explicit precedence.
+    void DiagnosticAliasRegressions() {
+        SetEnvironmentVariableW(L"IMAGE_VIEWER_TEST_ALIAS", nullptr);
+        SetEnvironmentVariableW(L"LENTEUV_TEST_ALIAS", L"legacy");
+        Check(PerformanceTrace::Environment(L"IMAGE_VIEWER_TEST_ALIAS") == L"legacy", "historical diagnostic variable remains readable");
+        SetEnvironmentVariableW(L"IMAGE_VIEWER_TEST_ALIAS", L"neutral");
+        Check(PerformanceTrace::Environment(L"IMAGE_VIEWER_TEST_ALIAS") == L"neutral", "neutral diagnostic variable wins");
+        SetEnvironmentVariableW(L"IMAGE_VIEWER_TEST_ALIAS", L"");
+        Check(PerformanceTrace::Environment(L"IMAGE_VIEWER_TEST_ALIAS").empty(), "explicit empty neutral value does not enable historical diagnostics");
+        SetEnvironmentVariableW(L"IMAGE_VIEWER_TEST_ALIAS", nullptr);
+        SetEnvironmentVariableW(L"LENTEUV_TEST_ALIAS", nullptr);
+    }
+
+    // Checks native caption precedence on an owned hidden HWND, without touching the desktop or another app.
+    void ClientHitTestRegressions() {
+        HWND hidden = CreateWindowExW(0,L"STATIC",L"viewer-hit-tests",WS_POPUP,100,100,800,600,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+        Check(hidden != nullptr, "hidden native hit-test window");
+        Window window;
+        window.m_hwnd = hidden; window.m_dpi = 96; window.m_resizeBorderWidth = 6;
+        Check(window.HitTest(200,120) == HTCAPTION, "grid retains native caption band");
+        window.events.onClientHitTest = [](float,float) { return true; };
+        Check(window.HitTest(200,120) == HTCLIENT, "viewer custom surfaces precede native caption double click");
+        Check(window.HitTest(101,150) == HTLEFT && window.HitTest(400,101) == HTTOP, "native resizing borders remain available");
     }
 
     // Runs original regressions and the optional pre-upload validity contract with checks active in Release.
@@ -1462,6 +1754,12 @@ public:
         LayoutCacheRegressions();
         TextFormatRegressions();
         UploadValidityRegressions();
+        StripPresentationRegressions();
+        SharedViewerRegressions();
+        DockRegressions();
+        ExteriorGestureRegressions();
+        DiagnosticAliasRegressions();
+        ClientHitTestRegressions();
         std::cout << "Passed " << checks << " production async preview checks\n";
         return 0;
     }
@@ -1497,6 +1795,8 @@ int main(int argc, char* argv[]) {
         kv::AsyncPreviewTests tests;
         if (preferences) return tests.RunViewerControls();
         if (argc == 2 && std::string_view(argv[1]) == "--cancellation-tests") return tests.RunCancellation();
+        if (argc == 3 && std::string_view(argv[1]) == "--dock-snapshot")
+            return tests.VisualSnapshot(std::filesystem::path(argv[2]), false, false, false, true);
         if (argc == 3 && std::string_view(argv[1]) == "--optimization-snapshot")
             return tests.VisualSnapshot(std::filesystem::path(argv[2]));
         if (argc == 3 && std::string_view(argv[1]) == "--layout-snapshot")

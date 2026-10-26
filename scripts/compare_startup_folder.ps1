@@ -23,7 +23,7 @@ $settings.settings.show_fullscreen[0] = $true
 foreach ($variant in @('baseline','candidate')) {
     $stage = Join-Path $run $variant
     New-Item -ItemType Directory -Path "$stage\user_data" | Out-Null
-    Copy-Item -LiteralPath $executables[$variant] -Destination "$stage\lenteuv.exe"
+    Copy-Item -LiteralPath $executables[$variant] -Destination "$stage\image_viewer.exe"
     $runtime = @(Get-ChildItem -LiteralPath (Split-Path $executables[$variant]) -Filter *.dll -File)
     if (!$runtime.Count) { $runtime = @(Get-ChildItem -LiteralPath (Split-Path $executables.baseline) -Filter *.dll -File) }
     $runtime | Copy-Item -Destination $stage
@@ -38,15 +38,19 @@ for ($pair = 0; $pair -le $Pairs; ++$pair) {
     foreach ($variant in $order) {
         $stage = Join-Path $run $variant
         $trace = Join-Path $run "$variant-$pair.csv"
-        $start = [Diagnostics.ProcessStartInfo]::new("$stage\lenteuv.exe")
+        $start = [Diagnostics.ProcessStartInfo]::new("$stage\image_viewer.exe")
         $start.UseShellExecute = $false
         $start.WorkingDirectory = $stage
         $start.ArgumentList.Add('--multiple')
         $start.ArgumentList.Add($imagesPath)
-        $start.Environment['LENTEUV_PERF_OUTPUT'] = $trace
-        $start.Environment['LENTEUV_PERF_EXIT_MS'] = '10000'
-        $start.Environment['LENTEUV_PERF_READY_EXIT_MS'] = '250'
-        $start.Environment['LENTEUV_PERF_SCENARIO'] = 'viewer'
+        $start.Environment['IMAGE_VIEWER_PERF_OUTPUT'] = $trace
+        $start.Environment['IMAGE_VIEWER_PERF_EXIT_MS'] = '10000'
+        $start.Environment['IMAGE_VIEWER_PERF_READY_EXIT_MS'] = '250'
+        $start.Environment['IMAGE_VIEWER_PERF_SCENARIO'] = 'viewer'
+        # Compatibility for explicitly supplied historical executables; neutral names remain primary.
+        foreach ($diagnosticName in @($start.Environment.Keys | Where-Object { $_ -like 'IMAGE_VIEWER_*' })) {
+            $start.Environment[$diagnosticName.Replace('IMAGE_VIEWER_', 'LENTEUV_')] = $start.Environment[$diagnosticName]
+        }
         $invoke = [Diagnostics.Stopwatch]::GetTimestamp()
         $child = [Diagnostics.Process]::Start($start)
         try {

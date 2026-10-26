@@ -12,6 +12,31 @@
 
 namespace kv {
 
+void WaterfallPage::OpenViewer() {
+    if (m_app->m_currentFolderIdx < 0 || m_app->m_currentFolderIdx >= static_cast<int>(m_app->m_folders.size())) return;
+    auto& folder = m_app->m_folders[m_app->m_currentFolderIdx];
+    const int index = m_hoveredPreviewIdx;
+    if (index < 0 || index >= static_cast<int>(folder.filePaths.size())) return;
+    m_app->CancelHoverLoads();
+    m_app->m_currentIndex = folder.currentIndex = index;
+    m_viewerModal = true;
+    m_app->m_thumbnailStrip.SetFileList(m_app->m_fileList);
+    m_app->m_thumbnailStrip.SyncSelection(index);
+    m_app->LoadImage(folder.filePaths[index]);
+    m_app->m_viewerPage.ResetView();
+    m_app->m_window.RequestRedraw();
+}
+
+void WaterfallPage::CloseViewer() {
+    m_app->m_viewerPage.CancelPointerGesture();
+    m_app->m_thumbnailStrip.CancelPointerGesture();
+    m_app->m_thumbnailStrip.CancelPendingLoads();
+    m_viewerModal = false;
+    m_waterfallBlockActiveItem = true;
+    m_unblockTimer = 1.0;
+    m_app->m_window.RequestRedraw();
+}
+
 void WaterfallPage::Initialize(App* app) {
     m_app = app;
     m_layoutValid = false;
@@ -70,7 +95,7 @@ void WaterfallPage::Draw(Renderer& renderer) {
         renderer.FillRect(RectF::FromXYWH(0, 0, size.width, size.height), Color::Black(0.66f));
         
         // Draw the modal viewer content on top
-        m_app->m_viewerPage.Draw(renderer);
+        m_app->DrawViewerComposition(renderer);
         return;
     }
 
@@ -151,7 +176,7 @@ void WaterfallPage::CalculateLayout() {
 }
 
 RectF WaterfallPage::EnlargeActiveItemRect(const RectF& rect) const {
-    float newW = rect.Width() + 40.0f;
+    float newW = rect.Width() + (200.0f / 3.0f);
     float newH = (newW / rect.Width()) * rect.Height();
     return RectF::Centered(rect.Center().x, rect.Center().y, newW, newH);
 }
@@ -550,11 +575,8 @@ bool WaterfallPage::OnMouseMove(float x, float y, KeyModifiers mods) {
 
 bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (m_viewerModal) {
-        if (btn == MouseButton::Left && !m_app->m_viewerPage.IsPointOverImage(x, y)) {
-            m_viewerModal = false;
-            m_waterfallBlockActiveItem = true;
-            m_unblockTimer = 1.0;
-            m_app->m_window.RequestRedraw();
+        if (btn == MouseButton::Left && !m_app->m_viewerPage.IsInfoBarHit(x, y) && !m_app->m_viewerPage.HasPointerGesture() && !m_app->m_viewerPage.IsPointOverImage(x, y)) {
+            CloseViewer();
             return true;
         }
         m_app->m_viewerPage.OnMouseDown(btn, x, y, mods);
@@ -572,6 +594,7 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
                 AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
             }
 
+            AppendMenuW(hMenu, MF_STRING, 13, L"Viewer (NUM1)");
             HMENU hSortSub = CreatePopupMenu();
             int currentMode = m_app->m_settings.sort_mode;
 
@@ -593,7 +616,9 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
                                           pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);
             DestroyMenu(hMenu);
 
-            if (selected == 1) {
+            if (selected == 13) {
+                m_app->SetPage(Page::Viewer);
+            } else if (selected == 1) {
                 m_app->OnKeyDown('O', {});
             } else if (selected == 2) {
                 m_app->OnKeyDown(VK_F11, {});
@@ -602,9 +627,7 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
             } else if (selected >= 30 && selected <= 35) {
                 m_app->ApplySortMode(selected - 30);
             } else if (selected == 10) {
-                m_viewerModal = true;
-                m_app->m_viewerPage.ResetView();
-                m_app->m_window.RequestRedraw();
+                OpenViewer();
             } else if (selected == 11) {
                 m_app->OnKeyDown('T', {});
             } else if (selected == 12) {
@@ -690,14 +713,8 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
                 m_hoveredPreviewIdx = clickedIdx;
             }
 
-            m_app->m_currentIndex = clickedIdx;
-            folder.currentIndex = clickedIdx;
-            m_app->LoadImage(folder.filePaths[clickedIdx]);
-
-            // Enter modal mode
-            m_viewerModal = true;
-            m_app->m_viewerPage.ResetView();
-            m_app->m_window.RequestRedraw();
+            m_hoveredPreviewIdx = clickedIdx;
+            OpenViewer();
             return true;
         }
     }
@@ -811,10 +828,7 @@ bool WaterfallPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         if (vk == VK_ESCAPE || vk == VK_RETURN || vk == VK_SPACE || vk == 'F') {
             // Escape/Enter leaves modal viewer
             if (vk == VK_ESCAPE || vk == VK_RETURN) {
-                m_viewerModal = false;
-                m_waterfallBlockActiveItem = true;
-                m_unblockTimer = 1.0; // Block hover changes for 1 second (same as Python singleShot timer)
-                m_app->m_window.RequestRedraw();
+                CloseViewer();
                 return true;
             }
         }
@@ -826,9 +840,7 @@ bool WaterfallPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         case VK_RETURN:
         case 'F':
             if (m_hoveredPreviewIdx != -1) {
-                m_viewerModal = true;
-                m_app->m_viewerPage.ResetView();
-                m_app->m_window.RequestRedraw();
+                OpenViewer();
                 return true;
             }
             break;

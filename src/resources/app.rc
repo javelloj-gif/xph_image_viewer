@@ -1,12 +1,12 @@
 // ============================================================================
 // app.rc — Windows Resource Script
-// LenteUV Image Viewer — Native C++20
+// Image Viewer — Native C++20
 // ============================================================================
 
 #include <winresrc.h>
 
 // ─── Application Icon ─────────────────────────────────────────────────────────
-1 ICON "lenteuv.ico"
+1 ICON "image_viewer.ico"
 
 // ─── Application Manifest ────────────────────────────────────────────────────
 // Note: The manifest is embedded via CMake's LINK_FLAGS instead of via RC.
@@ -31,12 +31,12 @@ BEGIN
         BLOCK "040904B0"  // English (US), Unicode
         BEGIN
             VALUE "CompanyName",      "xPhang"
-            VALUE "FileDescription",  "LenteUV Image Viewer"
+            VALUE "FileDescription",  "Image Viewer"
             VALUE "FileVersion",      "1.00.3.0"
-            VALUE "InternalName",     "lenteuv"
-            VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. LenteUV is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
-            VALUE "OriginalFilename", "lenteuv.exe"
-            VALUE "ProductName",      "LenteUV"
+            VALUE "InternalName",     "image_viewer"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. Image Viewer is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
+            VALUE "OriginalFilename", "image_viewer.exe"
+            VALUE "ProductName",      "Image Viewer"
             VALUE "ProductVersion",   "1.00.3.0"
         END
     END

@@ -1,11 +1,11 @@
 // ============================================================================
 // Class: App
-// Project: LenteUV Image Viewer
+// Project: Image Viewer
 // Author: xPhang
 // Based on: Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)
 //           Fork extended with Direct2D/Direct3D 11, XMP tagging, Board page,
 //           multi-language support and Windows shell integration.
-// Description: App is the central coordinator for the LenteUV application,
+// Description: App is the central coordinator for the Image Viewer application,
 //              managing the main event loop, routing system messages, and
 //              page navigation across Viewer, Board and Waterfall pages.
 // Responsibility: Orchestrate the Win32 window message loop and delegate
@@ -13,6 +13,8 @@
 // ============================================================================
 
 #pragma once
+#include "ui/dock_accessibility.h"
+#include "ui/dock_icons.h"
 
 #include "common/types.h"
 #include "core/settings.h"
@@ -98,22 +100,22 @@ private:
     // ── Event Handlers ────────────────────────────────────────────────────
     void OnPaint();
     void OnResize(uint32_t width, uint32_t height);
-    // UI: tracks radial hover/tooltip, then delegates movement to the active page.
+    // UI: tracks dock hover/tooltip, then delegates movement to the active page.
     void OnMouseMove(float x, float y, KeyModifiers mods);
-    // UI: dispatches overlays/radial/page clicks; the reserved radial slot consumes without action.
+    // UI: dispatches overlays/dock/strip/page clicks in that order.
     void OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
-    // UI: consumes radial releases and routes remaining releases to the active page.
+    // UI: consumes dock releases and routes remaining releases to the active page.
     void OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     // UI: routes scroll through overlays and the active page.
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
-    // UI: delegates double-click gestures to the active page and viewer strip.
-    // UI thread: modal overlays/radial/strip/pages consume double clicks before viewer fullscreen.
+    // UI thread: modal overlays/dock/strip/pages consume double clicks before viewer fullscreen.
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
     // UI: offers keys to editors/pages before global shortcuts; NUM2/2 have no navigation action.
     void OnKeyDown(uint32_t vk, KeyModifiers mods);
     void OnChar(wchar_t ch);
     // UI: loads dropped content using the existing preference; Board retains its own drop path.
     void OnFileDrop(std::vector<std::wstring> files);
+    // UI: clears dock hover and notifies the shared strip when the pointer leaves the client.
     void OnMouseLeave();
 
     // ── Rendering ─────────────────────────────────────────────────────────
@@ -121,6 +123,10 @@ private:
     void RenderFrame();
     // UI: draws Viewer, Board or Waterfall using renderer-owned resources.
     void DrawViewerContent();
+    // UI: identifies both hosts of the single shared viewer, without changing page identity.
+    bool IsViewerActive() const;
+    // UI: draws the same image, metadata and strip using App-owned resources in either host.
+    void DrawViewerComposition(Renderer& renderer);
     void DrawImageFitted(ID2D1Bitmap1* bitmap);
     void DrawCheckerboard(const RectF& rect);
     void DrawOverlayInfo();
@@ -134,7 +140,8 @@ private:
     void BeginViewerLoad(const std::wstring& path);
     // UI after page initialization: queues folder data without delaying an already decoding original.
     void PrepareImageFolder(const std::wstring& path);
-    // UI: commits a current CPU/GPU result without selecting a page or applying obsolete work.
+    // UI: commits current CPU/GPU original and strip identity, including animation;
+    // does not select a page or apply obsolete work.
     void ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loaded);
     // UI: reconciles the latest requested image with a newly available folder snapshot.
     void OnFolderReady();
@@ -219,13 +226,29 @@ private:
     float    m_mouseY = 0.0f;
     bool     m_wasFullscreen = false;
 
-    // ── Radial Menu fullscreen state ──────────────────────────────────────
-    bool    m_radialMenuVisible = false;
-    float   m_radialMenuProgress = 0.0f; // Animated 0.0 to 1.0
-    int     m_radialMenuHoveredIdx = -1;  // -1 if none, 0 to 3
-    // UI: draws three mode targets and a gray reserved slot with an informational tooltip.
-    void    DrawRadialMenu();
-    PointF  GetRadialButtonCenter(int idx, float progress);
+    // UI-only dock state; shares commands and resources with the existing viewer host.
+    std::shared_ptr<DockAccessibleState> m_dockAccessibleState;
+    // UI: publishes MSAA names/geometry/actions via WM_GETOBJECT; the provider weakly borrows this owner.
+    LRESULT GetDockAccessibleObject(WPARAM request, LPARAM objectId);
+    DockIcons m_dockIcons; // UI-owned artwork; independent of image/cache state.
+    float m_dockOpacity = 0;
+    double m_dockRemaining = 0;
+    int m_dockHovered = -1, m_dockFocus = -1, m_dockPressed = -1;
+    // UI: centers responsive client-pixel geometry at the top; cells remain at least 44 DIP.
+    RectF GetDockBounds() const;
+    RectF GetDockButtonRect(int index) const;
+    int HitDock(float x, float y) const;
+    // UI: includes the visible command tooltip when protecting underlying image gestures.
+    RectF GetDockTooltipRect() const;
+    bool IsDockHit(float x, float y) const;
+    // UI: retains hover/focus/owned overlays, then fades with the existing effects preference.
+    void UpdateDock(double dt);
+    // UI: draws reference-faithful Outline vectors, separators, cyan hover/active states and command tooltips.
+    void DrawDock();
+    // UI: invokes existing page/action handlers; index 4 is deliberately inert.
+    void InvokeDock(int index);
+    // UI: offers Tab/arrows/Enter/Escape to dock focus before viewer shortcuts.
+    bool HandleDockKey(uint32_t vk, KeyModifiers mods);
 
     // ── Cached Values ─────────────────────────────────────────────────────
     ComPtr<ID2D1Bitmap1>  m_checkerboardBitmap;  // cached checkerboard pattern

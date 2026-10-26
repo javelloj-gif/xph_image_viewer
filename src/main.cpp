@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: None
-// Description: Main is the WinMain entry point of the project. lenteuv imageviewer basado en Sergkruma's image viewer.
+// Description: Main is the WinMain entry point of the project. image_viewer basado en Sergkruma's image viewer.
 // Responsibility: Parse parameters, initialize COM, verify single instances via IPC, and initialize `App`.
 // ============================================================================
 #include "common/pch.h"
@@ -83,9 +83,9 @@ int wWinMainImpl(
     }
     if (initResult == kv::InitResult::ForwardFailed) {
         const auto message = std::format(
-            L"No se pudo enviar la solicitud a la instancia existente de LenteUV.\n\n"
+            L"No se pudo enviar la solicitud a la instancia existente de Image Viewer.\n\n"
             L"Error de transporte Win32: {}. Vuelva a intentar la apertura.", app.GetIpcSendError());
-        MessageBoxW(nullptr, message.c_str(), L"LenteUV — Error de envío", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, message.c_str(), L"Image Viewer — Error de envío", MB_OK | MB_ICONERROR);
         return 2;
     }
     if (initResult == kv::InitResult::Failed) {
@@ -95,7 +95,7 @@ int wWinMainImpl(
             L"• GPU driver does not support Direct3D 11\n"
             L"• Windows version is too old (requires Windows 10 1903+)\n"
             L"• DirectComposition is not available",
-            L"LenteUV — Error de inicialización",
+            L"Image Viewer — Error de inicialización",
             MB_OK | MB_ICONERROR);
         return 1;
     }

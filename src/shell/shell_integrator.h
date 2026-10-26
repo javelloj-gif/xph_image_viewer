@@ -13,6 +13,7 @@ namespace kv {
 
 class ShellIntegrator {
 public:
+    // UI/COM apartment: reads the active Explorer selection into caller-owned paths; reports shell failures.
     static HRESULT GetFileListFromActiveExplorerWindow(std::vector<std::wstring>& outFiles, bool fullpaths = true);
     static bool SendFileToRecycleBin(const std::wstring& filePath);
 

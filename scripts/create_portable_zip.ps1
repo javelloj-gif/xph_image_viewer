@@ -12,10 +12,10 @@ param(
 . (Join-Path $PSScriptRoot 'common.ps1')
 if (!$Version) { $Version = Get-ProjectVersion }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Version must have major.minor.patch form.' }
-if (!$OutputName) { $OutputName = "lenteuv_portable_$Version" }
+if (!$OutputName) { $OutputName = "image_viewer_portable_$Version" }
 if ($OutputName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { throw 'OutputName must be a plain filename, without directories.' }
 if (!$SkipBuild) { & (Join-Path $PSScriptRoot 'build.ps1') -Configuration Release -CMakePath $CMakePath }
-$binary = Join-Path $ProjectRoot 'build/windows-x64/bin/Release/lenteuv.exe'
+$binary = Join-Path $ProjectRoot 'build/windows-x64/bin/Release/image_viewer.exe'
 if (!(Test-Path -LiteralPath $binary)) { throw 'Release executable not found. Run scripts/build.ps1 first.' }
 
 $vsRoot = $null
@@ -44,7 +44,7 @@ $stage = Assert-ChildPath (Join-Path $stagingParent ([guid]::NewGuid().ToString(
 $dist = Join-Path $ProjectRoot 'dist'
 New-Item -ItemType Directory -Path $stage, $dist -Force | Out-Null
 Copy-Item -LiteralPath $binary -Destination $stage
-Copy-Item -LiteralPath (Join-Path $ProjectRoot 'src/resources/lenteuv.ico'), (Join-Path $ProjectRoot 'LICENSE') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $ProjectRoot 'src/resources/image_viewer.ico'), (Join-Path $ProjectRoot 'LICENSE') -Destination $stage
 foreach ($locale in Get-ChildItem -LiteralPath (Join-Path $ProjectRoot 'locales') -Directory) {
     $catalog = Join-Path $locale.FullName 'LC_MESSAGES/base.po'
     if (Test-Path -LiteralPath $catalog) {
@@ -62,7 +62,7 @@ New-Item -ItemType Directory -Path $userData -Force | Out-Null
 foreach ($subdir in @('boards', 'cache', 'tags')) { New-Item -ItemType Directory -Path (Join-Path $userData $subdir) -Force | Out-Null }
 Copy-Item -LiteralPath (Join-Path $ProjectRoot 'packaging/default-settings.json') -Destination (Join-Path $userData 'settings.json')
 [IO.File]::WriteAllText((Join-Path $userData 'session.txt'), '', [Text.UTF8Encoding]::new($false))
-[IO.File]::WriteAllText((Join-Path $stage 'README.txt'), "LenteUV $Version`r`nRun lenteuv.exe with an image or folder path. Windows 10 1903+ x64; optional formats depend on installed WIC codecs.`r`nData is stored in user_data beside the executable. Keep the extracted folder writable.`r`nGNU GPL: see LICENSE. Sources and attribution: https://github.com/javelloj-gif/xph_image_viewer (based on Sergei Krumas' image_viewer, extended by xPhang).`r`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $stage 'README.txt'), "Image Viewer $Version`r`nRun image_viewer.exe with an image or folder path. Windows 10 1903+ x64; optional formats depend on installed WIC codecs.`r`nData is stored in user_data beside the executable. Keep the extracted folder writable.`r`nGNU GPL: see LICENSE. Sources and attribution: https://github.com/javelloj-gif/xph_image_viewer (based on Sergei Krumas' image_viewer, extended by xPhang).`r`n", [Text.UTF8Encoding]::new($false))
 
 # Static imports are checked for the executable and all app-local runtime DLLs.
 # This does not validate GPU initialization or the user interface.
@@ -88,9 +88,9 @@ if ($Format -in @('Portable', 'All')) {
     Write-Host "Portable: $zip"
 }
 if ($Format -in @('Installer', 'All')) {
-    $installer = Assert-ChildPath (Join-Path $dist "lenteuv_setup_$Version.exe") $dist
+    $installer = Assert-ChildPath (Join-Path $dist "image_viewer_setup_$Version.exe") $dist
     if (Test-Path -LiteralPath $installer) { Remove-Item -LiteralPath $installer -Force }
-    & $ISCCPath "/DStageDir=$stage" "/DMyAppVersion=$Version" "/DMyOutputDir=$dist" (Join-Path $ProjectRoot 'packaging/lenteuv_setup.iss')
+    & $ISCCPath "/DStageDir=$stage" "/DMyAppVersion=$Version" "/DMyOutputDir=$dist" (Join-Path $ProjectRoot 'packaging/image_viewer_setup.iss')
     Assert-NativeSuccess 'Inno Setup'
     if (!(Test-Path -LiteralPath $installer)) { throw 'Installer was not generated.' }
     Write-Host "Installer: $installer"

@@ -36,7 +36,7 @@ public:
 
     // ─── Viewer Page Settings ────────────────────────────────────────────────
     bool animated_zoom = true;
-    float thumbnail_width = 50.0f;
+    float thumbnail_width = 44.0f;
     bool zoom_on_mousewheel = true;
     bool draw_default_thumbnail = true;
     bool show_thirds = false;

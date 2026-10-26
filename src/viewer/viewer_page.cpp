@@ -92,6 +92,8 @@ void ViewerPage::Update(double dt) {
         m_app->m_window.RequestRedraw();
     }
 
+    if (IsInfoBarHit(m_app->m_mouseX, m_app->m_mouseY) ||
+        (m_app->IsViewerActive() && m_app->m_thumbnailStrip.IsMouseOver(m_app->m_mouseX, m_app->m_mouseY))) m_mouseInactivityTimer = 0;
     m_mouseInactivityTimer += dt;
     if (m_mouseInactivityTimer >= 2.0) {
         if (m_metadataOpacity > 0.0f) {
@@ -287,62 +289,108 @@ void ViewerPage::DrawThirds(Renderer& renderer, const RectF& rect) {
     renderer.DrawLine({ rect.left, rect.top + h / 3.0f * 2.0f }, { rect.right, rect.top + h / 3.0f * 2.0f }, color, 1.5f);
 }
 
+RectF ViewerPage::GetInfoBarRect(float desiredWidth, float height) const {
+    const auto size = m_app->m_renderer.GetTargetSize().ToFloat();
+    const float scale = m_app->m_window.GetDpiScale();
+    const float margin = std::min(8.0f * scale, size.width / 2);
+    const float width = std::clamp(desiredWidth, 0.0f, std::max(0.0f, size.width - 2 * margin));
+    const bool stripVisible = m_app->IsViewerActive() && m_app->m_thumbnailStrip.GetOpacity() > 0;
+    const float anchor = stripVisible ? m_app->m_thumbnailStrip.GetActiveCenter(size.width) : size.width / 2;
+    const float x = std::clamp(anchor - width / 2, margin, std::max(margin, size.width - margin - width));
+    const float bottom = stripVisible ? m_app->m_thumbnailStrip.GetBounds().top - 12 * scale : size.height - 15 * scale;
+    return RectF::FromXYWH(x, std::max(0.0f, bottom - height), width, std::min(height, std::max(0.0f, bottom)));
+}
+
+std::wstring ViewerPage::FitInfoName(Renderer& renderer, const std::wstring& name, float width, float fontSize) const {
+    if (renderer.MeasureText(name, fontSize).x <= width) return name;
+    const std::wstring ellipsis = L"\u2026";
+    if (renderer.MeasureText(ellipsis, fontSize).x > width) return {};
+    size_t lo = 0, hi = name.size();
+    while (lo < hi) {
+        const size_t mid = lo + (hi - lo + 1) / 2;
+        if (renderer.MeasureText(name.substr(0, mid) + ellipsis, fontSize).x <= width) lo = mid;
+        else hi = mid - 1;
+    }
+    if (lo > 0 && name[lo - 1] >= 0xd800 && name[lo - 1] <= 0xdbff) --lo;
+    return name.substr(0, lo) + ellipsis;
+}
+
+bool ViewerPage::IsInfoBarHit(float x, float y) const {
+    if (!m_app) return false;
+    const bool modal = m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal;
+    return (m_app->m_settings.show_metadata || modal) && m_metadataOpacity > 0 &&
+        (m_infoBarRect.Contains(x, y) || m_infoTooltipRect.Contains(x, y));
+}
+
 void ViewerPage::DrawOverlayInfo(Renderer& renderer) {
-    auto size = renderer.GetTargetSize().ToFloat();
-
-    bool isWaterfallModal = (m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal);
-    if ((m_app->m_settings.show_metadata || isWaterfallModal) && m_metadataOpacity > 0.0f) {
-        auto currentImage = m_app->m_currentImage;
-        auto animatedImage = m_app->m_animatedImage;
-
-        std::wstring info;
-        if (isWaterfallModal) {
-            if (animatedImage) {
-                info = std::filesystem::path(animatedImage->filePath).filename().wstring();
-            } else if (currentImage) {
-                info = std::filesystem::path(currentImage->filePath).filename().wstring();
-            }
+    const bool overPreviousTooltip = m_infoTooltipRect.Contains(m_app->m_mouseX, m_app->m_mouseY);
+    m_infoBarRect = {};
+    m_infoTooltipRect = {};
+    const bool modal = m_app->m_currentPage == Page::Waterfall && m_app->m_waterfallPage.m_viewerModal;
+    if ((!m_app->m_settings.show_metadata && !modal) || m_metadataOpacity <= 0) return;
+    const auto image = m_app->m_currentImage;
+    const auto animation = m_app->m_animatedImage;
+    if (!image && !animation) return;
+    const float scale = m_app->m_window.GetDpiScale();
+    const float fontSize = 13.0f; // Original client-unit text size; do not inflate it again with window DPI.
+    const auto size = renderer.GetTargetSize().ToFloat();
+    const std::wstring name = std::filesystem::path(animation ? animation->filePath : image->filePath).filename().wstring();
+    std::wstring suffix;
+    if (!modal) {
+        if (animation) {
+            suffix = std::format(L" | Frame {}/{} | Zoom: {:.0f}%", m_app->m_frameSequencer.GetCurrentFrame() + 1,
+                m_app->m_frameSequencer.GetFrameCount(), GetDisplayZoom() * 100);
         } else {
-            if (animatedImage) {
-                info = std::format(L"{} | Frame {}/{} | Zoom: {:.0f}%",
-                    std::filesystem::path(animatedImage->filePath).filename().wstring(),
-                    m_app->m_frameSequencer.GetCurrentFrame() + 1,
-                    m_app->m_frameSequencer.GetFrameCount(),
-                    GetDisplayZoom() * 100.0f);
-            } else if (currentImage) {
-                info = std::format(L"{} | {}×{} | Zoom: {:.0f}%",
-                    std::filesystem::path(currentImage->filePath).filename().wstring(),
-                    currentImage->width, currentImage->height,
-                    GetDisplayZoom() * 100.0f);
-            }
-
-            if (!m_app->m_fileList.empty()) {
-                info += std::format(L" | [{}/{}]", m_app->m_currentIndex + 1, m_app->m_fileList.size());
-            }
+            suffix = std::format(L" | {}×{} | Zoom: {:.0f}%", image->width, image->height, GetDisplayZoom() * 100);
         }
-
-        if (!info.empty()) {
-            float textWidth = renderer.MeasureText(info, 13.0f).x;
-            float paddingH = 15.0f;
-            float paddingV = 5.0f;
-            float barW = textWidth + paddingH * 2.0f;
-            float barH = 30.0f;
-            float barX = (size.width - barW) / 2.0f;
-
-            if (m_metadataOpacity > 0.0f) {
-                // Offset the island upward if the thumbnail strip is visible
-                float stripOpacity = m_app->m_thumbnailStrip.GetOpacity();
-                float bottomOffset = 15.0f + stripOpacity * (ThumbnailStrip::HEIGHT - 15.0f);
-                float barY = size.height - barH - bottomOffset;
-
-                RectF barRect = RectF::FromXYWH(barX, barY, barW, barH);
-                renderer.FillRoundedRect(barRect, 6.0f, 6.0f, Color::Black(0.6f * m_metadataOpacity));
-                renderer.DrawRoundedRect(barRect, 6.0f, 6.0f, Color::White(0.15f * m_metadataOpacity), 1.0f);
-
-                RectF textRect = RectF::FromXYWH(barX + paddingH, barY + paddingV, textWidth, barH - paddingV * 2.0f);
-                renderer.DrawText(info, textRect, Color::White(0.9f * m_metadataOpacity), 13.0f, TextAlign::Center, TextVAlign::Center);
-            }
+        if (!m_app->m_fileList.empty()) suffix += std::format(L" | [{}/{}]", m_app->m_currentIndex + 1, m_app->m_fileList.size());
+    }
+    const float padding = 12 * scale;
+    const float suffixWidth = renderer.MeasureText(suffix, fontSize).x;
+    const float desiredWidth = renderer.MeasureText(name, fontSize).x + suffixWidth + 2 * padding;
+    // A second line preserves suffixes on narrow clients rather than dropping dimensions/zoom.
+    const bool twoLines = suffixWidth > std::max(0.0f, size.width - 2 * padding - 16 * scale) * 0.7f;
+    m_infoBarRect = GetInfoBarRect(desiredWidth, (twoLines ? 50.0f : 30.0f) * scale);
+    if (m_infoBarRect.Width() <= 0 || m_infoBarRect.Height() <= 0) return;
+    const float textWidth = std::max(0.0f, m_infoBarRect.Width() - 2 * padding);
+    const auto shownName = FitInfoName(renderer, name, std::max(0.0f, textWidth - (twoLines ? 0 : suffixWidth)), fontSize);
+    renderer.FillRoundedRect(m_infoBarRect, 6 * scale, 6 * scale, Color::Black(0.6f * m_metadataOpacity));
+    renderer.DrawRoundedRect(m_infoBarRect, 6 * scale, 6 * scale, Color::White(0.15f * m_metadataOpacity), scale);
+    renderer.PushClip(m_infoBarRect);
+    const auto textRect = RectF::FromXYWH(m_infoBarRect.left + padding, m_infoBarRect.top + 3 * scale, textWidth, (twoLines ? 22.0f : 24.0f) * scale);
+    renderer.DrawText(shownName + (twoLines ? L"" : suffix), textRect, Color::White(0.9f * m_metadataOpacity), fontSize, TextAlign::Center, TextVAlign::Center);
+    if (twoLines) {
+        const float suffixFont = std::min(fontSize, fontSize * textWidth / std::max(1.0f, suffixWidth));
+        renderer.DrawText(suffix, RectF::FromXYWH(textRect.left, m_infoBarRect.top + 25 * scale, textWidth, 22 * scale),
+            Color::White(0.9f * m_metadataOpacity), suffixFont, TextAlign::Center, TextVAlign::Center);
+    }
+    renderer.PopClip();
+    if (shownName != name && (m_infoBarRect.Contains(m_app->m_mouseX, m_app->m_mouseY) || overPreviousTooltip)) {
+        auto context = renderer.GetD2DContext();
+        if (!context) return;
+        if (!m_infoTooltipLayout || m_infoTooltipName != name || m_infoTooltipWidth != textWidth || m_infoTooltipFont != fontSize) {
+            auto format = renderer.CreateTextFormat(L"Segoe UI", fontSize);
+            if (!format) return;
+            format->SetWordWrapping(DWRITE_WORD_WRAPPING_EMERGENCY_BREAK);
+            ComPtr<IDWriteFactory> factory;
+            if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(factory.GetAddressOf())))) return;
+            m_infoTooltipLayout.Reset();
+            if (FAILED(factory->CreateTextLayout(name.c_str(), static_cast<UINT32>(name.size()), format.Get(),
+                std::max(1.0f, textWidth), 100000.0f, &m_infoTooltipLayout))) return;
+            m_infoTooltipName = name;
+            m_infoTooltipWidth = textWidth;
+            m_infoTooltipFont = fontSize;
+            m_infoTooltipScroll = 0;
         }
+        DWRITE_TEXT_METRICS metrics{};
+        m_infoTooltipLayout->GetMetrics(&metrics);
+        const float height = std::min(metrics.height + 8 * scale, m_infoBarRect.top);
+        m_infoTooltipRect = RectF::FromXYWH(m_infoBarRect.left, m_infoBarRect.top - height,
+            m_infoBarRect.Width(), height);
+        renderer.FillRoundedRect(m_infoTooltipRect, 4 * scale, 4 * scale, Color::Black(0.95f));
+        renderer.PushClip(m_infoTooltipRect);
+        context->DrawTextLayout(D2D1::Point2F(m_infoTooltipRect.left + padding, m_infoTooltipRect.top + 4 * scale - m_infoTooltipScroll), m_infoTooltipLayout.Get(), renderer.GetBrush(Color::White()));
+        renderer.PopClip();
     }
 }
 
@@ -407,6 +455,11 @@ void ViewerPage::DrawRegionZoom(Renderer& renderer) {
     }
 }
 
+void ViewerPage::CancelPointerGesture() {
+    m_leftButtonDown = m_exteriorPress = false;
+    if (m_regionZoomActive) CancelRegionZoom();
+}
+
 void ViewerPage::OnMouseMove(float x, float y, KeyModifiers mods) {
     m_mouseInactivityTimer = 0.0;
     if (m_metadataOpacity < 1.0f) {
@@ -435,7 +488,20 @@ void ViewerPage::OnMouseMove(float x, float y, KeyModifiers mods) {
     }
 }
 
+bool ViewerPage::IsExteriorPress(float x, float y, KeyModifiers mods) const {
+    return m_app->m_currentPage == Page::Viewer && m_app->m_window.IsTranslucent() && m_app->m_settings.window_opacity < 1.0f
+        && (m_app->m_currentImage || m_app->m_animatedImage) && !mods.ctrl && !mods.shift && !mods.alt
+        && !HasPointerGesture() && !IsInfoBarHit(x, y) && !IsPointOverImage(x, y);
+}
+
 void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (btn == MouseButton::Left && IsExteriorPress(x, y, mods)) {
+        m_exteriorPress = true;
+        if (m_app->m_window.IsFullscreen()) m_app->m_window.SetFullscreen(false);
+        if (GetCapture() == m_app->m_window.GetHwnd()) ReleaseCapture();
+        return;
+    }
+    if (IsInfoBarHit(x, y)) return;
     m_mouseInactivityTimer = 0.0;
     if (m_metadataOpacity < 1.0f) {
         m_app->m_window.RequestRedraw();
@@ -464,6 +530,7 @@ void ViewerPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mod
 }
 
 void ViewerPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (btn == MouseButton::Left && m_exteriorPress) { m_exteriorPress = false; return; }
     m_mouseInactivityTimer = 0.0;
     if (m_metadataOpacity < 1.0f) {
         m_app->m_window.RequestRedraw();
@@ -540,6 +607,14 @@ void ViewerPage::ShowContextMenu() {
 }
 
 void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
+    if (IsInfoBarHit(x, y) && m_infoTooltipLayout) {
+        DWRITE_TEXT_METRICS metrics{};
+        m_infoTooltipLayout->GetMetrics(&metrics);
+        m_infoTooltipScroll = std::clamp(m_infoTooltipScroll - delta * 30 * m_app->m_window.GetDpiScale(),
+            0.0f, std::max(0.0f, metrics.height + 8 * m_app->m_window.GetDpiScale() - m_infoTooltipRect.Height()));
+        m_app->m_window.RequestRedraw();
+        return;
+    }
     m_mouseInactivityTimer = 0.0;
     if (m_metadataOpacity < 1.0f) {
         m_app->m_window.RequestRedraw();
@@ -582,7 +657,8 @@ void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) 
 }
 
 void ViewerPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (btn == MouseButton::Left) {
+    if (btn == MouseButton::Left && !IsInfoBarHit(x, y) && !IsExteriorPress(x, y, mods)) {
+        CancelPointerGesture();
         m_app->m_window.ToggleFullscreen();
     }
 }
