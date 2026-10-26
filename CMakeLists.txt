@@ -271,7 +271,7 @@ set_tests_properties(common.user_data_paths PROPERTIES TIMEOUT 30)
 # Link actual consumers and loader; delivery is controlled without workers or app renderer initialization.
 set(ASYNC_PREVIEW_TEST_SOURCES ${SOURCES})
 list(REMOVE_ITEM ASYNC_PREVIEW_TEST_SOURCES src/main.cpp)
-add_executable(async_preview_tests tests/startup_cache_tests.cpp tests/async_preview_tests.cpp tests/ipc_diagnostic_tests.cpp tests/image_decode_tests.cpp tests/shutdown_tests.cpp ${ASYNC_PREVIEW_TEST_SOURCES})
+add_executable(async_preview_tests tests/settings_preferences_tests.cpp tests/startup_cache_tests.cpp tests/async_preview_tests.cpp tests/ipc_diagnostic_tests.cpp tests/image_decode_tests.cpp tests/shutdown_tests.cpp ${ASYNC_PREVIEW_TEST_SOURCES})
 target_precompile_headers(async_preview_tests PRIVATE src/common/pch.h)
 target_include_directories(async_preview_tests PRIVATE src)
 target_compile_options(async_preview_tests PRIVATE /W4 /WX /permissive- /utf-8 /MP /EHsc /wd4100)
@@ -282,6 +282,12 @@ add_test(NAME loader.startup_cache COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile
     -File "${CMAKE_SOURCE_DIR}/scripts/run_startup_cache_tests.ps1"
     -Executable "$<TARGET_FILE:async_preview_tests>" -RunRoot "${CMAKE_BINARY_DIR}/test-runs")
 set_tests_properties(loader.startup_cache PROPERTIES TIMEOUT 90)
+add_test(NAME settings.preferences COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+    -File "${CMAKE_SOURCE_DIR}/scripts/run_settings_preferences_tests.ps1"
+    -Executable "$<TARGET_FILE:async_preview_tests>"
+    -Defaults "${CMAKE_SOURCE_DIR}/packaging/default-settings.json"
+    -RunRoot "${CMAKE_BINARY_DIR}/test-runs")
+set_tests_properties(settings.preferences PROPERTIES TIMEOUT 30)
 add_test(NAME ui.async_previews COMMAND async_preview_tests)
 set_tests_properties(ui.async_previews PROPERTIES TIMEOUT 60)
 add_test(NAME lifecycle.cancellation

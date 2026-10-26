@@ -26,7 +26,7 @@ La primera visita todavía necesita generar las miniaturas desde las fotografía
 | NUM4 o 4 | Tablero; al entrar se incorpora la imagen activa si no está ya |
 | O o tecla de tilde | Abrir opciones |
 | F11 o F | Alternar fullscreen/ventana |
-| Doble clic izquierdo | Alternar fullscreen si la opción está activa |
+| Doble clic izquierdo | Alternar fullscreen en Viewer y su modal en Waterfall; controles y overlays tienen precedencia |
 | Escape | Depende del contexto: cierra overlay, deselecciona en Board o sale globalmente |
 | T, también Ctrl+T | Etiquetas/metadatos de la imagen objetivo o selección de Board |
 | Supr | Papelera para imágenes en los modos que lo ofrecen; en Board elimina ítems del lienzo |
@@ -43,7 +43,7 @@ el proceso. Usa la salida de su menú para asegurar cierre completo.
 - Ctrl+clic/arrastre define la región de ampliación; `1` también cancela una región activa.
 - Arrastre izquierdo panea en fullscreen y mueve la ventana en compacto según los cambios previos conservados.
 - A/D desplazan; `0` o NUM0 restablecen vista. R rota 90°, Shift+R invierte el sentido.
-- Espacio pausa/reanuda animación. C alterna marco, G tercios, M información.
+- Espacio pausa/reanuda animación. G alterna tercios, P interpolación pixelada, M información. C/I ya no tienen acción exclusiva en el visor.
 - PageUp/PageDown cambian opacidad. Acerca el puntero al borde inferior para la tira de miniaturas.
 
 El modo compacto usa la imagen global para calcular tamaño y contiene un mínimo
@@ -79,6 +79,8 @@ Escribir metadatos modifica el archivo de imagen. Usa copias para probar. JPEG y
 tienen inyectores propios; el resto depende de WIC/propiedades Windows y puede fallar.
 
 ## Opciones e idioma
+
+El zoom animado está activo sin preferencia previa; respeta `animated_zoom` guardado y `effects`. Las flechas arriba/abajo conservan su camino de animación propio.
 
 O abre opciones de opacidad, gestos, animación, arranque y otros campos. Algunas
 preferencias solo se guardan y no tienen consumidor funcional identificado; consultar

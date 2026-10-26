@@ -279,12 +279,6 @@ void ThumbnailStrip::Draw(Renderer& renderer) {
     float windowWidth = targetSize.width;
     float windowHeight = targetSize.height;
 
-    // 1. Draw backplate panel
-    if (m_app->m_settings.draw_control_panel_backplate) {
-        RectF panelRect = RectF::FromXYWH(0, windowHeight - HEIGHT, windowWidth, HEIGHT);
-        renderer.FillRect(panelRect, Color::FromRGBA(20, 20, 20, static_cast<uint8_t>(220 * m_opacity)));
-    }
-
     // 2. Draw filename/metadata text
     std::wstring labelText;
     if (m_hoveredIndex >= 0 && m_hoveredIndex < static_cast<int>(m_thumbnails.size())) {

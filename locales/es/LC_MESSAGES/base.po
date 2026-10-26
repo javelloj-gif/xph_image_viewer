@@ -1007,10 +1007,6 @@ msgstr ""
 msgid "Full-screen mode on application start"
 msgstr ""
 
-#: settings_handling.py:508
-msgid "Toggle between full-screen and window mode via double click"
-msgstr ""
-
 #: settings_handling.py:509
 msgid "Hide to tray on close"
 msgstr ""
@@ -1039,10 +1035,6 @@ msgstr ""
 msgid "Animated zoom"
 msgstr ""
 
-#: settings_handling.py:522
-msgid "Draw backplate for control panel"
-msgstr ""
-
 #: settings_handling.py:523
 msgid "Thumbnails size"
 msgstr ""
@@ -1057,10 +1049,6 @@ msgstr ""
 
 #: settings_handling.py:526
 msgid "Show thirds"
-msgstr ""
-
-#: settings_handling.py:527
-msgid "Cyberpunk frame"
 msgstr ""
 
 #: settings_handling.py:528
@@ -1381,10 +1369,6 @@ msgid ""
 "\n"
 "➜ WATERFALL PAGE\n"
 "    not set\n"
-msgstr ""
-
-#: settings_handling.py:503
-msgid "Desaturated corner buttons and corner menus"
 msgstr ""
 
 #: settings_handling.py:505

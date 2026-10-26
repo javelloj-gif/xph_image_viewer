@@ -239,16 +239,21 @@ Los inyectores preservan el contenido binario salvo la sección de metadatos que
 | `ui_lang` | `I18nEngine`, recarga desde opciones EN/RU; inglés usa msgid, es/de/fr/it/ru cargan `.po` si se configura su código |
 | `page_on_app_launch_from_explorer`, `page_to_open_on_drag_and_drop` | `App::Initialize/OnFileDrop`, valores del enum Page |
 | `show_fullscreen`, `hide_on_app_start`, `single_instance`, `hide_to_tray_on_close` | Arranque, IPC y callback de cierre |
-| `doubleclick_toggle` | `ViewerPage::OnMouseDoubleClick` |
 | `effects`, `animated_zoom`, `zoom_on_mousewheel` | Animaciones/zoom y selección de gesto; arriba/abajo tiene camino propio |
 | `window_opacity` | Limpieza alfa del frame; no es un ajuste de todas las ventanas del sistema |
 | `thumbnail_width`, `sort_mode` | Tira, layout/ordenación y persistencia |
-| `show_thirds`, `show_cyberpunk`, `show_metadata` | Dibujo del visor |
+| `show_thirds`, `show_metadata` | Dibujo del visor |
 | `enable_file_log`, `enable_debug_ipc` (clave `debug_ipc`) | Flags globales de diagnóstico; consulta temprana antes de crear App |
-| `desaturated_corner_buttons_and_corner_menus` | Color del botón de cierre en App; no asumir que cubre todos los menús |
 | `settings_window_opacity` | Fondo del overlay de opciones |
-| `draw_control_panel_backplate`, `draw_default_thumbnail` | Fondo de tira e indicador de carga en `ThumbnailStrip` |
+| `draw_default_thumbnail` | Indicador de carga en `ThumbnailStrip`; tira sin backplate opcional |
 | `debug_page`, `do_not_show_start_dialog`, `run_on_windows_startup`, `show_console_output`, `show_noise_cells` | Sin consumidor funcional encontrado fuera de persistencia/controles. `ShellIntegrator::SetRunOnStartup` existe pero no tiene llamadores en las fuentes actuales |
+
+Desde 017, `animated_zoom=true` en código y paquete cuando falta la preferencia;
+los valores guardados se respetan junto con `effects`. El doble clic izquierdo en
+Viewer/modal Waterfall siempre alterna fullscreen después de controles/overlays.
+Se retiraron desaturación, inversión, esquinas y fondo opcional de tira, sus
+controles y atajos exclusivos C/I. Las cuatro claves persistidas retiradas se
+ignoran al cargar y desaparecen al guardar sin migrar rutas ni formatos.
 
 Para cambiar esta tabla, buscar el identificador en todas las fuentes: carga/guardado y construcción de controles no cuentan como consumidor funcional.
 

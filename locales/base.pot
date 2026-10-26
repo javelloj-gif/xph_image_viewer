@@ -1647,20 +1647,12 @@ msgstr ""
 msgid "Full-screen mode on application start"
 msgstr ""
 
-#: settings_handling.py:1074
-msgid "Toggle between full-screen and window mode via double click"
-msgstr ""
-
 #: settings_handling.py:1075
 msgid "Hide to tray on close"
 msgstr ""
 
 #: settings_handling.py:1076
 msgid "Hide to tray on app start"
-msgstr ""
-
-#: settings_handling.py:1077
-msgid "Desaturated corner buttons and corner menus"
 msgstr ""
 
 #: settings_handling.py:1078
@@ -1715,10 +1707,6 @@ msgstr ""
 msgid "Animated zoom"
 msgstr ""
 
-#: settings_handling.py:1095
-msgid "Draw backplate for control panel"
-msgstr ""
-
 #: settings_handling.py:1096
 msgid "Thumbnails size"
 msgstr ""
@@ -1733,10 +1721,6 @@ msgstr ""
 
 #: settings_handling.py:1099
 msgid "Show thirds"
-msgstr ""
-
-#: settings_handling.py:1100
-msgid "Cyberpunk frame"
 msgstr ""
 
 #: settings_handling.py:1101

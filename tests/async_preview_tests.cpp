@@ -908,7 +908,6 @@ public:
         app.m_currentImage->width = 640;
         app.m_currentImage->height = 320;
         app.m_settings.show_metadata = true;
-        app.m_settings.draw_control_panel_backplate = true;
         app.m_settings.draw_default_thumbnail = true;
         app.m_currentIndex = 3;
         app.m_fileList.clear();
@@ -1396,6 +1395,60 @@ public:
         return 0;
     }
 
+    // Uses real viewer input/animations on the owned hidden window; writes only wrapper-owned settings.
+    int RunViewerControls() {
+        app.m_renderer.m_width = 800;
+        app.m_renderer.m_height = 600;
+        app.m_currentPage = Page::Viewer;
+        app.m_viewerPage.Initialize(&app);
+        app.m_currentImage = std::make_shared<ImageData>();
+        app.m_currentImage->width = 1600;
+        app.m_currentImage->height = 1200;
+        auto& viewer = app.m_viewerPage;
+        Check(!viewer.OnKeyDown('C', {}) && !viewer.OnKeyDown('I', {}), "retired keys unhandled");
+        Check(viewer.OnKeyDown('P', {}) && viewer.m_pixelatedZoom, "pixelated zoom retained");
+        for (bool effects : {false, true}) {
+            for (bool zoom : {false, true}) {
+                app.m_settings.effects = effects;
+                app.m_settings.animated_zoom = zoom;
+                viewer.ResetView();
+                viewer.OnMouseWheel(1, 400, 300, {});
+                Check(app.m_animations.IsActive("zoom") == (effects && zoom), "wheel respects effects and saved zoom");
+                Check((effects && zoom) ? viewer.m_zoom == 1 : viewer.m_zoom > 1, "wheel animates or applies immediately");
+                viewer.ResetView();
+                viewer.ZoomToPoint(1.5f, 400, 300);
+                Check(app.m_animations.IsActive("zoom") == (effects && zoom), "point zoom respects preferences");
+                viewer.ResetView();
+                viewer.Toggle1To1();
+                Check(app.m_animations.IsActive("zoom") == (effects && zoom), "1:1 respects preferences");
+                Check((effects && zoom) ? viewer.m_targetZoom == 2 : viewer.m_zoom == 2, "1:1 target preserved");
+                viewer.ResetView();
+                viewer.StartRegionZoom(200, 150);
+                viewer.FinishRegionZoom(600, 450);
+                Check(app.m_animations.IsActive("region_zoom_factor") == (effects && zoom), "region respects preferences");
+                viewer.ResetView();
+                Check(viewer.OnKeyDown(VK_UP, {}) && app.m_animations.IsActive("zoom"), "keyboard retains its existing independent animation path");
+                viewer.ResetView();
+            }
+        }
+        app.m_optionsMenu.Initialize(&app);
+        app.m_optionsMenu.Show();
+        app.m_window.m_fullscreen = true;
+        app.OnMouseDoubleClick(MouseButton::Left, 400, 300, {});
+        Check(app.m_window.IsFullscreen(), "Settings consumes double click before viewer");
+        app.m_optionsMenu.Hide();
+        app.m_radialMenuProgress = 1;
+        app.OnMouseDoubleClick(MouseButton::Left, 100, 100, {});
+        Check(app.m_window.IsFullscreen(), "radial consumes double click before viewer");
+        app.m_radialMenuProgress = 0;
+        viewer.OnMouseDoubleClick(MouseButton::Right, 400, 300, {});
+        Check(app.m_window.IsFullscreen(), "right double click does not toggle fullscreen");
+        viewer.OnMouseDoubleClick(MouseButton::Left, 400, 300, {});
+        Check(!app.m_window.IsFullscreen(), "left double click always toggles viewer");
+        std::cout << "viewer control checks: " << checks << '\n';
+        return 0;
+    }
+
     // Runs original regressions and the optional pre-upload validity contract with checks active in Release.
     int Run() {
         ProducerShutdownOrder();
@@ -1419,6 +1472,9 @@ private:
 };
 } // namespace kv
 
+// Runs production Settings against wrapper-owned synthetic preferences.
+int RunSettingsPreferencesTests();
+
 // Runs the IPC diagnostic parent or sender role; App::Initialize is never called.
 int RunIpcDiagnosticTests();
 // Runs the isolated real-WIC decoder suite with its own COM and data setup.
@@ -1435,8 +1491,11 @@ int main(int argc, char* argv[]) {
     if (argc > 1 && std::string_view(argv[1]).starts_with("--startup-cache-")) return RunStartupCacheTests();
     if (argc > 1 && std::string_view(argv[1]) == "--decode-tests") return RunImageDecodeTests();
     try {
+        const bool preferences = argc == 2 && std::string_view(argv[1]) == "--settings-preferences-tests";
+        if (preferences && RunSettingsPreferencesTests() != 0) return 1;
         kv::ScopedComInit com;
         kv::AsyncPreviewTests tests;
+        if (preferences) return tests.RunViewerControls();
         if (argc == 2 && std::string_view(argv[1]) == "--cancellation-tests") return tests.RunCancellation();
         if (argc == 3 && std::string_view(argv[1]) == "--optimization-snapshot")
             return tests.VisualSnapshot(std::filesystem::path(argv[2]));

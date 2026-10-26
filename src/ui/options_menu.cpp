@@ -79,14 +79,12 @@ void OptionsMenu::BuildControls() {
             { L"Run on Windows Startup", &s.run_on_windows_startup },
             { L"Supress start dialog and run lite mode", &s.do_not_show_start_dialog },
             { L"Full-screen mode on application start", &s.show_fullscreen },
-            { L"Toggle between full-screen and window mode via double click", &s.doubleclick_toggle },
             { L"Hide to tray on close", &s.hide_to_tray_on_close },
             { L"Hide to tray on app start", &s.hide_on_app_start },
             { L"Enforce single instance", &s.single_instance },
             { L"Show standard (console) output overlay", &s.show_console_output },
             { L"Animated effects", &s.effects },
             { L"Show animated cells overlay", &s.show_noise_cells },
-            { L"Desaturate corner buttons & menus", &s.desaturated_corner_buttons_and_corner_menus }
         };
 
         float currentY = contentTop;
@@ -104,11 +102,9 @@ void OptionsMenu::BuildControls() {
         // --- VIEWER PAGE OPTIONS ---
         std::vector<std::pair<std::wstring, bool*>> viewerBools = {
             { L"Animated zoom", &s.animated_zoom },
-            { L"Draw backplate for control panel", &s.draw_control_panel_backplate },
             { L"Enable mouse wheel to zoom and Ctrl+mouse wheel to navigate through image list", &s.zoom_on_mousewheel },
             { L"Show dummy-default thumbnail while generated one is not ready", &s.draw_default_thumbnail },
             { L"Show thirds", &s.show_thirds },
-            { L"Cyberpunk frame", &s.show_cyberpunk },
             { L"Show metadata", &s.show_metadata }
         };
 

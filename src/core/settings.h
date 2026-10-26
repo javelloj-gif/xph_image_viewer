@@ -23,11 +23,9 @@ public:
     bool run_on_windows_startup = true;
     bool do_not_show_start_dialog = true;
     bool show_fullscreen = true;
-    bool doubleclick_toggle = true;
     bool hide_to_tray_on_close = true;
     bool hide_on_app_start = false;
     bool single_instance = true;
-    bool desaturated_corner_buttons_and_corner_menus = false;
     bool show_console_output = true;
     bool effects = true;
     bool show_noise_cells = false;
@@ -37,13 +35,11 @@ public:
     float window_opacity = 0.85f;
 
     // ─── Viewer Page Settings ────────────────────────────────────────────────
-    bool animated_zoom = false;
-    bool draw_control_panel_backplate = false;
+    bool animated_zoom = true;
     float thumbnail_width = 50.0f;
     bool zoom_on_mousewheel = true;
     bool draw_default_thumbnail = true;
     bool show_thirds = false;
-    bool show_cyberpunk = false;
     bool show_metadata = true;
     int sort_mode = 0;
 
@@ -54,10 +50,11 @@ public:
     /// Reads the shared resolved settings.json before App initialization and sets the debug IPC flag.
     static void PreInitDebugIpc();
 
-    /// Load settings from user_data/settings.json. Returns false on failure (e.g. file missing).
+    /// Loads known preferences; missing keys retain defaults, obsolete keys are ignored.
+    /// Returns false on failure; a missing file is saved with current defaults.
     bool Load();
 
-    /// Save settings to user_data/settings.json.
+    /// Saves current preferences to user_data/settings.json, omitting obsolete keys.
     bool Save();
 
 private:

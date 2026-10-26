@@ -43,7 +43,7 @@ public:
     /// UI thread: updates animations/autohide and requests thumbnails within the visible interval.
     void Update(double dt);
 
-    /// UI thread: draws the panel and visible thumbnails with the existing clipping and effects.
+    /// UI thread: draws labels, reflections and visible thumbnails with the existing clipping and effects.
     void Draw(Renderer& renderer);
 
     /// UI thread: rebuilds via a temporary occurrence index; retains each old entry/request once and resets selection.

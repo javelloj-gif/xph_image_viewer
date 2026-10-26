@@ -1,7 +1,7 @@
 // ============================================================================
 // Class: ViewerPage
 // Description: ViewerPage implements the single-image display screen with advanced zoom, pan, and visual grids for [IMAGE_VIEWER_APP_NAME].
-// Responsibility: Handle fit-to-screen transforms, cyberpunk boundary graphics, thirds divisions, and Ctrl+drag spotlights.
+// Responsibility: Handle fit-to-screen transforms, thirds divisions, and Ctrl+drag spotlights.
 // ============================================================================
 #include "common/pch.h"
 #include "viewer_page.h"
@@ -125,7 +125,7 @@ void ViewerPage::Draw(Renderer& renderer) {
         auto size = renderer.GetTargetSize().ToFloat();
         RectF textRect = RectF::FromXYWH(0, 0, size.width, size.height);
         renderer.DrawText(
-            L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nC - Cyberpunk Corners | G - Rule of Thirds",
+            L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nG - Rule of Thirds",
             textRect,
             Color::FromRGBA(180, 180, 180),
             20.0f,
@@ -178,9 +178,6 @@ void ViewerPage::DrawImageFitted(Renderer& renderer, ID2D1Bitmap1* bitmap) {
     renderer.PopTransform();
     renderer.PopTransform();
 
-    if (m_app->m_settings.show_cyberpunk) {
-        DrawCyberpunkCorners(renderer, GetImageTransformedRect());
-    }
     if (m_app->m_settings.show_thirds) {
         DrawThirds(renderer, GetImageTransformedRect());
     }
@@ -276,92 +273,6 @@ void ViewerPage::DrawCheckerboard(Renderer& renderer, const RectF& rect) {
         }
     }
     renderer.PopClip();
-}
-
-void ViewerPage::DrawCyberpunkCorners(Renderer& renderer, const RectF& rect) {
-    auto targetSize = renderer.GetTargetSize().ToFloat();
-
-    ComPtr<ID2D1Factory> factory;
-    renderer.GetD2DContext()->GetFactory(&factory);
-
-    ComPtr<ID2D1RectangleGeometry> windowGeo;
-    factory->CreateRectangleGeometry(D2D1::RectF(0, 0, targetSize.width, targetSize.height), &windowGeo);
-
-    ComPtr<ID2D1RectangleGeometry> imageGeo;
-    factory->CreateRectangleGeometry(rect.ToD2D(), &imageGeo);
-
-    ComPtr<ID2D1PathGeometry> clipGeo;
-    factory->CreatePathGeometry(&clipGeo);
-
-    ComPtr<ID2D1GeometrySink> sink;
-    clipGeo->Open(&sink);
-    HRESULT hr = windowGeo->CombineWithGeometry(imageGeo.Get(), D2D1_COMBINE_MODE_EXCLUDE, nullptr, sink.Get());
-    if (SUCCEEDED(hr)) {
-        sink->Close();
-
-        ComPtr<ID2D1Layer> layer;
-        renderer.GetD2DContext()->CreateLayer(&layer);
-        renderer.GetD2DContext()->PushLayer(
-            D2D1::LayerParameters(D2D1::InfiniteRect(), clipGeo.Get(), D2D1_ANTIALIAS_MODE_PER_PRIMITIVE),
-            layer.Get()
-        );
-
-        float val = std::min(rect.Width(), rect.Height());
-        float factor = std::clamp((val - 200.0f) / 500.0f, 0.0f, 1.0f);
-        float alpha = 200.0f / 255.0f * factor;
-        Color color = Color::White(alpha);
-
-        float offset = 4.0f;
-
-        auto drawCorner = [&](PointF c, PointF f1, PointF f2, PointF d1, PointF d2) {
-            ComPtr<ID2D1PathGeometry> cornerGeo;
-            factory->CreatePathGeometry(&cornerGeo);
-            ComPtr<ID2D1GeometrySink> cSink;
-            cornerGeo->Open(&cSink);
-            cSink->BeginFigure(d1.ToD2D(), D2D1_FIGURE_BEGIN_FILLED);
-            cSink->AddLine(f1.ToD2D());
-            cSink->AddLine(c.ToD2D());
-            cSink->AddLine(f2.ToD2D());
-            cSink->AddLine(d2.ToD2D());
-            cSink->EndFigure(D2D1_FIGURE_END_CLOSED);
-            cSink->Close();
-            renderer.GetD2DContext()->FillGeometry(cornerGeo.Get(), renderer.GetBrush(color));
-        };
-
-        drawCorner(
-            { rect.left - offset, rect.top - offset },
-            { rect.left - offset + 85.0f, rect.top - offset },
-            { rect.left - offset, rect.top - offset + 85.0f },
-            { rect.left - offset + 85.0f + 20.0f, rect.top - offset + 40.0f },
-            { rect.left - offset + 40.0f, rect.top - offset + 85.0f + 20.0f }
-        );
-
-        drawCorner(
-            { rect.right + offset, rect.top - offset },
-            { rect.right + offset - 85.0f, rect.top - offset },
-            { rect.right + offset, rect.top - offset + 85.0f },
-            { rect.right + offset - 85.0f - 20.0f, rect.top - offset + 40.0f },
-            { rect.right + offset - 40.0f, rect.top - offset + 85.0f + 20.0f }
-        );
-
-        drawCorner(
-            { rect.right + offset, rect.bottom + offset },
-            { rect.right + offset - 85.0f, rect.bottom + offset },
-            { rect.right + offset, rect.bottom + offset - 85.0f },
-            { rect.right + offset - 85.0f - 20.0f, rect.bottom + offset - 40.0f },
-            { rect.right + offset - 40.0f, rect.bottom + offset - 85.0f - 20.0f }
-        );
-
-        drawCorner(
-            { rect.left - offset, rect.bottom + offset },
-            { rect.left - offset + 85.0f, rect.bottom + offset },
-            { rect.left - offset, rect.bottom + offset - 85.0f },
-            { rect.left - offset + 85.0f + 20.0f, rect.bottom + offset - 40.0f },
-            { rect.left - offset + 40.0f, rect.bottom + offset - 85.0f - 20.0f }
-        );
-
-        renderer.GetD2DContext()->PopLayer();
-    }
 }
 
 void ViewerPage::DrawThirds(Renderer& renderer, const RectF& rect) {
@@ -575,9 +486,7 @@ void ViewerPage::ShowContextMenu() {
     if (!hMenu) return;
     AppendMenuW(hMenu, MF_STRING, 4, L"Toggle 1:1 Zoom (1)");
     AppendMenuW(hMenu, MF_STRING, 5, L"Rotate 90° (R)");
-    AppendMenuW(hMenu, MF_STRING, 6, L"Invert Colors (I)");
     AppendMenuW(hMenu, MF_STRING, 7, L"Pixelated Zoom (P)");
-    AppendMenuW(hMenu, MF_STRING, 8, L"Toggle Cyberpunk Corners (C)");
     AppendMenuW(hMenu, MF_STRING, 9, L"Toggle Rule of Thirds (G)");
     AppendMenuW(hMenu, MF_STRING, 10, L"Toggle Metadata Overlay (M)");
     AppendMenuW(hMenu, MF_STRING, 11, L"Tagging Modal... (T)");
@@ -606,15 +515,8 @@ void ViewerPage::ShowContextMenu() {
     } else if (selected == 5) {
         m_rotation += 90.0f;
         m_app->m_window.RequestRedraw();
-    } else if (selected == 6) {
-        m_invertImage = !m_invertImage;
-        m_app->m_window.RequestRedraw();
     } else if (selected == 7) {
         m_pixelatedZoom = !m_pixelatedZoom;
-        m_app->m_window.RequestRedraw();
-    } else if (selected == 8) {
-        m_app->m_settings.show_cyberpunk = !m_app->m_settings.show_cyberpunk;
-        m_app->m_settings.Save();
         m_app->m_window.RequestRedraw();
     } else if (selected == 9) {
         m_app->m_settings.show_thirds = !m_app->m_settings.show_thirds;
@@ -680,7 +582,7 @@ void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) 
 }
 
 void ViewerPage::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
-    if (btn == MouseButton::Left && m_app->m_settings.doubleclick_toggle) {
+    if (btn == MouseButton::Left) {
         m_app->m_window.ToggleFullscreen();
     }
 }
@@ -690,11 +592,6 @@ bool ViewerPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         case '1':
             Toggle1To1();
             return true;
-        case 'C':
-            m_app->m_settings.show_cyberpunk = !m_app->m_settings.show_cyberpunk;
-            m_app->m_settings.Save();
-            m_app->m_window.RequestRedraw();
-            return true;
         case 'G':
             m_app->m_settings.show_thirds = !m_app->m_settings.show_thirds;
             m_app->m_settings.Save();
@@ -703,10 +600,6 @@ bool ViewerPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
         case 'M':
             m_app->m_settings.show_metadata = !m_app->m_settings.show_metadata;
             m_app->m_settings.Save();
-            m_app->m_window.RequestRedraw();
-            return true;
-        case 'I':
-            m_invertImage = !m_invertImage;
             m_app->m_window.RequestRedraw();
             return true;
         case 'P':

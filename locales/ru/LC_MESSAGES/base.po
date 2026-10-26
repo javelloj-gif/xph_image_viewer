@@ -960,10 +960,6 @@ msgstr "Запускать лайтовый (упрощённый) режим с
 msgid "Full-screen mode on application start"
 msgstr "Открываться в полноэкранном режиме"
 
-#: settings_handling.py:1074
-msgid "Toggle between full-screen and window mode via double click"
-msgstr "Переключение между оконным и полноэкранным режимом через двойной клик"
-
 #: settings_handling.py:1075
 msgid "Hide to tray on close"
 msgstr "Прятаться в трей при закрытии окна"
@@ -992,10 +988,6 @@ msgstr "Страница VIEWER"
 msgid "Animated zoom"
 msgstr "Анимированный зум изображения"
 
-#: settings_handling.py:1095
-msgid "Draw backplate for control panel"
-msgstr "Монотонная подложка под панель миниатюр и кнопок"
-
 #: settings_handling.py:1096
 msgid "Thumbnails size"
 msgstr "Размер миниатюр в панели управления вьювера"
@@ -1011,10 +1003,6 @@ msgstr "Рисовать дефолтную мелкую превьюшку, п�
 #: settings_handling.py:1099
 msgid "Show thirds"
 msgstr "Показывать трети"
-
-#: settings_handling.py:1100
-msgid "Cyberpunk frame"
-msgstr "Кибирпунк"
 
 #: settings_handling.py:1101
 msgid "Show image center"
@@ -1286,10 +1274,6 @@ msgid ""
 "➜ WATERFALL PAGE\n"
 "    not set\n"
 msgstr ""
-
-#: settings_handling.py:1077
-msgid "Desaturated corner buttons and corner menus"
-msgstr "Обесцветить угловые кнопки и угловые меню"
 
 #: settings_handling.py:1089
 msgid "Gamepad move stick easeInExpro parameter"

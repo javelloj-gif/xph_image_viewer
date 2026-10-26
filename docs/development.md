@@ -48,7 +48,15 @@ SVG si falta el PNG. Revisa el diff del ICO antes de confirmarlo.
 
 ## Tests aislados
 
-La configuración actual contiene ocho suites. `loader.startup_cache` usa
+La configuración actual contiene nueve suites. `settings.preferences` usa
+`run_settings_preferences_tests.ps1` y el modo `--settings-preferences-tests` del
+harness productivo, con EXE/defaults copiados, marcador y user_data propios.
+Antes de escribir verifica la resolución desde el EXE. Sus 30 checks cubren ausencia,
+clave omitida, true/false explícitos, round trip antiguo y defaults del paquete;
+36 checks adicionales ejercitan entradas y animaciones reales sobre ventana oculta
+propia (sin App::Initialize). No sustituyen el recorrido visual nativo.
+
+La suite `loader.startup_cache` usa
 `run_startup_cache_tests.ps1`, otro EXE aislado y copias propias de fixtures/datos.
 Sus 94 comprobaciones cubren píxeles exactos entre generación y persistencia,
 variantes, firmas, Unicode, corrupción, cuotas/LRU, lectura entre procesos,

@@ -615,9 +615,7 @@ void App::DrawCloseButton() {
     float btnSize = 32.0f;
     RectF btnRect = RectF::FromXYWH(size.width - btnSize - 8, 8, btnSize, btnSize);
 
-    Color btnColor = m_settings.desaturated_corner_buttons_and_corner_menus
-                     ? Color::FromRGBA(80, 80, 80, 180)
-                     : Color::FromRGBA(200, 50, 50, 180);
+    Color btnColor = Color::FromRGBA(200, 50, 50, 180);
     m_renderer.FillRoundedRect(btnRect, 6, 6, btnColor);
 
     // Draw X
@@ -1184,6 +1182,7 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
     m_mouseX = x;
     m_mouseY = y;
+    if (m_taggingModal.IsVisible() || m_optionsMenu.IsVisible()) return;
     if (m_radialMenuProgress > 0.5f && x < 200.0f && y < 200.0f) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;

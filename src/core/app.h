@@ -107,6 +107,7 @@ private:
     // UI: routes scroll through overlays and the active page.
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
     // UI: delegates double-click gestures to the active page and viewer strip.
+    // UI thread: modal overlays/radial/strip/pages consume double clicks before viewer fullscreen.
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
     // UI: offers keys to editors/pages before global shortcuts; NUM2/2 have no navigation action.
     void OnKeyDown(uint32_t vk, KeyModifiers mods);
@@ -123,6 +124,7 @@ private:
     void DrawImageFitted(ID2D1Bitmap1* bitmap);
     void DrawCheckerboard(const RectF& rect);
     void DrawOverlayInfo();
+    // UI thread: draws the red close control and its glyph.
     void DrawCloseButton();
 
     // ── Image Management ──────────────────────────────────────────────────

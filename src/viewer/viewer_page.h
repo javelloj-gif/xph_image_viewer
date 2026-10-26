@@ -1,7 +1,7 @@
 // ============================================================================
 // Class: ViewerPage
 // Description: ViewerPage implements the single-image display screen with advanced zoom, pan, and visual grids for [IMAGE_VIEWER_APP_NAME].
-// Responsibility: Handle fit-to-screen transforms, cyberpunk boundary graphics, thirds divisions, and Ctrl+drag spotlights.
+// Responsibility: Handle fit-to-screen transforms, thirds divisions, and Ctrl+drag spotlights.
 // ============================================================================
 #pragma once
 
@@ -39,7 +39,9 @@ public:
     void OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
     void OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     void OnMouseWheel(float delta, float x, float y, KeyModifiers mods);
+    // UI thread: toggles fullscreen on left double click after parent controls have consumed input.
     void OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods);
+    // UI thread: handles viewer transforms, overlays, animation and navigation keys.
     bool OnKeyDown(uint32_t vk, KeyModifiers mods);
 
     // ── View Control ───────────────────────────────────────────────────────
@@ -55,9 +57,9 @@ public:
 
 private:
     // ── Drawing Helpers ────────────────────────────────────────────────────
+    // UI thread: draws transformed image, retained thirds, metadata and animation progress.
     void DrawImageFitted(Renderer& renderer, ID2D1Bitmap1* bitmap);
     void DrawCheckerboard(Renderer& renderer, const RectF& rect);
-    void DrawCyberpunkCorners(Renderer& renderer, const RectF& rect);
     void DrawThirds(Renderer& renderer, const RectF& rect);
     // UI thread: prepares/draws metadata only at positive fade opacity; does not advance animation state.
     void DrawOverlayInfo(Renderer& renderer);
@@ -72,6 +74,7 @@ private:
     float GetDefaultZoom() const;
 
     // ── Context Menu (right-click in windowed mode) ────────────────────────
+    // UI thread: presents native viewer actions and applies the chosen command.
     void ShowContextMenu();
 
     // ── Pointer to Parent Application ──────────────────────────────────────
@@ -117,7 +120,6 @@ private:
     ComPtr<ID2D1Bitmap1> m_checkerboardBitmap;
 
     // ── Page View Overlay Settings ─────────────────────────────────────────
-    bool   m_invertImage = false;
     bool   m_pixelatedZoom = false; // smooth (Linear/HighQuality) at all times if false
 
     // ── Zoom Text Overlay State ────────────────────────────────────────────
