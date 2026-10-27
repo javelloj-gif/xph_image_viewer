@@ -13,6 +13,7 @@
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <unordered_map>
 
 namespace kv {
 
@@ -35,6 +36,10 @@ struct FolderInfo {
     std::wstring folderName;
     std::vector<std::wstring> filePaths;
     int currentIndex = 0;
+    std::vector<std::wstring> inventory; // Complete, unfiltered CPU paths.
+    int appliedSort = -1, appliedFilter = -1;
+    ImageLoadLifetime viewLifetime; // Cancels superseded worker projections.
+    std::unordered_map<std::wstring,PreviewItem> hiddenPreviews; // Ready state retained only for hidden inventory paths; no pending leases.
 
     // Preview thumbnails loaded for this folder
     std::vector<PreviewItem> previews;
@@ -47,6 +52,7 @@ struct FolderInfo {
 // The optional App pointer is non-owning and must outlive calls that use it.
 // Folder/preview mutators below automatically advance the transient layout revision when geometry inputs change.
 class FolderDataManager {
+    friend class AsyncPreviewTests;
     friend class StartupCacheTests; // Exercises production async generations/cache with isolated data.
 public:
     friend class App;
@@ -64,6 +70,8 @@ public:
     bool HasPendingFolders() const { return !m_pendingFolders.empty(); }
     // UI: prevents a snapshot started before a known deletion from reintroducing that file into a model.
     void NotifyImageRemoved(const std::wstring& path);
+    // UI: invalidates attribute/order caches after known metadata writes; reprojects only the active folder.
+    void NotifyAttributesChanged();
 
     // Keeps state ownership and App's aliases bound to a single service instance.
     FolderDataManager(const FolderDataManager&) = delete;
@@ -127,8 +135,13 @@ public:
     // ─── Sorting ─────────────────────────────────────────────────────────────
     // Values are shared with persisted settings.sort_mode; preserve their order.
     enum class SortMode { NameAsc, NameDesc, DateAsc, DateDesc, SizeAsc, SizeDesc };
-    // Reorders files and matching preview state; cancels active hover whose index may change. Does not save or redraw.
+    // Synchronous isolated-consumer adapter; production preference changes use ApplyView.
+    // Reorders files/previews with the shared CPU comparator, cancels hover, and neither saves nor redraws.
     void SortFolder(int folderIdx, SortMode mode);
+    // UI: projects the selected folder on the worker, retaining the old list until atomic publication.
+    void ApplyView(int folderIdx);
+    // UI: reconciles previews by path and only updates navigation for the currently selected folder.
+    void CompleteView(const std::wstring& path, uint64_t mutation, FolderSnapshot snapshot);
 
     // UI-only read: matches token and exact path across current folders; no loading/layout mutation or borrowed address.
     bool IsPreviewRequestCurrent(const ImageRequestToken& request) const;

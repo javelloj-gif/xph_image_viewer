@@ -349,6 +349,7 @@ void TaggingModal::SaveChanges() {
             );
         }
     }
+    if (m_app) m_app->m_folderData.NotifyAttributesChanged();
     Hide();
 }
 
@@ -515,9 +516,14 @@ void TaggingModal::GetScrollLimits(float& leftTotalH, float& leftMaxScroll, floa
     }
 }
 
+float TaggingModal::GetLayoutScale() const {
+    const auto size=m_app->m_renderer.GetTargetSize().ToFloat();
+    return std::max(0.1f,std::min({1.0f,(size.width-16)/1152,(size.height-16)/840}));
+}
 RectF TaggingModal::GetBounds() const {
     if (!m_app) return {};
     auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
+    const float scale=GetLayoutScale(); screenSize.width/=scale; screenSize.height/=scale;
     float boxW = 1152.0f;
     float boxH = 840.0f;
     return RectF::FromXYWH(
@@ -532,6 +538,10 @@ void TaggingModal::Draw(Renderer& renderer) {
     if (!m_visible) return;
 
     auto screenSize = renderer.GetTargetSize().ToFloat();
+    const float scale=GetLayoutScale(); screenSize.width/=scale; screenSize.height/=scale;
+    auto* context=renderer.GetD2DContext();
+    D2D1_MATRIX_3X2_F previous; context->GetTransform(&previous);
+    context->SetTransform(D2D1::Matrix3x2F::Scale(scale,scale)*previous);
     RectF bounds = GetBounds();
 
     // 1. Dark overlay background
@@ -546,7 +556,7 @@ void TaggingModal::Draw(Renderer& renderer) {
     // 3. Draw Title (Filename or Multi-Image Title)
     std::wstring dialogTitle;
     if (m_multiImageMode) {
-        dialogTitle = _(L"Etiquetado Múltiple ({} imágenes)");
+        dialogTitle = _(L"Tags for {} images");
         size_t placeholder = dialogTitle.find(L"{}");
         if (placeholder != std::wstring::npos) {
             dialogTitle.replace(placeholder, 2, std::to_wstring(m_filePaths.size()));
@@ -629,13 +639,14 @@ void TaggingModal::Draw(Renderer& renderer) {
     Color cancelBg = (m_hoveredButton == 2) ? Color::FromRGBA(60, 60, 65) : Color::FromRGBA(35, 35, 40);
     renderer.FillRoundedRect(cancelRect, 4.0f, 4.0f, cancelBg);
     renderer.DrawRoundedRect(cancelRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-    renderer.DrawText(_(L"Cancelar"), cancelRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Cancel"), cancelRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
 
     // Save Button
     Color saveBg = (m_hoveredButton == 1) ? Color::FromRGBA(255, 55, 95) : Color::FromRGBA(220, 40, 75);
     renderer.FillRoundedRect(saveRect, 4.0f, 4.0f, saveBg);
     renderer.DrawRoundedRect(saveRect, 4.0f, 4.0f, Color::White(0.2f), 1.0f);
-    renderer.DrawText(_(L"Guardar"), saveRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Save"), saveRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
+    context->SetTransform(previous);
 }
 
 void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const RectF& rightPane) {
@@ -657,7 +668,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
         renderer.DrawRoundedRect(searchRect, 4.0f, 4.0f, searchBorder, 1.0f);
 
         if (m_searchText.empty()) {
-            renderer.DrawText(_(L"Buscar etiquetas..."), searchRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
+            renderer.DrawText(_(L"Search tags..."), searchRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
         } else {
             renderer.DrawText(m_searchText, searchRect.Inset(8.0f), Color::White(), 15.0f, TextAlign::Left, TextVAlign::Center);
         }
@@ -780,7 +791,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
                 RectF headerRect = RectF::FromXYWH(listRect.left + 8.0f, availY + 4.0f, listRect.Width() - 16.0f, 20.0f);
                 if (headerRect.bottom > listRect.top && headerRect.top < listRect.bottom) {
                     renderer.DrawText(
-                        _(L"Otros"),
+                        _(L"Others"),
                         headerRect,
                         Color::FromRGBA(0, 240, 255, 180),
                         14.0f,
@@ -897,7 +908,7 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
     renderer.DrawRoundedRect(addRect, 4.0f, 4.0f, addBorder, 1.0f);
 
     if (m_manualTagText.empty()) {
-        renderer.DrawText(_(L"Nueva etiqueta..."), addRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(_(L"New tag..."), addRect.Inset(8.0f), Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
     } else {
         renderer.DrawText(m_manualTagText, addRect.Inset(8.0f), Color::White(), 15.0f, TextAlign::Left, TextVAlign::Center);
     }
@@ -1013,11 +1024,11 @@ void TaggingModal::DrawTagsTab(Renderer& renderer, const RectF& leftPane, const 
     if (m_multiImageMode) {
         float startX = hasAvailable ? leftPane.left : rightPane.left;
         RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, bounds.Width() - 60.0f, 30.0f);
-        renderer.DrawText(_(L"Clasificación: No disponible en modo múltiple"), starsTextRect, Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(_(L"Rating unavailable for multiple images"), starsTextRect, Color::FromRGBA(120, 120, 120), 15.0f, TextAlign::Left, TextVAlign::Center);
     } else {
         float startX = hasAvailable ? leftPane.left : rightPane.left;
         RectF starsTextRect = RectF::FromXYWH(startX, rightPane.bottom + 15.0f, 120.0f, 30.0f);
-        renderer.DrawText(_(L"Clasificación") + L":", starsTextRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Center);
+        renderer.DrawText(_(L"Rating") + L":", starsTextRect, Color::White(0.85f), 15.0f, TextAlign::Left, TextVAlign::Center);
 
         float starX = starsTextRect.right + 12.0f;
         float starY = starsTextRect.top;
@@ -1132,19 +1143,20 @@ void TaggingModal::DrawMetadataTab(Renderer& renderer, const RectF& bounds) {
 
     // Title
     RectF titleRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 20.0f, bounds.Width() - 40.0f, 40.0f);
-    drawTextBox(_(L"Título"), m_title, titleRect, 3);
+    drawTextBox(_(L"Title"), m_title, titleRect, 3);
 
     // Creator / Author
     RectF creatorRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 85.0f, bounds.Width() - 40.0f, 40.0f);
-    drawTextBox(_(L"Autor"), m_creator, creatorRect, 4);
+    drawTextBox(_(L"Creator"), m_creator, creatorRect, 4);
 
     // Description
     RectF descRect = RectF::FromXYWH(bounds.left + 20.0f, fieldsY + 150.0f, bounds.Width() - 40.0f, 90.0f);
-    drawTextBox(_(L"Descripción / Comentario"), m_description, descRect, 5, true);
+    drawTextBox(_(L"Description / Comment"), m_description, descRect, 5, true);
 }
 
 bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
     if (!m_visible) return false;
+    const float scale=GetLayoutScale(); x/=scale; y/=scale;
 
     RectF bounds = GetBounds();
 
@@ -1439,6 +1451,7 @@ bool TaggingModal::OnMouseMove(float x, float y, KeyModifiers mods) {
 
 bool TaggingModal::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
     if (!m_visible) return false;
+    const float scale=GetLayoutScale(); x/=scale; y/=scale;
     if (btn != MouseButton::Left) return true;
 
     RectF bounds = GetBounds();
@@ -1846,6 +1859,7 @@ bool TaggingModal::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mod
 
 bool TaggingModal::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
     if (!m_visible) return false;
+    const float scale=GetLayoutScale(); x/=scale; y/=scale;
 
     RectF bounds = GetBounds();
     bool hasAvailable = !m_availableTags.empty();

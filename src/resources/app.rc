@@ -14,8 +14,8 @@
 
 // ─── Version Information ─────────────────────────────────────────────────────
 VS_VERSION_INFO VERSIONINFO
-    FILEVERSION    1,00,3,0
-    PRODUCTVERSION 1,00,3,0
+    FILEVERSION    1,0,0,0
+    PRODUCTVERSION 1,0,0,0
     FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
 #ifdef _DEBUG
     FILEFLAGS      VS_FF_DEBUG
@@ -32,12 +32,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "xPhang"
             VALUE "FileDescription",  "Image Viewer"
-            VALUE "FileVersion",      "1.00.3.0"
+            VALUE "FileVersion",      "1.0.0.0"
             VALUE "InternalName",     "image_viewer"
             VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. Image Viewer is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
             VALUE "OriginalFilename", "image_viewer.exe"
             VALUE "ProductName",      "Image Viewer"
-            VALUE "ProductVersion",   "1.00.3.0"
+            VALUE "ProductVersion",   "1.0.0.0"
         END
     END
     BLOCK "VarFileInfo"

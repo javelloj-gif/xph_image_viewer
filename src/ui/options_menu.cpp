@@ -14,11 +14,11 @@ namespace kv {
 // Names persisted mode IDs for option labels; retired/unknown IDs have no active mode.
 static std::wstring GetPageName(int pageVal) {
     switch (pageVal) {
-        case 1: return L"Start";
-        case 2: return L"Viewer";
-        case 3: return L"Board";
-        case 5: return L"Waterfall";
-        default: return L"Unknown";
+        case 1: return _(L"Start");
+        case 2: return _(L"Viewer");
+        case 3: return _(L"Board");
+        case 5: return _(L"Waterfall");
+        default: return _(L"Unknown");
     }
 }
 
@@ -50,8 +50,8 @@ void OptionsMenu::Hide() {
 
 RectF OptionsMenu::GetBounds() const {
     auto screenSize = m_app->m_renderer.GetTargetSize().ToFloat();
-    float boxW = 720.0f;
-    float boxH = 560.0f;
+    float boxW = std::min(720.0f,screenSize.width-16);
+    float boxH = std::min(560.0f,screenSize.height-16);
     return RectF::FromXYWH(
         (screenSize.width - boxW) / 2.0f,
         (screenSize.height - boxH) / 2.0f,
@@ -212,7 +212,7 @@ void OptionsMenu::BuildControls() {
         // Info Label
         ControlItem appLabel;
         appLabel.type = ControlItem::Label;
-        appLabel.label = L"Image Viewer — Native C++20 Version";
+        appLabel.label = _(L"Image Viewer — Native C++20 Version");
         appLabel.rect = RectF::FromXYWH(contentLeft, currentY, bounds.Width() - 60.0f, 30.0f);
         m_controls.push_back(appLabel);
         currentY += rowHeight * 1.5f;
@@ -230,7 +230,7 @@ void OptionsMenu::BuildControls() {
         enBtn.type = ControlItem::Button;
         enBtn.name = L"lang_en";
         enBtn.label = L"English (EN)";
-        enBtn.rect = RectF::FromXYWH(contentLeft, currentY, 150.0f, 35.0f);
+        enBtn.rect = RectF::FromXYWH(contentLeft, currentY, (bounds.Width()-76)/3, 35.0f);
         enBtn.onClick = [this, &s]() {
             s.ui_lang = L"en";
             I18nEngine::Initialize(L"en");
@@ -243,7 +243,7 @@ void OptionsMenu::BuildControls() {
         ruBtn.type = ControlItem::Button;
         ruBtn.name = L"lang_ru";
         ruBtn.label = L"\u0420\u0443\u0441\u0441\u043a\u0438\u0439 (RU)";
-        ruBtn.rect = RectF::FromXYWH(contentLeft + 180.0f, currentY, 150.0f, 35.0f);
+        ruBtn.rect = RectF::FromXYWH(contentLeft + (bounds.Width()-60)/3, currentY, (bounds.Width()-76)/3, 35.0f);
         ruBtn.onClick = [this, &s]() {
             s.ui_lang = L"ru";
             I18nEngine::Initialize(L"ru");
@@ -251,6 +251,11 @@ void OptionsMenu::BuildControls() {
             BuildControls();
         };
         m_controls.push_back(ruBtn);
+        ControlItem esBtn;
+        esBtn.type=ControlItem::Button; esBtn.name=L"lang_es"; esBtn.label=L"Español (ES)";
+        esBtn.rect=RectF::FromXYWH(contentLeft+2*(bounds.Width()-60)/3,currentY,(bounds.Width()-76)/3,35);
+        esBtn.onClick=[this,&s]() { s.ui_lang=L"es"; I18nEngine::Initialize(L"es"); s.Save(); BuildControls(); };
+        m_controls.push_back(esBtn);
     }
 }
 
@@ -291,13 +296,13 @@ void OptionsMenu::Draw(Renderer& renderer) {
 
     for (int i = 0; i < static_cast<int>(tabLabels.size()); ++i) {
         std::wstring label = _(tabLabels[i]);
-        float labelW = static_cast<float>(label.size() * 10.0f + 30.0f);
+        float labelW = (bounds.Width()-60)/4;
         RectF tabRect = RectF::FromXYWH(tabX, tabY, labelW, tabH);
 
         bool active = (m_currentTab == i);
         Color textColor = active ? Color::White() : Color::FromRGBA(160, 160, 160);
 
-        renderer.DrawText(label, tabRect, textColor, 14.0f, TextAlign::Center, TextVAlign::Center);
+        renderer.DrawText(label, tabRect, textColor, std::min(14.0f,14.0f*tabRect.Width()/std::max(1.0f,renderer.MeasureText(label,14).x)), TextAlign::Center, TextVAlign::Center);
         if (active) {
             // Draw red underline for active tab
             renderer.FillRect(
@@ -306,7 +311,7 @@ void OptionsMenu::Draw(Renderer& renderer) {
             );
         }
 
-        tabX += labelW + 15.0f;
+        tabX += labelW;
     }
 
     // 5. Draw active controls
@@ -368,6 +373,7 @@ void OptionsMenu::Draw(Renderer& renderer) {
         } else if (item.type == ControlItem::Button) {
             bool currentLangSelected = false;
             if (item.name == L"lang_en" && m_app->m_settings.ui_lang == L"en") currentLangSelected = true;
+            if (item.name == L"lang_es" && m_app->m_settings.ui_lang == L"es") currentLangSelected = true;
             if (item.name == L"lang_ru" && m_app->m_settings.ui_lang == L"ru") currentLangSelected = true;
 
             Color btnBg = currentLangSelected ? Color::FromRGBA(220, 50, 50, 180) : Color::FromRGBA(40, 40, 40);
@@ -375,7 +381,7 @@ void OptionsMenu::Draw(Renderer& renderer) {
 
             renderer.FillRoundedRect(item.rect, 4.0f, 4.0f, btnBg);
             renderer.DrawRoundedRect(item.rect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-            renderer.DrawText(item.label, item.rect, Color::White(), 13.0f, TextAlign::Center, TextVAlign::Center);
+            renderer.DrawText(item.label, item.rect, Color::White(), std::min(13.0f,13.0f*(item.rect.Width()-8)/std::max(1.0f,renderer.MeasureText(item.label,13).x)), TextAlign::Center, TextVAlign::Center);
         }
     }
 }
@@ -434,7 +440,7 @@ bool OptionsMenu::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
     };
 
     for (int i = 0; i < static_cast<int>(tabLabels.size()); ++i) {
-        float labelW = static_cast<float>(_(tabLabels[i]).size() * 10.0f + 30.0f);
+        float labelW = (bounds.Width()-60)/4;
         RectF tabRect = RectF::FromXYWH(tabX, tabY, labelW, tabH);
         if (tabRect.Contains(x, y)) {
             m_currentTab = i;
@@ -442,7 +448,7 @@ bool OptionsMenu::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mo
             m_app->m_window.RequestRedraw();
             return true;
         }
-        tabX += labelW + 15.0f;
+        tabX += labelW;
     }
 
     // Check control item clicks

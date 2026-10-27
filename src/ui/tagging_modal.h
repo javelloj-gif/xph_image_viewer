@@ -17,6 +17,7 @@ namespace kv {
 class App;
 
 class TaggingModal {
+    friend class AsyncPreviewTests; // Checks scaled metadata controls and native drawing without writing image data.
 public:
     TaggingModal() = default;
     ~TaggingModal() = default;
@@ -27,7 +28,9 @@ public:
     void Hide();
     bool IsVisible() const { return m_visible; }
 
+    // UI: draws localized controls in a fitted logical viewport and restores the renderer transform.
     void Draw(Renderer& renderer);
+    // UI: pointer positions are mapped into the same logical viewport used for drawing.
     bool OnMouseMove(float x, float y, KeyModifiers mods);
     bool OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
@@ -38,7 +41,9 @@ public:
 private:
     bool LoadAvailableTags();
     void DrawTagsTab(Renderer& renderer, const RectF& leftPane, const RectF& rightPane);
+    // UI: draws translated metadata labels; stored titles, authors and descriptions remain user content.
     void DrawMetadataTab(Renderer& renderer, const RectF& bounds);
+    // UI: writes metadata to the selected source files, invalidates known sort attributes and closes the overlay.
     void SaveChanges();
     void GetScrollLimits(float& leftTotalH, float& leftMaxScroll, float& rightTotalH, float& rightMaxScroll);
 
@@ -95,6 +100,8 @@ private:
     int m_hoveredButton = 0; // 0 = None, 1 = Save, 2 = Cancel, 3 = Left-to-Right Copy Arrow, 4 = Add Tag Button
 
     // Layout coordinates
+    // UI: preserves the established 1152x840 layout within a client-fitted coordinate system.
+    float GetLayoutScale() const;
     RectF GetBounds() const;
 };
 

@@ -653,17 +653,17 @@ void ThumbnailStrip::ShowContextMenu(float screenX, float screenY) {
     HMENU hSortSub = CreatePopupMenu();
     int currentMode = m_app->m_settings.sort_mode;
 
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 10, L"Name (Ascending)");
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 11, L"Name (Descending)");
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 12, L"Date (Ascending)");
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 13, L"Date (Descending)");
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 14, L"Size (Ascending)");
-    AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 15, L"Size (Descending)");
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 10, _(L"Name (Ascending)").c_str());
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 11, _(L"Name (Descending)").c_str());
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 12, _(L"Date (Ascending)").c_str());
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 13, _(L"Date (Descending)").c_str());
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 14, _(L"Size (Ascending)").c_str());
+    AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 15, _(L"Size (Descending)").c_str());
 
-    AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
+    AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), _(L"Sort By").c_str());
     AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING, 6, L"Save order metadata to disk");
-    AppendMenuW(hMenu, MF_STRING, 7, L"Toggle fullscreen mode");
+    AppendMenuW(hMenu, MF_STRING, 6, _(L"Save order metadata to disk").c_str());
+    AppendMenuW(hMenu, MF_STRING, 7, _(L"Toggle fullscreen mode").c_str());
 
     int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                   static_cast<int>(screenX), static_cast<int>(screenY),

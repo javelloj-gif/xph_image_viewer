@@ -47,8 +47,8 @@ void BoardSearchManager::SetSearchVisible(bool visible) {
 
 RectF BoardSearchManager::GetSearchModalBounds() const {
     auto screenSize = m_page->m_app->m_renderer.GetTargetSize().ToFloat();
-    float boxW = 600.0f;
-    float boxH = 360.0f;
+    float boxW = std::min(600.0f,screenSize.width-16);
+    float boxH = std::min(360.0f,screenSize.height-16);
     return RectF::FromXYWH(
         (screenSize.width - boxW) / 2.0f,
         (screenSize.height - boxH) / 2.0f,
@@ -134,7 +134,7 @@ void BoardSearchManager::Draw(Renderer& renderer) {
     
     RectF titleRect = RectF::FromXYWH(bounds.left + 30.0f, bounds.top + 20.0f, bounds.Width() - 60.0f, 30.0f);
     renderer.DrawText(
-        L"Buscar por etiquetas",
+        _(L"Search by tags"),
         titleRect,
         Color::White(),
         22.0f,
@@ -149,7 +149,7 @@ void BoardSearchManager::Draw(Renderer& renderer) {
     
     if (m_searchText.empty()) {
         renderer.DrawText(
-            L"Etiquetas separadas por comas (ej. tag1, -tag2)...",
+            _(L"Comma-separated tags (e.g. tag1, -tag2)..."),
             searchRect.Inset(8.0f),
             Color::FromRGBA(120, 120, 120),
             15.0f,
@@ -231,12 +231,12 @@ void BoardSearchManager::Draw(Renderer& renderer) {
     Color closeBg = (m_hoveredSearchButton == 2) ? Color::FromRGBA(60, 60, 65) : Color::FromRGBA(35, 35, 40);
     renderer.FillRoundedRect(closeRect, 4.0f, 4.0f, closeBg);
     renderer.DrawRoundedRect(closeRect, 4.0f, 4.0f, Color::White(0.15f), 1.0f);
-    renderer.DrawText(L"Cerrar", closeRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Close"), closeRect, Color::White(0.9f), 15.0f, TextAlign::Center, TextVAlign::Center);
     
     Color searchBg = (m_hoveredSearchButton == 1) ? Color::FromRGBA(255, 55, 95) : Color::FromRGBA(220, 40, 75);
     renderer.FillRoundedRect(searchBtnRect, 4.0f, 4.0f, searchBg);
     renderer.DrawRoundedRect(searchBtnRect, 4.0f, 4.0f, Color::White(0.2f), 1.0f);
-    renderer.DrawText(L"Buscar", searchBtnRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
+    renderer.DrawText(_(L"Search"), searchBtnRect, Color::White(), 15.0f, TextAlign::Center, TextVAlign::Center);
 }
 
 bool BoardSearchManager::OnMouseMove(float x, float y, KeyModifiers mods) {

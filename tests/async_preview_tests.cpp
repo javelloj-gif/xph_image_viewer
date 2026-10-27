@@ -8,6 +8,7 @@
 #include <limits>
 #include <random>
 #include <cstring>
+#include "ui_message_keys.h"
 
 namespace kv {
 
@@ -882,7 +883,7 @@ public:
     }
 
     // Writes production text, strip/overlay, dock/icon or grid pixels on WARP; checks reference geometry/text contracts.
-    int VisualSnapshot(const std::filesystem::path& output, bool grids = false, bool textOnly = false, bool reference = false, bool dock = false) {
+    int VisualSnapshot(const std::filesystem::path& output, bool grids = false, bool textOnly = false, bool reference = false, bool dock = false, bool batch = false, bool tags = false) {
         auto& renderer = app.m_renderer;
         ComPtr<ID3D11Device> d3d;
         Check(SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_WARP, nullptr,
@@ -950,7 +951,7 @@ public:
         Check(stream.good(), "snapshot output");
         int frames = 0;
         for (const uint32_t width : (grids ? std::array{801u, 1601u} : std::array{320u, 801u})) {
-            for (const float dpi : {96.0f, 144.0f}) {
+            for (const float dpi : (batch ? std::vector{96.0f,144.0f,192.0f} : std::vector{96.0f,144.0f})) {
                 renderer.m_width = width;
                 renderer.m_height = 480;
                 const auto properties = D2D1::BitmapProperties1(D2D1_BITMAP_OPTIONS_TARGET,
@@ -966,7 +967,7 @@ public:
                 ComPtr<ID2D1Bitmap1> readable;
                 Check(SUCCEEDED(context->CreateBitmap(D2D1::SizeU(width, 480), nullptr, 0,
                     readProperties, &readable)), "snapshot readback");
-                for (int state = 0; state < 3; ++state) {
+                for (int state = 0; state < (batch ? 12 : 3); ++state) {
                     auto& strip = app.m_thumbnailStrip;
                     strip.m_opacity = state == 0 ? 0.0f : (state == 1 ? 0.45f : 1.0f);
                     strip.m_scrollX = state == 1 ? -273.125f : -300.0f;
@@ -989,7 +990,23 @@ public:
                     }
                     renderer.BeginFrame();
                     renderer.Clear(dock ? Color::FromHex(0x10171b) : Color::Transparent());
-                    if (textOnly) {
+                    if (batch) {
+                        app.m_settings.ui_lang=state<4 ? L"en" : state<8 ? L"ru" : L"es";
+                        I18nEngine::Initialize(app.m_settings.ui_lang);
+                        renderer.Clear(Color::FromHex(0x10171b));
+                        app.m_currentPage=state%4==1 ? Page::Waterfall : state%4==2 ? Page::Board : Page::Viewer;
+                        app.m_waterfallPage.m_viewerModal=false;
+                        app.m_dockOpacity=1; app.m_dockHovered=state%4==2 ? 4 : 0; app.m_dockFocus=-1;
+                        if (state%4==1 || state%4==2) app.DrawDock();
+                        if (state%4==0) { app.m_sortFilterModal.Initialize(&app); app.m_sortFilterModal.Show(); app.m_sortFilterModal.Draw(renderer); app.m_sortFilterModal.Hide(); }
+                        if (state%4==3 && tags) {
+                            app.m_taggingModal.Initialize(&app); app.m_taggingModal.m_visible=true; app.m_taggingModal.m_currentTab=1;
+                            D2D1_MATRIX_3X2_F before,after; context->GetTransform(&before);
+                            app.m_taggingModal.Draw(renderer); context->GetTransform(&after);
+                            Check(std::memcmp(&before,&after,sizeof(before))==0,"responsive metadata drawing restores its transform");
+                            app.m_taggingModal.Hide();
+                        } else if (state%4==3) { app.m_optionsMenu.Initialize(&app); app.m_optionsMenu.Show(); app.m_optionsMenu.m_currentTab=3; app.m_optionsMenu.BuildControls(); app.m_optionsMenu.Draw(renderer); app.m_optionsMenu.Hide(); }
+                    } else if (textOnly) {
                         DrawTextProbe(renderer, state, reference);
                     } else if (grids) {
                         app.m_folders[0].scrollOffset = state == 0 ? 0.0f : -135.25f * state;
@@ -1521,6 +1538,7 @@ public:
                             auto right = strip.GetThumbnailRect(i + 1, size.width, size.height);
                             Check(std::abs(right.left - left.right - 3 * scale) < 0.001f, "neighbor thumbnails use the requested half gap at every DPI");
                         }
+                        viewer.m_infoLift=size.height-15*scale-(strip.GetBounds().top-12*scale);
                         const auto bar = viewer.GetInfoBarRect(10000 * scale, 30 * scale);
                         Check(bar.left >= 0 && bar.right <= size.width && bar.bottom <= strip.GetBounds().top - 12 * scale + 0.001f, "metadata bounds preserve client and 12 DIP separation");
                         Check(std::abs(bar.Center().x - rect.Center().x) < 0.01f, "metadata aligns with centered active image");
@@ -1536,6 +1554,7 @@ public:
                             Check(reference == bounded, "active-width visible interval matches full traversal");
                         }
                         app.m_currentPage = Page::Waterfall;
+                        viewer.m_infoLift=0;
                         const auto modalBar = viewer.GetInfoBarRect(100, 30 * scale);
                         Check(std::abs(modalBar.bottom - (size.height - 15 * scale)) < 0.01f, "Waterfall modal reserves no nonexistent strip");
                         app.m_currentPage = Page::Viewer;
@@ -1595,6 +1614,7 @@ public:
         app.m_fileList = {L"shared-a", L"shared-b"};
         strip.SetFileList(app.m_fileList); strip.m_opacity = strip.m_targetOpacity = 1;
         Check(app.IsViewerActive(), "Waterfall modal hosts the shared viewer");
+        viewer.m_infoLift=600-15-(strip.GetBounds().top-12);
         Check(viewer.GetInfoBarRect(200, 28).bottom <= strip.GetBounds().top - 12, "modal metadata reserves strip envelope");
         viewer.m_metadataOpacity = 1; viewer.m_infoBarRect = RectF::FromXYWH(200, 400, 250, 30);
         app.OnMouseDown(MouseButton::Left, 220, 410, {});
@@ -1646,8 +1666,9 @@ public:
         app.HandleDockKey(VK_TAB, {});
         Check(app.m_dockFocus == 0 && app.m_dockOpacity == 1, "Tab reveals named dock focus");
         const auto rotation = app.m_viewerPage.m_rotation;
-        app.InvokeDock(4);
-        Check(app.m_currentPage == Page::Viewer && app.m_viewerPage.m_rotation == rotation && !app.m_optionsMenu.IsVisible(), "future filter is inert");
+        app.m_sortFilterModal.Initialize(&app); app.InvokeDock(4);
+        Check(app.m_sortFilterModal.IsVisible(), "sort action opens the real modal"); app.m_sortFilterModal.Hide();
+        Check(app.m_currentPage == Page::Viewer && app.m_viewerPage.m_rotation == rotation && !app.m_optionsMenu.IsVisible(), "opening filter preserves image and page");
         app.m_dockFocus = 2; app.HandleDockKey(VK_RETURN, {});
         Check(app.m_viewerPage.m_rotation == rotation + 90, "focused rotate invokes existing image command");
         const auto objectResult = app.GetDockAccessibleObject(0, OBJID_CLIENT);
@@ -1658,21 +1679,23 @@ public:
         Check(SUCCEEDED(accessible->get_accName(child, &name)) && std::wstring(name).find(L"Sort & Filter") != std::wstring::npos, "disabled icon has accessible name");
         SysFreeString(name);
         VARIANT state{};
-        Check(SUCCEEDED(accessible->get_accState(child, &state)) && (state.lVal & STATE_SYSTEM_UNAVAILABLE), "MSAA marks future action unavailable");
-        Check(accessible->accDoDefaultAction(child) == S_FALSE, "MSAA cannot invoke future action");
+        Check(SUCCEEDED(accessible->get_accState(child, &state)) && !(state.lVal & STATE_SYSTEM_UNAVAILABLE), "MSAA exposes enabled sorting in Viewer");
+        Check(accessible->accDoDefaultAction(child) == S_OK && app.m_sortFilterModal.IsVisible(), "MSAA opens sort modal");
+        app.m_sortFilterModal.Hide();
         app.m_dockAccessibleState.reset();
         Check(accessible->get_accState(child, &state) == CO_E_OBJNOTCONNECTED, "MSAA external references cannot outlive owner state");
         app.m_dockFocus = -1; app.m_waterfallPage.m_viewerModal = true; app.m_currentPage = Page::Waterfall;
         app.m_dockOpacity = 1;
         const auto cell = app.GetDockButtonRect(4).Center();
         app.OnMouseDown(MouseButton::Left, cell.x, cell.y, {}); app.OnMouseUp(MouseButton::Left, cell.x, cell.y, {});
-        Check(app.m_waterfallPage.m_viewerModal, "disabled dock press cannot dismiss modal");
-        app.InvokeDock(0);
-        Check(app.m_currentPage == Page::Waterfall && !app.m_waterfallPage.m_viewerModal, "Waterfall dock returns to grid");
+        Check(app.m_waterfallPage.m_viewerModal, "sort dock press cannot dismiss viewer host");
+        app.m_sortFilterModal.Hide(); app.InvokeDock(0);
+        Check(app.m_currentPage == Page::Viewer && !app.m_waterfallPage.m_viewerModal, "Waterfall dock returns to standalone viewer");
+        app.m_currentPage=Page::Waterfall; app.m_dockFocus=-1; app.m_dockRemaining=0;
         app.UpdateDock(1);
-        Check(app.m_dockOpacity == 0, "grid has no dock");
+        Check(app.HasDock() && app.HandleDockKey(VK_TAB,{}), "grid has keyboard-accessible dock");
         app.m_currentPage = Page::Board; app.UpdateDock(1);
-        Check(app.m_dockOpacity == 0 && !app.HandleDockKey(VK_TAB, {}), "Board has no dock input");
+        Check(app.HasDock() && app.HandleDockKey(VK_TAB, {}) && app.GetDockAction(4).disabled, "Board dock is available with sorting disabled");
         app.m_currentPage = Page::Viewer; app.m_dockFocus = -1; app.m_dockOpacity = 0;
     }
 
@@ -1809,6 +1832,152 @@ public:
         live.m_renderer.m_initialized = false;
     }
 
+    // Measures real worker latency and UI submission cost on an explicitly supplied read-only synthetic inventory.
+    int ViewBenchmark(const std::filesystem::path& input) {
+        std::vector<std::wstring> inventory;
+        for (const auto& entry : std::filesystem::directory_iterator(input))
+            if (entry.is_regular_file() && ImageLoader::IsSupported(entry.path().wstring())) inventory.push_back(entry.path().wstring());
+        FolderScanService worker; auto life=std::make_shared<const bool>(true);
+        std::cout<<"mode,iteration,submit_ms,total_ms,count\n";
+        for (int mode=0;mode<6;++mode) for (int iteration=0;iteration<31;++iteration) {
+            bool done=false; size_t count=0;
+            const auto begin=std::chrono::steady_clock::now();
+            worker.RequestView(input.wstring(),inventory,mode,iteration%2 ? 2 : 511,0,ImageCancellation(life),[&](FolderSnapshot value) { count=value.files.size(); done=value.complete; });
+            const auto submitted=std::chrono::steady_clock::now();
+            const auto until=begin+std::chrono::seconds(10);
+            while (!done && std::chrono::steady_clock::now()<until) { worker.ProcessPending(); Sleep(1); }
+            Check(done,"view benchmark completion");
+            const auto end=std::chrono::steady_clock::now();
+            std::cout<<mode<<','<<iteration<<','<<std::chrono::duration<double,std::milli>(submitted-begin).count()<<','<<std::chrono::duration<double,std::milli>(end-begin).count()<<','<<count<<'\n';
+        }
+        return 0;
+    }
+
+    // Exercises worker projections, transient drafts, Board preservation, locales and animation on isolated files.
+    int RunProductBatch() {
+        namespace fs=std::filesystem;
+        const auto input=fs::current_path()/L"input"; fs::create_directories(input);
+        const auto a=(input/L"a.JPG").wstring(), b=(input/L"B.png").wstring(), c=(input/L"c.svg").wstring();
+        { std::ofstream(a)<<"aaaa"; std::ofstream(b)<<"bb"; std::ofstream(c)<<"cccccc"; }
+        const auto now=fs::file_time_type::clock::now();
+        fs::last_write_time(a,now-std::chrono::seconds(3)); fs::last_write_time(b,now-std::chrono::seconds(2)); fs::last_write_time(c,now);
+        FolderScanService worker;
+        FolderSnapshot value; bool done=false;
+        auto life=std::make_shared<const bool>(true);
+        const auto wait=[&]() {
+            const auto until=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+            while (!done && std::chrono::steady_clock::now()<until) { worker.ProcessPending(); Sleep(1); }
+            Check(done && value.complete,"worker publishes complete snapshot on UI"); done=false;
+        };
+        const auto project=[&](int mode,int mask) {
+            worker.RequestView(input.wstring(),{c,b,a},mode,mask,0,ImageCancellation(life),[&](FolderSnapshot result) { value=std::move(result); done=true; }); wait();
+        };
+        for (int mode=0;mode<6;++mode) {
+            project(mode,511);
+            const std::vector<std::wstring> ascending=mode<4 ? std::vector{a,b,c} : std::vector{b,a,c};
+            auto expected=ascending; if (mode%2) std::reverse(expected.begin(),expected.end());
+            Check(value.files==expected,"all six orders preserve deterministic keys");
+        }
+        project(0,1|256); Check(value.files==std::vector{a,c} && value.inventory.size()==3,"combined family filter preserves inventory");
+        project(0,0); Check(value.files.empty() && value.inventory.size()==3,"zero families is a valid empty result");
+        Check(FolderScanService::FormatBit(L"x.JFIF")==1 && FolderScanService::FormatBit(L"x.APNG")==2 && FolderScanService::FormatBit(L"x.AVF")==64 && FolderScanService::FormatBit(L"x.HEIC")==128 && FolderScanService::FormatBit(L"x.txt")==0,"extension families preserve loader support");
+        // A cached order must remain usable without re-reading changed sizes until explicit revision invalidation.
+        { std::ofstream(b)<<std::string(40,'b'); }
+        project(4,511); Check(value.files==std::vector{b,a,c},"repeated criterion reuses cached size keys/order");
+        worker.RequestView(input.wstring(),{c,b,a},4,511,1,ImageCancellation(life),[&](FolderSnapshot result) { value=std::move(result); done=true; }); wait();
+        Check(value.files==std::vector{a,c,b},"attribute mutation revision invalidates cached order");
+        auto canceled=std::make_shared<const bool>(true); int stale=0;
+        worker.RequestView(input.wstring(),{c,b,a},0,511,0,ImageCancellation(canceled),[&](FolderSnapshot) { ++stale; }); canceled.reset();
+        project(1,2); Check(stale==0 && value.files==std::vector{b},"superseded request cannot publish");
+        worker.Shutdown();
+
+        app.m_folderData.Initialize(&app); app.m_folders.clear();
+        FolderInfo folder; folder.folderPath=input.wstring(); folder.inventory={a,b,c}; folder.filePaths=folder.inventory;
+        for (const auto& path : folder.filePaths) { PreviewItem item; item.filePath=path; folder.previews.push_back(std::move(item)); }
+        app.m_folders.push_back(std::move(folder)); app.m_currentFolderIdx=0;
+        app.m_settings.sort_mode=0; app.m_settings.image_filter_mask=2;
+        app.m_currentImage=std::make_shared<ImageData>(); app.m_currentImage->filePath=a;
+        value.path=input.wstring(); value.files={b}; value.filterMask=2; value.sortMode=0; value.complete=true;
+        app.m_folderData.CompleteView(input.wstring(),0,value);
+        Check(app.m_currentIndex==-1 && app.m_currentImage->filePath==a && app.m_thumbnailStrip.m_activeIndex==-1,"excluded original remains visible with no false strip selection");
+        Check(app.m_folders[0].inventory.size()==3,"UI projection never truncates inventory");
+        value.files={c}; app.m_folderData.CompleteView(input.wstring(),999,value);
+        Check(app.m_fileList==std::vector{b},"mutation generation rejects stale model publication");
+        const auto retained=std::make_shared<ImageData>(); app.m_folders[0].previews[0].texture=retained;
+        app.m_folderData.EnableAsync();
+        app.ApplyFileView(5,511); app.ApplyFileView(4,0);
+        const auto awaitView=[&](int mode,int mask) {
+            const auto until=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+            while ((app.m_folders[0].appliedSort!=mode || app.m_folders[0].appliedFilter!=mask) && std::chrono::steady_clock::now()<until) {
+                app.m_folderData.ProcessPending(); Sleep(1);
+            }
+            Check(app.m_folders[0].appliedSort==mode && app.m_folders[0].appliedFilter==mask,"production manager publishes the latest asynchronous settings generation");
+        };
+        awaitView(4,0);
+        Check(app.m_fileList.empty() && app.m_currentImage->filePath==a && app.m_currentIndex==-1,"rapid changes publish a valid empty projection without replacing the original");
+        app.ApplyFileView(0,511); awaitView(0,511);
+        const auto restored=std::find_if(app.m_folders[0].previews.begin(),app.m_folders[0].previews.end(),[&](const PreviewItem& item) { return item.filePath==b; });
+        Check(restored!=app.m_folders[0].previews.end() && restored->texture==retained,"filter round trip reuses the same ready preview resource");
+        Check(app.m_fileList.size()==3 && app.m_folders[0].hiddenPreviews.empty(),"All restores the complete inventory and consumes retained hidden previews");
+        app.m_settings.image_filter_mask=2;
+        app.m_sortFilterModal.Initialize(&app); app.m_sortFilterModal.Show();
+        app.m_sortFilterModal.Activate(14); app.m_sortFilterModal.OnKeyDown(VK_ESCAPE,{});
+        Check(app.m_settings.image_filter_mask==2,"Escape cancels draft without committing preferences");
+        for (const auto dpi : {96u,144u,192u}) for (const auto width : {320u,480u,736u,1024u}) {
+            app.m_window.m_dpi=dpi; app.m_renderer.m_width=width; app.m_renderer.m_height=600;
+            for (int i=0;i<17;++i) { const auto r=app.m_sortFilterModal.Control(i); Check(r.left>=0 && r.right<=width && r.top>=0 && r.bottom<=600,"all modal controls fit narrow/high-DPI clients"); }
+        }
+        app.m_renderer.m_width=800; app.m_renderer.m_height=600; app.m_window.m_dpi=96;
+        app.m_boardPage.Initialize(&app);
+        app.m_boardPage.m_items.clear(); app.m_boardPage.AddNoteAt({0,0},L"saved original note");
+        Check(app.m_boardPage.SaveBoard((input/L"!board.kbrd").wstring()),"isolated saved Board fixture");
+        app.m_boardPage.m_items.clear();
+        Check(app.m_boardPage.AddImageToWorkspace(a),"send prepares saved Board and appends image");
+        Check(!app.m_boardPage.AddImageToWorkspace(a),"sending same image is idempotent");
+        const auto count=app.m_boardPage.m_items.size();
+        app.m_boardPage.AddNoteAt({10,20},L"unsaved user text");
+        app.m_currentPage=Page::Viewer; app.SetPage(Page::Board); app.SetPage(Page::Viewer); app.SetPage(Page::Board);
+        Check(app.m_boardPage.m_items.size()==count+1 && app.m_boardPage.m_items.back().plainText==L"unsaved user text","entering Board preserves sent images and unsaved edits");
+        Check(app.GetDockAction(0).command==App::DockCommand::Viewer && app.GetDockAction(2).disabled && app.GetDockAction(4).disabled,"Board action descriptors follow mode and disabled contracts");
+        app.InvokeDock(4); Check(!app.m_sortFilterModal.IsVisible(),"blocked Board sorting cannot invoke modal");
+        app.m_currentPage=Page::Waterfall; app.m_waterfallPage.m_viewerModal=false;
+        Check(app.HasDock() && app.GetDockAction(2).disabled && app.GetDockAction(3).disabled,"grid dock does not target stale viewer image");
+        app.m_currentPage=Page::Viewer; app.m_viewerPage.Initialize(&app); app.m_thumbnailStrip.SetFileList({a});
+        auto& viewer=app.m_viewerPage; app.m_settings.effects=true;
+        app.m_thumbnailStrip.m_opacity=1; viewer.m_infoLift=0;
+        viewer.Update(0.016); const auto first=viewer.m_infoLift;
+        viewer.Update(0.016); Check(first>0 && viewer.m_infoLift>first && viewer.m_metadataOpacity==1,"metadata slides upward without disappearing");
+        app.m_thumbnailStrip.m_opacity=0; const auto raised=viewer.m_infoLift; viewer.Update(0.016);
+        Check(viewer.m_infoLift<raised && viewer.m_infoLift>0 && viewer.m_metadataOpacity==1,"metadata slides downward without disappearing");
+        for (int i=0;i<200;++i) viewer.Update(0.1);
+        Check(viewer.m_infoLift==0 && viewer.m_metadataOpacity==0,"animation settles and preserves inactivity fade");
+        app.m_settings.effects=false; app.m_thumbnailStrip.m_opacity=1; viewer.Update(0.016);
+        app.m_sortFilterModal.Show(); app.m_sortFilterModal.m_mode=5; app.m_sortFilterModal.m_mask=3; app.m_sortFilterModal.Activate(15);
+        Settings persisted; persisted.Load(); Check(persisted.sort_mode==5 && persisted.image_filter_mask==3,"Apply persists sort and combined mask in the established settings schema");
+        app.m_folderData.StopScanning();
+        for (const auto dpi : {96u,144u,192u}) {
+            app.m_window.m_dpi=dpi; app.m_renderer.m_width=320; app.m_renderer.m_height=480;
+            Check(app.GetDockBounds().bottom<=480,"dock wraps enough columns to remain within a short high-DPI client");
+            app.m_taggingModal.Initialize(&app); app.m_taggingModal.m_visible=true;
+            const float scale=app.m_taggingModal.GetLayoutScale(); const auto bounds=app.m_taggingModal.GetBounds();
+            Check(bounds.left*scale>=0 && bounds.right*scale<=320 && bounds.top*scale>=0 && bounds.bottom*scale<=480,"metadata modal remains inside small clients");
+            app.m_taggingModal.OnMouseDown(MouseButton::Left,(bounds.right-90)*scale,(bounds.bottom-36)*scale,{});
+            Check(!app.m_taggingModal.IsVisible(),"scaled Cancel button uses matching input coordinates without writing metadata");
+        }
+        app.m_renderer.m_width=800; app.m_renderer.m_height=600; app.m_window.m_dpi=96;
+        Check(viewer.GetInfoBarRect(200,30).bottom<=app.m_thumbnailStrip.GetBounds().top-12,"effects off applies final metadata position directly");
+        for (const auto language : {L"ru",L"es"}) {
+            I18nEngine::Initialize(language);
+            for (const auto key : kUiMessageKeys) {
+                const std::wstring text=key;
+                const bool invariant=text==L"General" || text==L"JPEG / JFIF" || text==L"PNG / APNG" || text==L"GIF" || text==L"BMP" || text==L"TIFF" || text==L"WebP" || text==L"AVIF" || text==L"HEIF / HEIC";
+                Check(!_(text).empty() && (invariant || _(text)!=text),"active message has nonempty localized runtime translation");
+            }
+        }
+        I18nEngine::Initialize(L"en");
+        std::cout<<"Passed "<<checks<<" product batch checks\n"; return 0;
+    }
+
     // Runs original regressions plus hidden update/invalidation contracts, with checks active in Release.
     int Run() {
         ProducerShutdownOrder();
@@ -1864,6 +2033,11 @@ int main(int argc, char* argv[]) {
         kv::AsyncPreviewTests tests;
         if (preferences) return tests.RunViewerControls();
         if (argc == 2 && std::string_view(argv[1]) == "--cancellation-tests") return tests.RunCancellation();
+        if (argc == 3 && std::string_view(argv[1]) == "--view-benchmark") return tests.ViewBenchmark(std::filesystem::path(argv[2]));
+        if (argc == 3 && std::string_view(argv[1]) == "--tags-snapshot")
+            return tests.VisualSnapshot(std::filesystem::path(argv[2]), false, false, false, false, true, true);
+        if (argc == 3 && std::string_view(argv[1]) == "--batch-snapshot")
+            return tests.VisualSnapshot(std::filesystem::path(argv[2]), false, false, false, false, true);
         if (argc == 3 && std::string_view(argv[1]) == "--dock-snapshot")
             return tests.VisualSnapshot(std::filesystem::path(argv[2]), false, false, false, true);
         if (argc == 3 && std::string_view(argv[1]) == "--optimization-snapshot")
@@ -1880,6 +2054,7 @@ int main(int argc, char* argv[]) {
             return tests.TextBenchmark();
         if (argc == 2 && std::string_view(argv[1]) == "--optimization-benchmark")
             return tests.OptimizationBenchmark();
+        if (argc == 2 && std::string_view(argv[1]) == "--product-batch-tests") return tests.RunProductBatch();
         return tests.Run();
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

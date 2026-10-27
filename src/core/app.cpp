@@ -154,6 +154,7 @@ InitResult App::Initialize(const AppConfig& config) {
     m_tagManager.Initialize(m_imageLoader.GetWicFactory());
     trace("Tags loaded");
     m_optionsMenu.Initialize(this);
+    m_sortFilterModal.Initialize(this);
     trace("OptionsMenu initialized");
     m_taggingModal.Initialize(this);
     trace("TaggingModal initialized");
@@ -336,6 +337,7 @@ bool App::RenderFrame() {
     dt = std::min(dt, 0.1);
 
     UpdateDock(dt);
+    if (m_toastRemaining>0) { m_toastRemaining=std::max(0.0,m_toastRemaining-dt); m_window.RequestRedraw(); }
 
     // Update animations
     const bool animatedProperties = m_animations.HasActiveAnimations();
@@ -388,6 +390,10 @@ bool App::RenderFrame() {
     m_originalDrawnThisFrame=false;
     m_stripReadyDrawnThisFrame=false; m_waterfallReadyDrawnThisFrame=false;
     DrawViewerContent();
+    if (m_currentPage!=Page::Board && m_fileList.empty() && m_currentFolderIdx>=0) {
+        const auto size=m_renderer.GetTargetSize().ToFloat();
+        m_renderer.DrawText(_(L"No matching images"),RectF::FromXYWH(16,110,size.width-32,34),Color::White(0.7f),14,TextAlign::Center,TextVAlign::Center);
+    }
     DrawCloseButton();
     if (m_optionsMenu.IsVisible()) {
         m_optionsMenu.Draw(m_renderer);
@@ -396,6 +402,13 @@ bool App::RenderFrame() {
         m_taggingModal.Draw(m_renderer);
     }
     DrawDock();
+    m_sortFilterModal.Draw(m_renderer);
+    if (m_toastRemaining>0) {
+        const auto size=m_renderer.GetTargetSize().ToFloat();
+        auto r=RectF::FromXYWH(16,size.height*0.25f,std::max(0.0f,size.width-32),36);
+        m_renderer.FillRoundedRect(r,6,6,Color::Black(0.7f));
+        m_renderer.DrawText(_(L"Image sent to Board"),r,Color::White(),13,TextAlign::Center,TextVAlign::Center);
+    }
 
     const auto presentResult=m_renderer.EndFrame();
     if (presentResult != S_OK) m_window.RequestRedraw();
@@ -719,8 +732,8 @@ void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loa
         m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
     } else {
         // Build file list from the image's parent folder
-        m_fileList.clear();
-        if (!m_asyncLoading) LoadFolder(fs::path(path).parent_path().wstring(), false);
+        m_currentIndex=-1;
+        if (!m_asyncLoading && m_currentFolderIdx<0) LoadFolder(fs::path(path).parent_path().wstring(), false);
         it = std::find(m_fileList.begin(), m_fileList.end(), path);
         if (it != m_fileList.end()) {
             m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
@@ -750,46 +763,20 @@ void App::LoadFolder(const std::wstring& folderPath, bool loadImage) {
 
 void App::OnFolderReady() {
     auto it=std::find(m_fileList.begin(),m_fileList.end(),m_requestedImagePath);
-    if (it!=m_fileList.end()) m_currentIndex=static_cast<int>(std::distance(m_fileList.begin(),it));
+    if (!m_requestedImagePath.empty()) m_currentIndex=it==m_fileList.end() ? -1 : static_cast<int>(std::distance(m_fileList.begin(),it));
     if (m_currentFolderIdx>=0 && m_currentFolderIdx<static_cast<int>(m_folders.size())) m_folders[m_currentFolderIdx].currentIndex=m_currentIndex;
     m_thumbnailStrip.SyncSelection(m_currentIndex);
     if (!m_fileList.empty()) PerformanceTrace::Event("navigation.ready",m_imageGeneration,m_fileList.size());
 }
 
-void App::ApplySortMode(int mode) {
-    m_settings.sort_mode = mode;
-    m_settings.Save();
+void App::OnFileViewReady() { m_waterfallPage.CalculateLayout(); }
 
-    for (size_t i = 0; i < m_folders.size(); ++i) {
-        m_folderData.SortFolder(static_cast<int>(i), static_cast<FolderDataManager::SortMode>(mode));
-    }
-
-    if (m_currentFolderIdx >= 0 && m_currentFolderIdx < static_cast<int>(m_folders.size())) {
-        auto& folder = m_folders[m_currentFolderIdx];
-        m_fileList = folder.filePaths;
-
-        std::wstring currentPath = L"";
-        if (m_currentImage) {
-            currentPath = m_currentImage->filePath;
-        } else if (m_animatedImage) {
-            currentPath = m_animatedImage->filePath;
-        }
-
-        if (!currentPath.empty()) {
-            auto it = std::find(m_fileList.begin(), m_fileList.end(), currentPath);
-            if (it != m_fileList.end()) {
-                m_currentIndex = static_cast<int>(std::distance(m_fileList.begin(), it));
-                folder.currentIndex = m_currentIndex;
-            }
-        }
-    }
-
-    m_thumbnailStrip.SetFileList(m_fileList);
-    m_thumbnailStrip.SyncSelection(m_currentIndex);
-
-    m_waterfallPage.CalculateLayout();
-
-    m_window.RequestRedraw();
+void App::ApplySortMode(int mode) { ApplyFileView(mode,m_settings.image_filter_mask); }
+void App::ApplyFileView(int mode,int mask) {
+    mode=std::clamp(mode,0,5); mask&=511;
+    if (mode==m_settings.sort_mode && mask==m_settings.image_filter_mask) return;
+    m_settings.sort_mode=mode; m_settings.image_filter_mask=mask; m_settings.Save();
+    m_folderData.ApplyView(m_currentFolderIdx); m_window.RequestRedraw();
 }
 
 void App::DeleteImage(const std::wstring& path) {
@@ -837,6 +824,7 @@ void App::DeleteImage(const std::wstring& path) {
             if (m_currentIndex >= static_cast<int>(m_fileList.size())) {
                 m_currentIndex = 0;
             }
+            if (m_currentIndex<0) m_currentIndex=0;
             LoadImage(m_fileList[m_currentIndex]);
         } else {
             m_currentIndex = -1;
@@ -862,6 +850,7 @@ void App::DeleteImage(const std::wstring& path) {
 
     m_waterfallPage.CalculateLayout();
 
+    m_folderData.ApplyView(m_currentFolderIdx);
     m_window.RequestRedraw();
 }
 
@@ -947,6 +936,7 @@ void App::AdjustWindowToImage() {
 void App::NavigateImage(int direction) {
     if (m_fileList.empty()) return;
 
+    if (m_currentIndex==-1) m_currentIndex=direction<0 ? static_cast<int>(m_fileList.size()) : -1;
     m_currentIndex += direction;
     if (m_currentIndex < 0) m_currentIndex = static_cast<int>(m_fileList.size()) - 1;
     if (m_currentIndex >= static_cast<int>(m_fileList.size())) m_currentIndex = 0;
@@ -1030,6 +1020,7 @@ void App::OnResize(uint32_t width, uint32_t height) {
 }
 
 void App::OnMouseMove(float x, float y, KeyModifiers mods) {
+    if (m_sortFilterModal.OnMouseMove(x,y)) return;
     m_mouseX = x;
     m_mouseY = y;
     if (m_taggingModal.IsVisible()) {
@@ -1041,7 +1032,7 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
 
     const bool overDockTooltip = m_dockOpacity > 0 && (m_dockHovered >= 0 || m_dockFocus >= 0) && GetDockTooltipRect().Contains(x, y);
     if (!overDockTooltip) m_dockHovered = HitDock(x, y);
-    if (IsViewerActive() && IsDockHit(x, y)) {
+    if (IsDockHit(x, y)) {
         m_window.RequestRedraw();
         return;
     }
@@ -1057,6 +1048,7 @@ void App::OnMouseMove(float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_sortFilterModal.OnMouseDown(btn,x,y)) return;
     m_mouseX = x;
     m_mouseY = y;
 
@@ -1067,7 +1059,7 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (m_optionsMenu.OnMouseDown(btn, x, y, mods)) return;
     }
 
-    if (IsViewerActive() && IsDockHit(x, y)) {
+    if (IsDockHit(x, y)) {
         m_dockFocus = -1;
         m_dockPressed = btn == MouseButton::Left ? HitDock(x, y) : -1;
         m_window.RequestRedraw();
@@ -1097,6 +1089,7 @@ void App::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_sortFilterModal.IsVisible()) return;
     m_mouseX = x;
     m_mouseY = y;
     if (m_taggingModal.IsVisible()) {
@@ -1112,7 +1105,7 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
         if (btn == MouseButton::Left && HitDock(x, y) == pressed) InvokeDock(pressed);
         return;
     }
-    if (IsViewerActive() && IsDockHit(x, y)) return;
+    if (IsDockHit(x, y)) return;
 
     if (IsViewerActive() && m_thumbnailStrip.HandleMouseUp(btn, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
@@ -1125,13 +1118,14 @@ void App::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
+    if (m_sortFilterModal.IsVisible()) return;
     m_mouseX = x;
     m_mouseY = y;
     if (m_taggingModal.IsVisible()) {
         if (m_taggingModal.OnMouseWheel(delta, x, y, mods)) return;
     }
     if (m_optionsMenu.IsVisible()) return;
-    if (IsViewerActive() && IsDockHit(x, y)) return;
+    if (IsDockHit(x, y)) return;
     if (IsViewerActive() && m_thumbnailStrip.HandleMouseWheel(delta, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseWheel(delta, x, y, mods)) return;
@@ -1143,10 +1137,11 @@ void App::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {
 }
 
 void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mods) {
+    if (m_sortFilterModal.IsVisible()) return;
     m_mouseX = x;
     m_mouseY = y;
     if (m_taggingModal.IsVisible() || m_optionsMenu.IsVisible()) return;
-    if (IsViewerActive() && IsDockHit(x, y)) return;
+    if (IsDockHit(x, y)) return;
     if (IsViewerActive() && m_thumbnailStrip.HandleMouseDoubleClick(btn, x, y, mods)) return;
     if (m_currentPage == Page::Board) {
         if (m_boardPage.OnMouseDoubleClick(btn, x, y, mods)) return;
@@ -1158,6 +1153,7 @@ void App::OnMouseDoubleClick(MouseButton btn, float x, float y, KeyModifiers mod
 }
 
 void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
+    if (m_sortFilterModal.OnKeyDown(vk,mods)) return;
     if (m_taggingModal.IsVisible()) {
         if (m_taggingModal.OnKeyDown(vk, mods)) return;
     }
@@ -1201,8 +1197,8 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
             if (!targetPath.empty()) {
                 bool isFullscreen = m_window.IsFullscreen();
                 int result = MessageBoxW(m_window.GetHwnd(),
-                    L"¿Estás seguro de que deseas enviar esta imagen a la Papelera de reciclaje?",
-                    L"Eliminar Imagen",
+                    _(L"Send this image to the Recycle Bin?").c_str(),
+                    _(L"Delete image").c_str(),
                     MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON1);
                 
                 if (isFullscreen && !m_window.IsFullscreen()) {
@@ -1353,6 +1349,7 @@ void App::OnKeyDown(uint32_t vk, KeyModifiers mods) {
 }
 
 void App::OnChar(wchar_t ch) {
+    if (m_sortFilterModal.IsVisible()) return;
     if (m_taggingModal.IsVisible()) {
         m_taggingModal.OnChar(ch);
         return;
@@ -1363,6 +1360,7 @@ void App::OnChar(wchar_t ch) {
 }
 
 void App::OnFileDrop(std::vector<std::wstring> files) {
+    if (m_sortFilterModal.IsVisible()) return;
     if (files.empty()) return;
 
     if (m_currentPage == Page::Board) {
@@ -1393,14 +1391,30 @@ void App::OnMouseLeave() {
     }
 }
 
+bool App::HasDock() const { return m_currentPage==Page::Viewer || m_currentPage==Page::Waterfall || m_currentPage==Page::Board; }
+App::DockAction App::GetDockAction(int index) const {
+    const bool board=m_currentPage==Page::Board;
+    const bool image=IsViewerActive() && (m_currentImage || m_animatedImage);
+    const bool selection=board && std::any_of(m_boardPage.m_items.begin(),m_boardPage.m_items.end(),[](const BoardItem& item) {
+        return item.selected && item.type==BoardItemType::Image && ImageLoader::IsSupported(item.filePath);
+    });
+    if (index==0) return m_currentPage==Page::Viewer ? DockAction{DockCommand::Waterfall,0,L"Waterfall (NUM3)",false} : DockAction{DockCommand::Viewer,6,L"Viewer (NUM1)",false};
+    if (index==1) return board ? DockAction{DockCommand::Waterfall,0,L"Waterfall (NUM3)",false} : DockAction{DockCommand::Board,1,L"Board (NUM4)",false};
+    if (index==2) return {DockCommand::Rotate,2,L"Rotate 90° (R)",!image};
+    if (index==3) return {DockCommand::Tags,3,L"Tags (T)",!(image || selection)};
+    if (index==4) return {DockCommand::SortFilter,4,L"Sort & Filter",board};
+    return {DockCommand::Settings,5,L"Settings (O)",false};
+}
+
 LRESULT App::GetDockAccessibleObject(WPARAM request, LPARAM objectId) {
     if (static_cast<LONG>(objectId) != OBJID_CLIENT) return 0;
     if (!m_dockAccessibleState) {
         m_dockAccessibleState = std::make_shared<DockAccessibleState>();
         auto& state = *m_dockAccessibleState;
         state.hwnd = m_window.GetHwnd();
-        state.visible = [this] { return IsViewerActive() && m_dockOpacity > 0 && !m_optionsMenu.IsVisible() && !m_taggingModal.IsVisible(); };
-        state.disabled = [this](int index) { return index == 4 || ((index == 2 || index == 3) && !m_currentImage && !m_animatedImage); };
+        state.visible = [this] { return HasDock() && m_dockOpacity > 0 && !m_optionsMenu.IsVisible() && !m_taggingModal.IsVisible() && !m_sortFilterModal.IsVisible(); };
+        state.disabled = [this](int index) { return GetDockAction(index).disabled; };
+        state.name = [this](int index) { return index<0 ? _(L"Navigation actions") : _(GetDockAction(index).name); };
         state.rect = [this](int index) { const auto r = index < 0 ? GetDockBounds() : GetDockButtonRect(index); return RECT{static_cast<LONG>(r.left),static_cast<LONG>(r.top),static_cast<LONG>(r.right),static_cast<LONG>(r.bottom)}; };
         state.invoke = [this](int index) { InvokeDock(index); };
     }
@@ -1413,7 +1427,10 @@ LRESULT App::GetDockAccessibleObject(WPARAM request, LPARAM objectId) {
 RectF App::GetDockBounds() const {
     const float scale = m_window.GetDpi() / 96.0f;
     const float width = m_renderer.GetTargetSize().ToFloat().width;
-    const int columns = std::clamp(static_cast<int>((width / scale - 76) / 46), 1, 6);
+    const int preferred=std::clamp(static_cast<int>((width / scale - 76) / 46),1,6);
+    const int rows=std::max(1,static_cast<int>((m_renderer.GetTargetSize().ToFloat().height/scale-24)/46));
+    const int fits=std::clamp(static_cast<int>((width/scale-12)/46),1,6);
+    const int columns=std::min(fits,std::max(preferred,(6+rows-1)/rows));
     const float dockWidth = (12 + columns * 46 - 2) * scale;
     return RectF::FromXYWH((width - dockWidth) / 2, 12 * scale, dockWidth, (12 + ((6 + columns - 1) / columns) * 46 - 2) * scale);
 }
@@ -1427,7 +1444,7 @@ RectF App::GetDockButtonRect(int index) const {
 }
 
 int App::HitDock(float x, float y) const {
-    if (!IsViewerActive() || m_dockOpacity <= 0) return -1;
+    if (!HasDock() || m_dockOpacity <= 0) return -1;
     for (int index = 0; index < 6; ++index) if (GetDockButtonRect(index).Contains(x, y)) return index;
     return -1;
 }
@@ -1441,18 +1458,18 @@ RectF App::GetDockTooltipRect() const {
 }
 
 bool App::IsDockHit(float x, float y) const {
-    return IsViewerActive() && m_dockOpacity > 0 && (GetDockBounds().Contains(x, y) || ((m_dockHovered >= 0 || m_dockFocus >= 0) && GetDockTooltipRect().Contains(x, y)));
+    return HasDock() && m_dockOpacity > 0 && (GetDockBounds().Contains(x, y) || ((m_dockHovered >= 0 || m_dockFocus >= 0) && GetDockTooltipRect().Contains(x, y)));
 }
 
 void App::UpdateDock(double dt) {
-    if (!IsViewerActive()) {
+    if (!HasDock()) {
         m_dockOpacity = 0; m_dockRemaining = 0; m_dockHovered = m_dockFocus = -1;
         return;
     }
     const auto bounds = GetDockBounds();
     const float scale = m_window.GetDpi() / 96.0f;
     const bool trigger = m_mouseX >= bounds.left && m_mouseX <= bounds.right && m_mouseY >= 0 && m_mouseY <= 48 * scale;
-    const bool retained = trigger || IsDockHit(m_mouseX, m_mouseY) || m_dockFocus >= 0 || m_optionsMenu.IsVisible() || m_taggingModal.IsVisible() || m_dockPressed >= 0;
+    const bool retained = trigger || IsDockHit(m_mouseX, m_mouseY) || m_dockFocus >= 0 || m_optionsMenu.IsVisible() || m_taggingModal.IsVisible() || m_sortFilterModal.IsVisible() || m_dockPressed >= 0;
     m_dockRemaining = retained ? 0.9 : std::max(0.0, m_dockRemaining - dt);
     const float target = m_dockRemaining > 0 ? 1.0f : 0.0f;
     const float previous = m_dockOpacity;
@@ -1463,18 +1480,21 @@ void App::UpdateDock(double dt) {
 }
 
 void App::InvokeDock(int index) {
-    if (index == 0) {
-        if (m_currentPage == Page::Waterfall) m_waterfallPage.CloseViewer();
-        else SetPage(Page::Waterfall);
-    } else if (index == 1) SetPage(Page::Board);
-    else if (index == 2 && (m_currentImage || m_animatedImage)) OnKeyDown('R', {});
-    else if (index == 3 && (m_currentImage || m_animatedImage)) OnKeyDown('T', {});
-    else if (index == 5) OnKeyDown('O', {});
+    if (index<0 || index>=6 || GetDockAction(index).disabled) return;
+    switch (GetDockAction(index).command) {
+        case DockCommand::Viewer: SetPage(Page::Viewer); break;
+        case DockCommand::Waterfall: SetPage(Page::Waterfall); break;
+        case DockCommand::Board: SetPage(Page::Board); break;
+        case DockCommand::Rotate: OnKeyDown('R',{}); break;
+        case DockCommand::Tags: OnKeyDown('T',{}); break;
+        case DockCommand::SortFilter: m_sortFilterModal.Show(); break;
+        case DockCommand::Settings: OnKeyDown('O',{}); break;
+    }
     m_window.RequestRedraw();
 }
 
 bool App::HandleDockKey(uint32_t vk, KeyModifiers mods) {
-    if (!IsViewerActive() || mods.ctrl || mods.alt) return false;
+    if (!HasDock() || mods.ctrl || mods.alt) return false;
     if (vk == VK_TAB) {
         m_dockFocus = m_dockFocus < 0 ? (mods.shift ? 5 : 0) : (m_dockFocus + (mods.shift ? 5 : 1)) % 6;
         m_dockRemaining = 0.9; m_dockOpacity = 1; m_window.RequestRedraw();
@@ -1491,7 +1511,7 @@ bool App::HandleDockKey(uint32_t vk, KeyModifiers mods) {
 }
 
 void App::DrawDock() {
-    if (!IsViewerActive() || m_dockOpacity <= 0) return;
+    if (!HasDock() || m_dockOpacity <= 0 || m_optionsMenu.IsVisible() || m_taggingModal.IsVisible() || m_sortFilterModal.IsVisible()) return;
     const float scale = m_window.GetDpi() / 96.0f;
     const auto bounds = GetDockBounds();
     const auto alpha = m_dockOpacity;
@@ -1499,16 +1519,17 @@ void App::DrawDock() {
     m_renderer.DrawRoundedRect(bounds, 8 * scale, 8 * scale, Color::White(0.12f * alpha), scale);
     for (int index = 0; index < 6; ++index) {
         const auto cell = GetDockButtonRect(index);
-        const bool disabled = index == 4 || ((index == 2 || index == 3) && !m_currentImage && !m_animatedImage);
+        const auto action=GetDockAction(index);
+        const bool disabled=action.disabled;
         const bool hovered = m_dockHovered == index || m_dockFocus == index;
-        const bool active = (index == 0 && m_currentPage == Page::Waterfall) || (index == 3 && m_taggingModal.IsVisible()) || (index == 5 && m_optionsMenu.IsVisible());
+        const bool active = (index == 4 && m_sortFilterModal.IsVisible()) || (index == 3 && m_taggingModal.IsVisible()) || (index == 5 && m_optionsMenu.IsVisible());
         const auto color = disabled ? Color::White(0.36f * alpha) : (active || hovered) ? Color::FromHex(0x53deee, alpha) : Color::FromHex(0xe9edef, alpha);
         if (!disabled && (hovered || active)) {
             m_renderer.FillRoundedRect(cell, 7 * scale, 7 * scale, Color::FromHex(0x53deee, (active ? 0.13f : 0.10f) * alpha));
         }
         if (m_dockFocus == index) m_renderer.DrawRoundedRect(cell, 7 * scale, 7 * scale, color, scale);
         const auto center = cell.Center();
-        m_dockIcons.Draw(m_renderer, index, RectF::FromXYWH(center.x - 14 * scale, center.y - 14 * scale, 28 * scale, 28 * scale), color);
+        m_dockIcons.Draw(m_renderer, action.glyph, RectF::FromXYWH(center.x - 14 * scale, center.y - 14 * scale, 28 * scale, 28 * scale), color);
         if (index < 5) {
             const auto next = GetDockButtonRect(index + 1);
             if (next.top == cell.top) {
@@ -1519,11 +1540,10 @@ void App::DrawDock() {
     }
     const int named = m_dockFocus >= 0 ? m_dockFocus : m_dockHovered;
     if (named >= 0) {
-        const wchar_t* names[] = {L"Waterfall (NUM3)",L"Board (NUM4)",L"Rotate 90° (R)",L"Tags (T)",L"Sort & Filter — coming later",L"Settings (O)"};
         const auto tooltip = GetDockTooltipRect();
         m_renderer.FillRoundedRect(tooltip,4*scale,4*scale,Color::Black(0.6f*alpha));
         m_renderer.DrawRoundedRect(tooltip,4*scale,4*scale,Color::White(0.15f*alpha),scale);
-        m_renderer.DrawText(names[named],tooltip,Color::White(alpha),12*scale,TextAlign::Center,TextVAlign::Center);
+        m_renderer.DrawText(_(GetDockAction(named).name),tooltip,Color::White(alpha),12*scale,TextAlign::Center,TextVAlign::Center);
     }
 }
 

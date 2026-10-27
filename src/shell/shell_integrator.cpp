@@ -4,6 +4,7 @@
 // Responsibility: Query explorer processes for paths, handle recycle-bin moves, and system tray menu events.
 // ============================================================================
 #include "common/pch.h"
+#include "i18n/i18n_engine.h"
 #include "shell_integrator.h"
 #include "common/types.h"
 #include <shlwapi.h>
@@ -180,10 +181,10 @@ void ShellIntegrator::ShowTrayContextMenu(HWND hwnd, POINT pt) {
             CloseHandle(hProcess);
         }
 
-        std::wstring memStr = std::format(L"Memory Allocated: ~{:.2f} MB", mbSize);
+        std::wstring memStr = std::vformat(_(L"Memory Allocated: ~{:.2f} MB"),std::make_wformat_args(mbSize));
         AppendMenuW(hMenu, MF_STRING | MF_GRAYED, 0, memStr.c_str());
         AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(hMenu, MF_STRING, 1002, L"Quit");
+        AppendMenuW(hMenu, MF_STRING, 1002, _(L"Quit").c_str());
 
         // Required by track popup menu
         SetForegroundWindow(hwnd);

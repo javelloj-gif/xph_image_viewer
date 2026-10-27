@@ -157,7 +157,8 @@ void BoardTagScanner::DrawProgressBar(Renderer& renderer) {
         renderer.FillRoundedRect(fillRect, 4.0f, 4.0f, Color::FromRGBA(0, 240, 255, 120));
     }
     
-    std::wstring text = std::format(L"Escaneando directorio: {} / {} ({}%)", current, total, static_cast<int>(pct * 100.0f));
+    const int percent=static_cast<int>(pct*100);
+    std::wstring text = std::vformat(_(L"Scanning directory: {} / {} ({}%)"),std::make_wformat_args(current,total,percent));
     renderer.DrawText(text, barRect, Color::White(), 12.0f, TextAlign::Center, TextVAlign::Center);
 }
 

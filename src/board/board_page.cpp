@@ -42,49 +42,31 @@ void BoardPage::Initialize(App* app) {
     }
 }
 
+void BoardPage::PrepareWorkspace() {
+    if (m_workspacePrepared) return;
+    m_workspacePrepared=true;
+    const auto path=(std::filesystem::path(GetActiveDirectory())/L"!board.kbrd").wstring();
+    if (std::filesystem::exists(path)) LoadBoard(path);
+}
+bool BoardPage::AddImageToWorkspace(const std::wstring& path) {
+    if (path.empty() || !ImageLoader::IsSupported(path)) return false;
+    PrepareWorkspace();
+    if (std::any_of(m_items.begin(),m_items.end(),[&](const BoardItem& item) {
+        return item.type==BoardItemType::Image && PathEquals(item.filePath,path);
+    })) return false;
+    const auto size=m_app->m_renderer.GetTargetSize().ToFloat();
+    BoardItem item; item.type=BoardItemType::Image;
+    item.position=ScreenToWorld({size.width*0.5f,size.height*0.5f});
+    item.filePath=path; item.label=std::filesystem::path(path).filename().wstring();
+    item.width=400; item.height=300;
+    m_items.push_back(std::move(item)); LoadItemTexture(m_items.back());
+    m_app->m_window.RequestRedraw(); return true;
+}
 void BoardPage::OnEnterPage() {
-    namespace fs = std::filesystem;
-
-    fs::path activeDir = GetActiveDirectory();
-    auto boardPath = (activeDir / L"!board.kbrd").wstring();
-    if (fs::exists(boardPath)) {
-        LoadBoard(boardPath);
-    }
-
-    std::wstring activePath;
-    if (m_app->m_currentImage) {
-        activePath = m_app->m_currentImage->filePath;
-    } else if (m_app->m_animatedImage) {
-        activePath = m_app->m_animatedImage->filePath;
-    } else if (!m_app->m_fileList.empty() && m_app->m_currentIndex >= 0 && m_app->m_currentIndex < static_cast<int>(m_app->m_fileList.size())) {
-        activePath = m_app->m_fileList[m_app->m_currentIndex];
-    }
-
-    if (!activePath.empty()) {
-        bool alreadyExists = false;
-        for (const auto& item : m_items) {
-            if (item.type == BoardItemType::Image && item.filePath == activePath) {
-                alreadyExists = true;
-                break;
-            }
-        }
-
-        if (!alreadyExists) {
-            auto targetSize = m_app->m_renderer.GetTargetSize().ToFloat();
-            PointF screenCenter = { targetSize.width * 0.5f, targetSize.height * 0.5f };
-            PointF worldCenter = ScreenToWorld(screenCenter);
-
-            BoardItem imgItem;
-            imgItem.type = BoardItemType::Image;
-            imgItem.position = worldCenter;
-            imgItem.filePath = activePath;
-            imgItem.label = std::filesystem::path(imgItem.filePath).filename().wstring();
-            imgItem.width = 400.0f;
-            imgItem.height = 300.0f;
-            m_items.push_back(imgItem);
-            LoadItemTexture(m_items.back());
-        }
-    }
+    PrepareWorkspace();
+    const auto path=m_app->m_currentImage ? m_app->m_currentImage->filePath :
+        m_app->m_animatedImage ? m_app->m_animatedImage->filePath : L"";
+    AddImageToWorkspace(path);
 }
 
 void BoardPage::Update(double dt) {
@@ -172,7 +154,7 @@ void BoardPage::Draw(Renderer& renderer) {
     renderer.DrawRoundedRect(islandRect, 8.0f, 8.0f, Color::FromHex(0xFF9800, 0.5f), 1.0f);
 
     RectF textRect = RectF::FromXYWH(islandX + 15.0f, islandY + 5.0f, islandWidth - 30.0f, islandHeight - 10.0f);
-    renderer.DrawText(L"Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Alt+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save", 
+    renderer.DrawText(_(L"Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Alt+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save"),
                       textRect, Color::White(0.9f), 11.0f, TextAlign::Center, TextVAlign::Center);
 
     // Render floating search toggle button (bottom-right)
@@ -181,7 +163,7 @@ void BoardPage::Draw(Renderer& renderer) {
     Color toggleBorder = Color::FromHex(0x00E5FF, m_search->IsHoveredToggleBtn() ? 0.65f : 0.35f);
     renderer.FillRoundedRect(toggleRect, 8.0f, 8.0f, toggleBg);
     renderer.DrawRoundedRect(toggleRect, 8.0f, 8.0f, toggleBorder, m_search->IsHoveredToggleBtn() ? 1.5f : 1.0f);
-    std::wstring toggleText = m_search->IsSearchModeGroup() ? L"Búsqueda: Agrupar" : L"Búsqueda: Filtrar";
+    std::wstring toggleText = m_search->IsSearchModeGroup() ? _(L"Search: Group") : _(L"Search: Filter");
     renderer.DrawText(toggleText, toggleRect, Color::White(0.9f), 11.0f, TextAlign::Center, TextVAlign::Center);
 
     m_search->Draw(renderer);
@@ -495,7 +477,7 @@ bool BoardPage::OnKeyDown(uint32_t vk, KeyModifiers mods) {
                 std::filesystem::path activeDir = GetActiveDirectory();
                 std::filesystem::path jsonPath = activeDir / "xmpTags.json";
                 if (std::filesystem::exists(jsonPath)) {
-                    m_toastMessage = L"Tags file already exists";
+                    m_toastMessage = _(L"Tags file already exists");
                     m_toastTimeRemaining = 2.5;
                     m_app->m_window.RequestRedraw();
                 } else {

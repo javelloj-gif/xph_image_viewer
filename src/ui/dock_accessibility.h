@@ -1,5 +1,6 @@
 #pragma once
 #include <oleacc.h>
+#include "i18n/i18n_engine.h"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -10,6 +11,7 @@ struct DockAccessibleState {
     HWND hwnd = nullptr;
     std::function<bool()> visible;
     std::function<bool(int)> disabled;
+    std::function<std::wstring(int)> name;
     std::function<RECT(int)> rect;
     std::function<void(int)> invoke;
 };
@@ -41,8 +43,9 @@ public:
     HRESULT STDMETHODCALLTYPE get_accName(VARIANT child,BSTR* value) override {
         if (!value) return E_POINTER; *value=nullptr;
         if (!Valid(child)) return E_INVALIDARG;
-        const wchar_t* names[] = {L"Viewer actions",L"Waterfall",L"Board",L"Rotate 90 degrees",L"Tags",L"Sort & Filter (coming later)",L"Settings"};
-        *value=SysAllocString(names[child.lVal]); return *value ? S_OK : E_OUTOFMEMORY;
+        const auto state=m_state.lock(); if (!state) return CO_E_OBJNOTCONNECTED;
+        const auto name=state->name(child.lVal-1);
+        *value=SysAllocString(name.c_str()); return *value ? S_OK : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE get_accRole(VARIANT child,VARIANT* value) override {
         if (!value) return E_POINTER; if (!Valid(child)) return E_INVALIDARG;
@@ -57,7 +60,7 @@ public:
     }
     HRESULT STDMETHODCALLTYPE get_accDefaultAction(VARIANT child,BSTR* value) override {
         if (!value) return E_POINTER; *value=nullptr; if (!Valid(child) || !child.lVal) return S_FALSE;
-        *value=SysAllocString(L"Press"); return *value ? S_OK : E_OUTOFMEMORY;
+        *value=SysAllocString(_(L"Press").c_str()); return *value ? S_OK : E_OUTOFMEMORY;
     }
     HRESULT STDMETHODCALLTYPE accLocation(long* x,long* y,long* w,long* h,VARIANT child) override {
         if (!x || !y || !w || !h) return E_POINTER; if (!Valid(child)) return E_INVALIDARG;

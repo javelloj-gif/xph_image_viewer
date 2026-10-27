@@ -12,11 +12,11 @@ public:
     // Returns false when the context/factory cannot provide resources; the next draw may retry.
     bool Draw(Renderer& renderer, int index, const RectF& bounds, const Color& color);
 private:
-    // UI: creates six outline/fill pairs and a round-cap/round-join style, replacing stale factory resources.
+    // UI: creates seven outline/fill pairs and a round-cap/round-join style, replacing stale factory resources.
     bool EnsureResources(ID2D1Factory* factory);
     ComPtr<ID2D1Factory> m_factory;
     ComPtr<ID2D1StrokeStyle> m_stroke;
-    std::array<ComPtr<ID2D1PathGeometry>, 6> m_outlines;
-    std::array<ComPtr<ID2D1PathGeometry>, 6> m_fills;
+    std::array<ComPtr<ID2D1PathGeometry>, 7> m_outlines;
+    std::array<ComPtr<ID2D1PathGeometry>, 7> m_fills;
 };
 } // namespace kv

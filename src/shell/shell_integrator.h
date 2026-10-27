@@ -23,6 +23,7 @@ public:
 
     static bool RegisterTrayIcon(HWND hwnd, HICON hIcon, const std::wstring& tooltip);
     static bool UnregisterTrayIcon(HWND hwnd);
+    // UI: presents localized memory information and exit action for this application's tray icon.
     static void ShowTrayContextMenu(HWND hwnd, POINT pt);
     static bool SetRunOnStartup(bool enable);
 };

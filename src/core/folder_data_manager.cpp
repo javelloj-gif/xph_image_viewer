@@ -21,7 +21,16 @@ void FolderDataManager::ProcessPending() { if (m_scanner) m_scanner->ProcessPend
 void FolderDataManager::StopScanning() { if (m_scanner) { m_scanner->Shutdown(); m_scanner.reset(); } }
 void FolderDataManager::NotifyImageRemoved(const std::wstring& path) {
     ++m_fileMutation;
+    for (auto& folder : m_folders) {
+        std::erase(folder.inventory,path); folder.hiddenPreviews.erase(path); folder.viewLifetime.reset();
+        folder.appliedSort=-1;
+    }
     if (!m_pendingFolders.empty()) m_removedDuringScan.emplace_back(path,m_fileMutation);
+}
+void FolderDataManager::NotifyAttributesChanged() {
+    ++m_fileMutation;
+    for (auto& folder : m_folders) { folder.appliedSort=-1; folder.viewLifetime.reset(); }
+    ApplyView(m_currentFolderIdx);
 }
 
 void FolderDataManager::RequestFolder(const std::wstring& path, bool restoring, bool loadImage) {
@@ -47,19 +56,20 @@ void FolderDataManager::RequestFolder(const std::wstring& path, bool restoring, 
     m_pendingFolders.push_back({path,restoring,loadImage,m_navigationGeneration,m_fileMutation,lifetime});
     if (std::find(m_sessionOrder.begin(),m_sessionOrder.end(),path)==m_sessionOrder.end()) m_sessionOrder.push_back(path);
     m_scanner->Request(path,m_app?m_app->m_settings.sort_mode:0,!restoring,ImageCancellation(lifetime),
-        [this,request](FolderSnapshot snapshot) { CompleteFolder(request,std::move(snapshot)); });
+        [this,request](FolderSnapshot snapshot) { CompleteFolder(request,std::move(snapshot)); },m_app?m_app->m_settings.image_filter_mask:511);
 }
 void FolderDataManager::CompleteFolder(const ImageRequestToken& request, FolderSnapshot snapshot) {
     auto found=std::find_if(m_pendingFolders.begin(),m_pendingFolders.end(),[&](const PendingFolder& f) { return f.path==*request; });
     if (found==m_pendingFolders.end()) return;
     const auto pending=*found;
     m_pendingFolders.erase(found);
-    if (m_app && snapshot.sortMode!=m_app->m_settings.sort_mode) {
-        // Rescan with current sort metadata on the worker, retaining original navigation intent.
+    if (!snapshot.complete) return;
+    if (m_app && (snapshot.sortMode!=m_app->m_settings.sort_mode || snapshot.filterMask!=m_app->m_settings.image_filter_mask)) {
+        // Reproject the completed inventory with current preferences, retaining navigation intent.
         auto retry=pending; retry.lifetime=std::make_shared<const bool>(true);
         m_pendingFolders.push_back(retry);
-        m_scanner->Request(retry.path,m_app->m_settings.sort_mode,!retry.restoring,ImageCancellation(retry.lifetime),
-            [this,request](FolderSnapshot value) { CompleteFolder(request,std::move(value)); });
+        m_scanner->RequestView(retry.path,std::move(snapshot.inventory),m_app->m_settings.sort_mode,m_app->m_settings.image_filter_mask,
+            m_fileMutation,ImageCancellation(retry.lifetime),[this,request](FolderSnapshot value) { CompleteFolder(request,std::move(value)); });
         return;
     }
     std::erase_if(snapshot.files,[&](const std::wstring& path) {
@@ -67,10 +77,14 @@ void FolderDataManager::CompleteFolder(const ImageRequestToken& request, FolderS
             return removed.second>pending.fileMutation && PathEquals(path,removed.first);
         });
     });
+    std::erase_if(snapshot.inventory,[&](const std::wstring& path) {
+        return std::any_of(m_removedDuringScan.begin(),m_removedDuringScan.end(),[&](const auto& removed) { return removed.second>pending.fileMutation && PathEquals(path,removed.first); });
+    });
     if (m_pendingFolders.empty()) m_removedDuringScan.clear();
-    if (!snapshot.complete || snapshot.files.empty()) return;
+    if (!snapshot.complete || snapshot.inventory.empty()) return;
     FolderInfo folder; folder.folderPath=snapshot.path; folder.folderName=std::filesystem::path(snapshot.path).filename().wstring();
     if (folder.folderName.empty()) folder.folderName=snapshot.path;
+    folder.inventory=std::move(snapshot.inventory); folder.appliedSort=snapshot.sortMode; folder.appliedFilter=snapshot.filterMask;
     folder.filePaths=std::move(snapshot.files); folder.previews.resize(folder.filePaths.size());
     for (size_t i=0;i<folder.previews.size();++i) folder.previews[i].filePath=folder.filePaths[i];
     folder.previewsInitialized=true; m_folders.push_back(std::move(folder)); NotifyPreviewLayoutChanged();
@@ -148,6 +162,7 @@ void FolderDataManager::AddFolder(const std::wstring& folderPath, bool restoring
     }
     folder.previewsInitialized = true;
 
+    folder.inventory=folder.filePaths;
     m_folders.push_back(std::move(folder));
     NotifyPreviewLayoutChanged();
 
@@ -199,7 +214,14 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
             folder.currentIndex = 0;
         }
         m_app->m_currentIndex = folder.currentIndex;
+        if (!loadImage) {
+            const auto active=m_app->m_currentImage ? m_app->m_currentImage->filePath : m_app->m_animatedImage ? m_app->m_animatedImage->filePath : L"";
+            const auto match=std::find(folder.filePaths.begin(),folder.filePaths.end(),active);
+            m_app->m_currentIndex=match==folder.filePaths.end() ? -1 : static_cast<int>(std::distance(folder.filePaths.begin(),match));
+            folder.currentIndex=m_app->m_currentIndex;
+        }
         m_app->m_thumbnailStrip.SetFileList(folder.filePaths);
+        m_app->m_thumbnailStrip.SyncSelection(m_app->m_currentIndex);
         
         if (loadImage && !folder.filePaths.empty()) {
             m_app->LoadImage(folder.filePaths[folder.currentIndex]);
@@ -207,6 +229,7 @@ void FolderDataManager::SetCurrentFolderIndex(int index, bool loadImage) {
     }
     
     if (m_app) {
+        ApplyView(index);
         m_app->m_window.RequestRedraw();
     }
 }
@@ -441,91 +464,63 @@ bool FolderDataManager::CompletePreview(const ImageRequestToken& request, std::s
     return false;
 }
 
-void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
-    if (folderIdx < 0 || folderIdx >= static_cast<int>(m_folders.size())) return;
-    if (m_app && folderIdx == m_currentFolderIdx) m_app->CancelHoverLoads();
-    auto& folder = m_folders[folderIdx];
-    PerformanceSpan sortSpan("folder.sort.begin", "folder.sort.end");
-    if (folder.filePaths.empty()) return;
-
-    // Keeps file sort keys and its existing preview together during reordering.
-    struct FileEntry {
-        std::wstring path;
-        std::wstring name;
-        std::filesystem::file_time_type date;
-        uint64_t size = 0;
-        PreviewItem preview;
-    };
-
-    std::vector<FileEntry> entries;
-    entries.reserve(folder.filePaths.size());
-
-    bool needDate = (mode == SortMode::DateAsc || mode == SortMode::DateDesc);
-    bool needSize = (mode == SortMode::SizeAsc || mode == SortMode::SizeDesc);
-
-    for (size_t i = 0; i < folder.filePaths.size(); ++i) {
-        const auto& path = folder.filePaths[i];
-        FileEntry entry;
-        entry.path = path;
-        entry.name = std::filesystem::path(path).filename().wstring();
-
-        std::wstring lowerName = entry.name;
-        std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::towlower);
-        entry.name = lowerName;
-
-        if (needDate) {
-            try {
-                entry.date = std::filesystem::last_write_time(path);
-            } catch (...) {
-                entry.date = std::filesystem::file_time_type();
-            }
-        } else {
-            entry.date = std::filesystem::file_time_type();
-        }
-
-        if (needSize) {
-            try {
-                entry.size = std::filesystem::file_size(path);
-            } catch (...) {
-                entry.size = 0;
-            }
-        } else {
-            entry.size = 0;
-        }
-
-        if (i < folder.previews.size()) {
-            entry.preview = folder.previews[i];
-        } else {
-            entry.preview.filePath = path;
-        }
-        entries.push_back(std::move(entry));
-    }
-
-    auto comp = [mode](const FileEntry& a, const FileEntry& b) {
-        switch (mode) {
-            case SortMode::NameAsc:
-                return a.name < b.name;
-            case SortMode::NameDesc:
-                return a.name > b.name;
-            case SortMode::DateAsc:
-                return a.date < b.date;
-            case SortMode::DateDesc:
-                return a.date > b.date;
-            case SortMode::SizeAsc:
-                return a.size < b.size;
-            case SortMode::SizeDesc:
-                return a.size > b.size;
-        }
-        return false;
-    };
-
-    std::sort(entries.begin(), entries.end(), comp);
-
-    folder.filePaths.clear();
+void FolderDataManager::ApplyView(int folderIdx) {
+    if (!m_app || folderIdx<0 || folderIdx>=static_cast<int>(m_folders.size())) return;
+    auto& folder=m_folders[folderIdx];
+    if (folder.appliedSort==m_app->m_settings.sort_mode && folder.appliedFilter==m_app->m_settings.image_filter_mask) return;
+    if (folder.inventory.empty() && !folder.filePaths.empty()) folder.inventory=folder.filePaths;
+    if (!m_scanner) EnableAsync();
+    folder.viewLifetime=std::make_shared<const bool>(true);
+    const auto mutation=m_fileMutation;
+    const auto path=folder.folderPath;
+    m_scanner->RequestView(path,folder.inventory,m_app->m_settings.sort_mode,m_app->m_settings.image_filter_mask,
+        mutation,ImageCancellation(folder.viewLifetime),[this,path,mutation](FolderSnapshot value) { CompleteView(path,mutation,std::move(value)); });
+}
+void FolderDataManager::CompleteView(const std::wstring& path, uint64_t mutation, FolderSnapshot snapshot) {
+    auto found=std::find_if(m_folders.begin(),m_folders.end(),[&](const FolderInfo& f) { return f.folderPath==path; });
+    if (found==m_folders.end() || !snapshot.complete || mutation!=m_fileMutation || !m_app) return;
+    auto& folder=*found;
+    if (snapshot.sortMode!=m_app->m_settings.sort_mode || snapshot.filterMask!=m_app->m_settings.image_filter_mask) return;
+    auto& previews=folder.hiddenPreviews;
+    for (auto& preview : folder.previews) previews.insert_or_assign(preview.filePath,std::move(preview));
     folder.previews.clear();
-    for (auto& entry : entries) {
-        folder.filePaths.push_back(entry.path);
-        folder.previews.push_back(entry.preview);
+    folder.filePaths=std::move(snapshot.files);
+    for (const auto& file : folder.filePaths) {
+        auto it=previews.find(file);
+        if (it!=previews.end()) { folder.previews.push_back(std::move(it->second)); previews.erase(it); }
+        else { PreviewItem item; item.filePath=file; folder.previews.push_back(std::move(item)); }
+    }
+    for (auto& [hidden,item] : previews) {
+        item.loadLifetime.reset(); item.pendingRequest.reset(); item.isLoading=false;
+    }
+    folder.appliedSort=snapshot.sortMode; folder.appliedFilter=snapshot.filterMask; folder.viewLifetime.reset();
+    folder.scrollOffset=folder.targetScrollOffset=0;
+    NotifyPreviewLayoutChanged();
+    if (std::distance(m_folders.begin(),found)==m_currentFolderIdx) {
+        m_app->CancelHoverLoads(); m_app->m_fileList=folder.filePaths;
+        const auto active=m_app->m_currentImage ? m_app->m_currentImage->filePath : m_app->m_animatedImage ? m_app->m_animatedImage->filePath : L"";
+        const auto image=std::find(folder.filePaths.begin(),folder.filePaths.end(),active);
+        m_app->m_currentIndex=image==folder.filePaths.end() ? -1 : static_cast<int>(std::distance(folder.filePaths.begin(),image));
+        folder.currentIndex=m_app->m_currentIndex;
+        m_app->m_thumbnailStrip.SetFileList(folder.filePaths); m_app->m_thumbnailStrip.SyncSelection(m_app->m_currentIndex);
+        m_app->OnFileViewReady();
+    }
+    m_app->m_window.RequestRedraw();
+}
+
+void FolderDataManager::SortFolder(int folderIdx, SortMode mode) {
+    if (folderIdx<0 || folderIdx>=static_cast<int>(m_folders.size())) return;
+    if (m_app && folderIdx==m_currentFolderIdx) m_app->CancelHoverLoads();
+    auto& folder=m_folders[folderIdx];
+    auto snapshot=FolderScanService::View(folder.folderPath,folder.filePaths,static_cast<int>(mode));
+    if (!snapshot.complete) return;
+    std::unordered_map<std::wstring,PreviewItem> previews;
+    for (auto& preview : folder.previews) previews.emplace(preview.filePath,std::move(preview));
+    folder.filePaths=std::move(snapshot.files); folder.previews.clear();
+    for (const auto& path : folder.filePaths) {
+        const auto found=previews.find(path);
+        if (found!=previews.end()) folder.previews.push_back(std::move(found->second));
+        else { PreviewItem item; item.filePath=path; folder.previews.push_back(std::move(item)); }
     }
     NotifyPreviewLayoutChanged();
 }

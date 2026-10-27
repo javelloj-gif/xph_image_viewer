@@ -758,7 +758,7 @@ msgstr "Сортировать по дате создания (по возрас
 
 #: control_panel.py:1618
 msgid "Save order metadata to disk"
-msgstr "Сохранить порядок изображений на диск"
+msgstr "Сохранить порядок в метаданных"
 
 #: control_panel.py:1620
 msgid "Show control panel in full-screen mode"
@@ -946,31 +946,31 @@ msgstr "Испанский"
 
 #: settings_handling.py:1066
 msgid "General"
-msgstr "Общее"
+msgstr "Общие"
 
 #: settings_handling.py:1071
 msgid "Run on Windows Startup"
-msgstr "Запускать приложение при старте Windows"
+msgstr "Запускать при входе в Windows"
 
 #: settings_handling.py:1072
 msgid "Supress start dialog and run lite mode"
-msgstr "Запускать лайтовый (упрощённый) режим сразу, то есть без диалога"
+msgstr "Пропускать стартовый диалог"
 
 #: settings_handling.py:1073
 msgid "Full-screen mode on application start"
-msgstr "Открываться в полноэкранном режиме"
+msgstr "Запускать на весь экран"
 
 #: settings_handling.py:1075
 msgid "Hide to tray on close"
-msgstr "Прятаться в трей при закрытии окна"
+msgstr "Скрывать в трей при закрытии"
 
 #: settings_handling.py:1076
 msgid "Hide to tray on app start"
-msgstr "Прятать окно в трей на старте"
+msgstr "Скрывать в трей при запуске"
 
 #: settings_handling.py:1078
 msgid "Show standard (console) output overlay"
-msgstr "Показывать консольный вывод поверх контента"
+msgstr "Показывать вывод консоли"
 
 #: settings_handling.py:1079
 msgid "Animated effects"
@@ -978,7 +978,7 @@ msgstr "Анимационные эффекты"
 
 #: settings_handling.py:1080
 msgid "Show animated cells overlay"
-msgstr "Показывать анимированнные ячейки поверх всего"
+msgstr "Показывать анимированные ячейки"
 
 #: settings_handling.py:1093
 msgid "Viewer page"
@@ -986,23 +986,23 @@ msgstr "Страница VIEWER"
 
 #: settings_handling.py:1094
 msgid "Animated zoom"
-msgstr "Анимированный зум изображения"
+msgstr "Плавное масштабирование"
 
 #: settings_handling.py:1096
 msgid "Thumbnails size"
-msgstr "Размер миниатюр в панели управления вьювера"
+msgstr "Размер миниатюр"
 
 #: settings_handling.py:1097
 msgid "Enable mouse wheel to zoom and Ctrl+mouse wheel to navigate through image list"
-msgstr "Зум с помощью колёсика мыши (для навигации по списку изображений удерживать Ctrl)"
+msgstr "Колесо — масштаб, Ctrl+колесо — навигация"
 
 #: settings_handling.py:1098
 msgid "Show dummy-default thumbnail while generated one is not ready"
-msgstr "Рисовать дефолтную мелкую превьюшку, пока не сгенерировалась настоящая"
+msgstr "Заглушка до загрузки миниатюры"
 
 #: settings_handling.py:1099
 msgid "Show thirds"
-msgstr "Показывать трети"
+msgstr "Показывать правило третей"
 
 #: settings_handling.py:1101
 msgid "Show image center"
@@ -1959,7 +1959,7 @@ msgstr "Нечего отменять"
 
 #: settings_handling.py:1087
 msgid "Settings window opacity"
-msgstr "Прозрачность окна настроек"
+msgstr "Непрозрачность настроек"
 
 #: settings_handling.py:1140
 msgid "Always hide control panel if it is not hovered"
@@ -2052,3 +2052,318 @@ msgstr "Скопировать/перенести файлы в папку до�
 #: library_data.py:1388
 msgid "CutCopy buffer contains {} items"
 msgstr "Буфер обмена содержит айтемов: {} "
+
+
+# Active native interface: product batch 026–030.
+msgid "AVIF"
+msgstr "AVIF"
+
+msgid "Add Node"
+msgstr "Добавить узел"
+
+msgid "Add Note"
+msgstr "Добавить заметку"
+
+msgid "Add folder images (Shift+Ctrl+L)"
+msgstr "Добавить изображения папки (Shift+Ctrl+L)"
+
+msgid "Advanced"
+msgstr "Дополнительно"
+
+msgid "Advanced Settings"
+msgstr "Дополнительные настройки"
+
+msgid "All"
+msgstr "Все"
+
+msgid "Application window opacity"
+msgstr "Непрозрачность окна"
+
+msgid "Apply"
+msgstr "Применить"
+
+msgid "Ascending"
+msgstr "По возрастанию"
+
+msgid "BMP"
+msgstr "BMP"
+
+msgid "Board"
+msgstr "Доска"
+
+msgid "Board (NUM4)"
+msgstr "Доска (NUM4)"
+
+msgid "Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Alt+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save"
+msgstr "Доска | Колесо: Масштаб | Средняя кнопка: Панорама | Левая кнопка: Перемещение/Выбор | Alt+щелчок: Связь | Правая кнопка: Меню | Del: Удалить | Ctrl+S: Сохранить"
+
+msgid "Camera"
+msgstr "Камера"
+
+msgid "Comma-separated tags (e.g. tag1, -tag2)..."
+msgstr "Теги через запятую (например, tag1, -tag2)..."
+
+msgid "Creator"
+msgstr "Автор"
+
+msgid "Date (Ascending)"
+msgstr "Дата (по возрастанию)"
+
+msgid "Date (Descending)"
+msgstr "Дата (по убыванию)"
+
+msgid "Default Debug Page"
+msgstr "Режим отладки"
+
+msgid "Delete (Del)"
+msgstr "Удалить (Del)"
+
+msgid "Delete Image (Del)"
+msgstr "Удалить изображение (Del)"
+
+msgid "Delete Link (Del)"
+msgstr "Удалить связь (Del)"
+
+msgid "Delete image"
+msgstr "Удалить изображение"
+
+msgid "Delete item (Del)"
+msgstr "Удалить элемент (Del)"
+
+msgid "Descending"
+msgstr "По убыванию"
+
+msgid "Description / Comment"
+msgstr "Описание / Комментарий"
+
+msgid "Deselect All (Esc)"
+msgstr "Снять выделение (Esc)"
+
+msgid "Dimensions"
+msgstr "Размеры"
+
+msgid "Drag & Drop Page"
+msgstr "Режим при перетаскивании"
+
+msgid "Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nG - Rule of Thirds"
+msgstr "Перетащите изображение сюда или укажите путь\n\nWASD / Стрелки — Перемещение и навигация\nCtrl+колесо — Масштаб / Навигация\nCtrl+перетаскивание — Увеличение области\nG — Правило третей"
+
+msgid "Enforce single instance"
+msgstr "Только один экземпляр"
+
+msgid "Exit (Esc)"
+msgstr "Выход (Esc)"
+
+msgid "File size"
+msgstr "Размер файла"
+
+msgid "GIF"
+msgstr "GIF"
+
+msgid "HEIF / HEIC"
+msgstr "HEIF / HEIC"
+
+msgid "Image Viewer — Native C++20 Version"
+msgstr "Image Viewer — Версия на C++20"
+
+msgid "Image sent to Board"
+msgstr "Изображение отправлено на доску"
+
+msgid "Image types"
+msgstr "Типы изображений"
+
+msgid "JPEG / JFIF"
+msgstr "JPEG / JFIF"
+
+msgid "Language / About"
+msgstr "Язык / О программе"
+
+msgid "Launch Page"
+msgstr "Режим при запуске"
+
+msgid "Link this item (Alt+Click)"
+msgstr "Связать элемент (Alt+щелчок)"
+
+msgid "Loading..."
+msgstr "Загрузка..."
+
+msgid "Metadata"
+msgstr "Метаданные"
+
+msgid "Modified"
+msgstr "Изменён"
+
+msgid "Modified date"
+msgstr "Дата изменения"
+
+msgid "Name"
+msgstr "Имя"
+
+msgid "Name (Ascending)"
+msgstr "Имя (по возрастанию)"
+
+msgid "Name (Descending)"
+msgstr "Имя (по убыванию)"
+
+msgid "Navigation actions"
+msgstr "Действия навигации"
+
+msgid "New Board"
+msgstr "Новая доска"
+
+msgid "New tag..."
+msgstr "Новый тег..."
+
+msgid "No folder selected"
+msgstr "Папка не выбрана"
+
+msgid "No matching images"
+msgstr "Нет подходящих изображений"
+
+msgid "No new images found in active folder"
+msgstr "В текущей папке нет новых изображений"
+
+msgid "Open in Modal Viewer (Enter)"
+msgstr "Открыть для просмотра (Enter)"
+
+msgid "Others"
+msgstr "Другие"
+
+msgid "PNG / APNG"
+msgstr "PNG / APNG"
+
+msgid "Press"
+msgstr "Нажать"
+
+msgid "Rating"
+msgstr "Оценка"
+
+msgid "Rating unavailable for multiple images"
+msgstr "Оценка недоступна для нескольких изображений"
+
+msgid "Rotate 90° (R)"
+msgstr "Повернуть на 90° (R)"
+
+msgid "Rule of Thirds (G)"
+msgstr "Правило третей (G)"
+
+msgid "Save Board (Ctrl+S)"
+msgstr "Сохранить доску (Ctrl+S)"
+
+msgid "Scan directory tags (Ctrl+L)"
+msgstr "Сканировать теги папки (Ctrl+L)"
+
+msgid "Scanning directory: {} / {} ({}%)"
+msgstr "Сканирование папки: {} / {} ({}%)"
+
+msgid "Search"
+msgstr "Найти"
+
+msgid "Search by tags"
+msgstr "Поиск по тегам"
+
+msgid "Search by tags (Ctrl+F)"
+msgstr "Поиск по тегам (Ctrl+F)"
+
+msgid "Search tags..."
+msgstr "Поиск тегов..."
+
+msgid "Search: Filter"
+msgstr "Поиск: Фильтровать"
+
+msgid "Search: Group"
+msgstr "Поиск: Группировать"
+
+msgid "Send this image to the Recycle Bin?"
+msgstr "Отправить это изображение в корзину?"
+
+msgid "Send to Board"
+msgstr "Отправить на доску"
+
+msgid "Settings (O)"
+msgstr "Настройки (O)"
+
+msgid "Settings... (O)"
+msgstr "Настройки... (O)"
+
+msgid "Show metadata"
+msgstr "Показывать метаданные"
+
+msgid "Size"
+msgstr "Размер"
+
+msgid "Size (Ascending)"
+msgstr "Размер (по возрастанию)"
+
+msgid "Size (Descending)"
+msgstr "Размер (по убыванию)"
+
+msgid "Sort & Filter"
+msgstr "Сортировка и фильтр"
+
+msgid "Sort By"
+msgstr "Сортировать по"
+
+msgid "Sort by"
+msgstr "Сортировать по"
+
+msgid "Start"
+msgstr "Начало"
+
+msgid "TIFF"
+msgstr "TIFF"
+
+msgid "Tags"
+msgstr "Теги"
+
+msgid "Tags (T)"
+msgstr "Теги (T)"
+
+msgid "Tags file already exists"
+msgstr "Файл тегов уже существует"
+
+msgid "Tags for {} images"
+msgstr "Теги для {} изображений"
+
+msgid "Title"
+msgstr "Название"
+
+msgid "Toggle Fullscreen (F11)"
+msgstr "Полноэкранный режим (F11)"
+
+msgid "Toggle fullscreen mode"
+msgstr "Переключить полноэкранный режим"
+
+msgid "Unknown"
+msgstr "Неизвестно"
+
+msgid "Viewer"
+msgstr "Просмотр"
+
+msgid "Viewer (NUM1)"
+msgstr "Просмотр (NUM1)"
+
+msgid "Viewer Page"
+msgstr "Просмотр"
+
+msgid "Waterfall"
+msgstr "Каскад"
+
+msgid "Waterfall (NUM3)"
+msgstr "Каскад (NUM3)"
+
+msgid "WebP"
+msgstr "WebP"
+
+
+msgid "Load failed"
+msgstr "Ошибка загрузки"
+
+msgid "Queued"
+msgstr "В очереди"
+
+msgid "Quit"
+msgstr "Выход"
+
+msgid "Memory Allocated: ~{:.2f} MB"
+msgstr "Используемая память: ~{:.2f} МБ"

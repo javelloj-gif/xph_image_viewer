@@ -26,6 +26,7 @@
   "draw_default_thumbnail": [true,"Show dummy-default thumbnail while generated one is not ready"],
   "show_thirds": [false,"Show thirds"],
   "show_metadata": [true,"Show metadata"],
-  "sort_mode": [0,"Sort mode"]
+  "sort_mode": [0,"Sort mode"],
+  "image_filter_mask": [511,"Image format families"]
  }
 }

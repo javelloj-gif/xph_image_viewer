@@ -28,7 +28,7 @@ public:
     /// Initialize the page with the parent App context
     void Initialize(App* app);
 
-    /// Update any continuous animations or states
+    // UI: advances view/metadata animation, retains information during strip motion, then applies inactivity fade.
     void Update(double dt);
 
     /// Draw the viewer page contents (image, checkerboard, overlays, magnifier)
@@ -87,7 +87,7 @@ private:
     float GetDefaultZoom() const;
 
     // ── Context Menu (right-click in windowed mode) ────────────────────────
-    // UI thread: presents native viewer actions and applies the chosen command.
+    // UI: presents native viewer actions with Settings and Exit last, then applies the chosen command.
     void ShowContextMenu();
 
     // ── Pointer to Parent Application ──────────────────────────────────────
@@ -143,6 +143,7 @@ private:
 
     // ── Metadata Overlay State ─────────────────────────────────────────────
     float  m_metadataOpacity = 1.0f;
+    float m_infoLift=0; // Smoothed distance above the lower resting position, in client pixels.
     double m_mouseInactivityTimer = 0.0;
     RectF m_infoBarRect = {}; // UI-only last visible information/tooltip bounds.
     RectF m_infoTooltipRect = {};

@@ -92,6 +92,17 @@ void ViewerPage::Update(double dt) {
         m_app->m_window.RequestRedraw();
     }
 
+    const auto size=m_app->m_renderer.GetTargetSize().ToFloat();
+    const float scale=m_app->m_window.GetDpiScale();
+    const bool stripVisible=m_app->IsViewerActive() && m_app->m_thumbnailStrip.GetOpacity()>0;
+    const float targetLift=stripVisible ? std::max(0.0f,size.height-15*scale-(m_app->m_thumbnailStrip.GetBounds().top-12*scale)) : 0;
+    const float previousLift=m_infoLift;
+    if (!m_app->m_settings.effects) m_infoLift=targetLift;
+    else m_infoLift=std::lerp(m_infoLift,targetLift,static_cast<float>(1-std::exp(-dt*16)));
+    if (std::abs(m_infoLift-targetLift)<0.1f) m_infoLift=targetLift;
+    if (previousLift!=m_infoLift) {
+        m_metadataOpacity=1; m_mouseInactivityTimer=0; m_app->m_window.RequestRedraw();
+    }
     if (IsInfoBarHit(m_app->m_mouseX, m_app->m_mouseY) ||
         (m_app->IsViewerActive() && m_app->m_thumbnailStrip.IsMouseOver(m_app->m_mouseX, m_app->m_mouseY))) m_mouseInactivityTimer = 0;
     m_mouseInactivityTimer += dt;
@@ -127,7 +138,7 @@ void ViewerPage::Draw(Renderer& renderer) {
         auto size = renderer.GetTargetSize().ToFloat();
         RectF textRect = RectF::FromXYWH(0, 0, size.width, size.height);
         renderer.DrawText(
-            L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nG - Rule of Thirds",
+            _(L"Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nG - Rule of Thirds"),
             textRect,
             Color::FromRGBA(180, 180, 180),
             20.0f,
@@ -297,7 +308,7 @@ RectF ViewerPage::GetInfoBarRect(float desiredWidth, float height) const {
     const bool stripVisible = m_app->IsViewerActive() && m_app->m_thumbnailStrip.GetOpacity() > 0;
     const float anchor = stripVisible ? m_app->m_thumbnailStrip.GetActiveCenter(size.width) : size.width / 2;
     const float x = std::clamp(anchor - width / 2, margin, std::max(margin, size.width - margin - width));
-    const float bottom = stripVisible ? m_app->m_thumbnailStrip.GetBounds().top - 12 * scale : size.height - 15 * scale;
+    const float bottom = size.height - 15 * scale - m_infoLift;
     return RectF::FromXYWH(x, std::max(0.0f, bottom - height), width, std::min(height, std::max(0.0f, bottom)));
 }
 
@@ -547,63 +558,25 @@ void ViewerPage::OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods)
 }
 
 void ViewerPage::ShowContextMenu() {
-    POINT pt;
-    if (!GetCursorPos(&pt)) return;
-    HMENU hMenu = CreatePopupMenu();
-    if (!hMenu) return;
-    AppendMenuW(hMenu, MF_STRING, 4, L"Toggle 1:1 Zoom (1)");
-    AppendMenuW(hMenu, MF_STRING, 5, L"Rotate 90° (R)");
-    AppendMenuW(hMenu, MF_STRING, 7, L"Pixelated Zoom (P)");
-    AppendMenuW(hMenu, MF_STRING, 9, L"Toggle Rule of Thirds (G)");
-    AppendMenuW(hMenu, MF_STRING, 10, L"Toggle Metadata Overlay (M)");
-    AppendMenuW(hMenu, MF_STRING, 11, L"Tagging Modal... (T)");
-    AppendMenuW(hMenu, MF_STRING, 12, L"Reset Zoom/Pan (0)");
-    AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING, 13, L"Next Image (Right Arrow)");
-    AppendMenuW(hMenu, MF_STRING, 14, L"Previous Image (Left Arrow)");
-    AppendMenuW(hMenu, MF_STRING, 15, L"Delete Image (Del)");
-    AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(hMenu, MF_STRING, 1, L"Settings... (O)");
-    AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
-    AppendMenuW(hMenu, MF_STRING, 3, L"Exit (Esc)");
-
-    int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
-                                   pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);
-    DestroyMenu(hMenu);
-
-    if (selected == 1) {
-        m_app->OnKeyDown('O', {});
-    } else if (selected == 2) {
-        m_app->OnKeyDown(VK_F11, {});
-    } else if (selected == 3) {
-        m_app->OnKeyDown(VK_ESCAPE, {});
-    } else if (selected == 4) {
-        Toggle1To1();
-    } else if (selected == 5) {
-        m_rotation += 90.0f;
-        m_app->m_window.RequestRedraw();
-    } else if (selected == 7) {
-        m_pixelatedZoom = !m_pixelatedZoom;
-        m_app->m_window.RequestRedraw();
-    } else if (selected == 9) {
-        m_app->m_settings.show_thirds = !m_app->m_settings.show_thirds;
-        m_app->m_settings.Save();
-        m_app->m_window.RequestRedraw();
-    } else if (selected == 10) {
-        m_app->m_settings.show_metadata = !m_app->m_settings.show_metadata;
-        m_app->m_settings.Save();
-        m_app->m_window.RequestRedraw();
-    } else if (selected == 11) {
-        m_app->OnKeyDown('T', {});
-    } else if (selected == 12) {
-        ResetView();
-    } else if (selected == 13) {
-        m_app->NavigateImage(1);
-    } else if (selected == 14) {
-        m_app->NavigateImage(-1);
-    } else if (selected == 15) {
-        m_app->OnKeyDown(VK_DELETE, {});
-    }
+    POINT point; if (!GetCursorPos(&point)) return;
+    HMENU menu=CreatePopupMenu(); if (!menu) return;
+    const auto path=m_app->m_currentImage ? m_app->m_currentImage->filePath : m_app->m_animatedImage ? m_app->m_animatedImage->filePath : L"";
+    const UINT imageFlags=MF_STRING|(path.empty()?MF_GRAYED:0);
+    AppendMenuW(menu,imageFlags,1,_(L"Delete (Del)").c_str());
+    AppendMenuW(menu,imageFlags|(m_app->m_settings.show_thirds?MF_CHECKED:0),4,_(L"Rule of Thirds (G)").c_str());
+    AppendMenuW(menu,imageFlags,5,_(L"Tags (T)").c_str());
+    AppendMenuW(menu,imageFlags,6,_(L"Send to Board").c_str());
+    AppendMenuW(menu,MF_STRING,2,_(L"Settings (O)").c_str());
+    AppendMenuW(menu,MF_STRING,3,_(L"Exit (Esc)").c_str());
+    const int command=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON|TPM_NONOTIFY,point.x,point.y,0,m_app->m_window.GetHwnd(),nullptr);
+    DestroyMenu(menu);
+    if (command==1 && !path.empty()) m_app->OnKeyDown(VK_DELETE,{});
+    else if (command==2) m_app->OnKeyDown('O',{});
+    else if (command==3) { m_app->m_isQuitting=true; m_app->m_window.Close(); }
+    else if (command==4 && !path.empty()) { m_app->m_settings.show_thirds=!m_app->m_settings.show_thirds; m_app->m_settings.Save(); }
+    else if (command==5 && !path.empty()) m_app->OnKeyDown('T',{});
+    else if (command==6 && !path.empty()) { m_app->m_boardPage.AddImageToWorkspace(path); m_app->m_toastRemaining=2; }
+    m_app->m_window.RequestRedraw();
 }
 
 void ViewerPage::OnMouseWheel(float delta, float x, float y, KeyModifiers mods) {

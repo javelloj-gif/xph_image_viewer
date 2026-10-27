@@ -1,8 +1,12 @@
 # Image Viewer (placeholder)
 
+Versión **1.0** (`1.0.0`). Entrega Windows x64: portable
+`image_viewer_portable_1.0.0.zip` e instalador `image_viewer_setup_1.0.0.exe`.
+Fuentes: etiqueta `v1.0.0`. [Resultado de entrega](docs/changes/031-release-1.0/result.md).
+
 Visor de imágenes para Windows inspirado en Picasa, derivado del
 [image_viewer de Sergei Krumas](https://github.com/sergkrumas/image_viewer),
-migrado a C++ y extendido por xPhang con biblioteca, cascada, tablero y metadatos XMP.
+migrado a C++ y extendido por xPhang con visor, cascada, tablero y metadatos XMP.
 
 El visor usa Win32, Direct3D 11, Direct2D, DirectWrite, DirectComposition y WIC.
 Requiere Windows 10 1903+ x64 y una GPU compatible; los formatos adicionales dependen

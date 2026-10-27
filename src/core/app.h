@@ -31,6 +31,7 @@
 #include "metadata/xmp_tag_manager.h"
 #include "ui/options_menu.h"
 #include "ui/tagging_modal.h"
+#include "ui/sort_filter_modal.h"
 #include "i18n/i18n_engine.h"
 
 namespace kv {
@@ -159,8 +160,12 @@ private:
     // UI: queues/selects a shared folder; its snapshot later synchronizes navigation and optional image loading.
     void LoadFolder(const std::wstring& folderPath, bool loadImage = true);
     void NavigateImage(int direction); // +1 = next, -1 = previous
-    // Persists the sort mode, reorders shared folders and restores the active image's selection.
+    // UI: persists sort preferences and queues the active folder projection; never sorts or reads attributes here.
     void ApplySortMode(int mode);
+    // UI: commits draft sort/filter preferences once; inactive folders update lazily on selection.
+    void ApplyFileView(int mode, int mask);
+    // UI: rebuilds active Waterfall geometry after a folder projection has been published.
+    void OnFileViewReady();
     // Removes a path from shared lists, cancels its hover, invalidates preview layouts and updates image/selection.
     void DeleteImage(const std::wstring& path);
     void AdjustWindowToImage();
@@ -186,6 +191,7 @@ private:
     friend class Settings;
     friend class OptionsMenu;
     friend class TaggingModal;
+    friend class SortFilterModal;
     Window              m_window;
     Renderer            m_renderer;
     ImageLoader         m_imageLoader;
@@ -201,6 +207,8 @@ private:
     XmpTagManager       m_tagManager;
     OptionsMenu         m_optionsMenu;
     TaggingModal        m_taggingModal;
+    SortFilterModal     m_sortFilterModal;
+    double m_toastRemaining=0;
 
     // ── Routing & Folders State ───────────────────────────────────────────
     Page                              m_currentPage = Page::Viewer;
@@ -233,6 +241,14 @@ private:
     // UI: publishes MSAA names/geometry/actions via WM_GETOBJECT; the provider weakly borrows this owner.
     LRESULT GetDockAccessibleObject(WPARAM request, LPARAM objectId);
     DockIcons m_dockIcons; // UI-owned artwork; independent of image/cache state.
+    // Transient command identity is independent of the six dock positions and persisted Page IDs.
+    enum class DockCommand { Viewer, Waterfall, Board, Rotate, Tags, SortFilter, Settings };
+    // UI-only descriptor; name is a static translation key, glyph identifies cached vector artwork.
+    struct DockAction { DockCommand command; int glyph; const wchar_t* name; bool disabled; };
+    // UI: one source of truth for drawing, invocation, tooltips and MSAA, including mode/selection enablement.
+    DockAction GetDockAction(int index) const;
+    // UI: dock is available on the three functional pages, including Waterfall's viewer host.
+    bool HasDock() const;
     float m_dockOpacity = 0;
     double m_dockRemaining = 0;
     int m_dockHovered = -1, m_dockFocus = -1, m_dockPressed = -1;
@@ -247,7 +263,7 @@ private:
     void UpdateDock(double dt);
     // UI thread: draws Outline icons and command tooltips with the metadata bar's translucent background/border.
     void DrawDock();
-    // UI: invokes existing page/action handlers; index 4 is deliberately inert.
+    // UI: invokes the descriptor's enabled command, preserving overlay/page input ownership.
     void InvokeDock(int index);
     // UI: offers Tab/arrows/Enter/Escape to dock focus before viewer shortcuts.
     bool HandleDockKey(uint32_t vk, KeyModifiers mods);

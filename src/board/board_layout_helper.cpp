@@ -127,7 +127,7 @@ void BoardLayoutHelper::ListCurrentDirectoryImages() {
     } catch (...) {}
 
     if (files.empty()) {
-        m_page->m_toastMessage = L"No new images found in active folder";
+        m_page->m_toastMessage = _(L"No new images found in active folder");
         m_page->m_toastTimeRemaining = 2.0;
         m_page->m_app->m_window.RequestRedraw();
         return;
@@ -200,29 +200,29 @@ void BoardLayoutHelper::ShowContextMenu(float screenX, float screenY) {
         HMENU hMenu = CreatePopupMenu();
         if (clickedIdx != -1) {
             if (m_page->m_items[clickedIdx].type == BoardItemType::Link) {
-                AppendMenuW(hMenu, MF_STRING, 5, L"Delete Link (Del)");
+                AppendMenuW(hMenu, MF_STRING, 5, _(L"Delete Link (Del)").c_str());
             } else {
-                AppendMenuW(hMenu, MF_STRING, 1, L"Link this item (Alt+Click)");
-                AppendMenuW(hMenu, MF_STRING, 2, L"Delete item (Del)");
+                AppendMenuW(hMenu, MF_STRING, 1, _(L"Link this item (Alt+Click)").c_str());
+                AppendMenuW(hMenu, MF_STRING, 2, _(L"Delete item (Del)").c_str());
                 if (m_page->m_items[clickedIdx].type == BoardItemType::Image) {
-                    AppendMenuW(hMenu, MF_STRING, 12, L"Tagging Modal... (T)");
+                    AppendMenuW(hMenu, MF_STRING, 12, _(L"Tags (T)").c_str());
                 }
             }
             AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
         }
         
-        AppendMenuW(hMenu, MF_STRING, 3, L"Add Note");
-        AppendMenuW(hMenu, MF_STRING, 4, L"Add Node");
-        AppendMenuW(hMenu, MF_STRING, 8, L"New Board");
+        AppendMenuW(hMenu, MF_STRING, 3, _(L"Add Note").c_str());
+        AppendMenuW(hMenu, MF_STRING, 4, _(L"Add Node").c_str());
+        AppendMenuW(hMenu, MF_STRING, 8, _(L"New Board").c_str());
         AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(hMenu, MF_STRING, 9, L"Buscar por tags... (Ctrl+F)");
-        AppendMenuW(hMenu, MF_STRING, 10, L"Escanear tags del directorio (Ctrl+L)");
-        AppendMenuW(hMenu, MF_STRING, 7, L"Listar imágenes de carpeta (Shift+Ctrl+L)");
-        AppendMenuW(hMenu, MF_STRING, 11, L"Save Board (Ctrl+S)");
-        AppendMenuW(hMenu, MF_STRING, 13, L"Deselect All (Esc)");
+        AppendMenuW(hMenu, MF_STRING, 9, _(L"Search by tags (Ctrl+F)").c_str());
+        AppendMenuW(hMenu, MF_STRING, 10, _(L"Scan directory tags (Ctrl+L)").c_str());
+        AppendMenuW(hMenu, MF_STRING, 7, _(L"Add folder images (Shift+Ctrl+L)").c_str());
+        AppendMenuW(hMenu, MF_STRING, 11, _(L"Save Board (Ctrl+S)").c_str());
+        AppendMenuW(hMenu, MF_STRING, 13, _(L"Deselect All (Esc)").c_str());
         AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(hMenu, MF_STRING, 14, L"Viewer (NUM1)");
-        AppendMenuW(hMenu, MF_STRING, 6, L"Settings... (O)");
+        AppendMenuW(hMenu, MF_STRING, 14, _(L"Viewer (NUM1)").c_str());
+        AppendMenuW(hMenu, MF_STRING, 6, _(L"Settings... (O)").c_str());
 
         int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                       pt.x, pt.y, 0, m_page->m_app->m_window.GetHwnd(), nullptr);

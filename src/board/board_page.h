@@ -54,7 +54,12 @@ public:
     bool OnKeyDown(uint32_t vk, KeyModifiers mods);
     void OnChar(wchar_t ch);
     void OnFileDrop(const std::wstring& path, float screenX, float screenY);
+    // UI: prepares the workspace once and incorporates the active image without reloading unsaved edits.
     void OnEnterPage();
+    // UI: prepares the working board once, without navigating or overwriting later in-memory edits.
+    void PrepareWorkspace();
+    // UI: adds a supported path once at the camera center; queues texture loading, never writes the source or KBRD.
+    bool AddImageToWorkspace(const std::wstring& path);
 
     // Coordinate conversions
     PointF ScreenToWorld(const PointF& screenPt) const;
@@ -98,6 +103,7 @@ private:
 
     // Items list
     std::vector<BoardItem> m_items;
+    bool m_workspacePrepared=false;
 
     // Dynamic Connection/Link-creation mode
     bool m_linkingMode = false;

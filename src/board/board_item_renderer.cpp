@@ -4,6 +4,7 @@
 // Responsibility: Direct2D drawing logic for nodes, connection links, editing status, and textured images.
 // ============================================================================
 #include "common/pch.h"
+#include "i18n/i18n_engine.h"
 #include "board_item_renderer.h"
 #include <cmath>
 #include <algorithm>
@@ -136,7 +137,7 @@ void BoardItemRenderer::DrawItems(
                 renderer.FillRect(itemRect, Color::FromRGBA(25, 25, 25, 180));
                 renderer.DrawRect(itemRect, item.selected ? Color::FromHex(0xFF9800) : Color::White(0.1f), 1.0f / zoom);
                 
-                std::wstring statusText = item.isLoading ? L"LOADING..." : (item.loadFailed ? L"LOAD FAILED" : L"QUEUED");
+                std::wstring statusText = item.isLoading ? _(L"Loading...") : (item.loadFailed ? _(L"Load failed") : _(L"Queued"));
                 renderer.DrawText(statusText, itemRect, Color::White(0.4f), 12.0f, TextAlign::Center, TextVAlign::Center);
                 
                 if (!item.isLoading && !item.loadFailed && loadTextureCallback) {

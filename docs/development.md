@@ -387,3 +387,25 @@ Corrección visual de 020: modo optativo `async_preview_tests.exe --dock-snapsho
 y comprueba font original, geometrías/reutilización y transform restaurado. No es
 benchmark. Los glifos detallados están en ui/dock_icons.*, sin recursos de terceros.
 Release/CTest y paquetes de esta corrección: [resultado 020](changes/020-navegacion-superior/result.md).
+
+## Validación del lote 026–030
+
+CTest añade `ui.product_batch` (diez suites en total), ejecutada por
+`scripts/run_product_batch_tests.ps1` con EXE, locales, datos y archivos sintéticos
+propios. Sus 509 checks cubren las seis órdenes, familias/empty, cancelación,
+revisión de atributos, publicación UI, drafts/persistencia, reutilización de previews,
+tablero sin pérdida, descriptores, movimiento de metadatos y traducciones runtime.
+
+El harness admite `--batch-snapshot <salida.bgra>` y `--tags-snapshot <salida.bgra>`:
+72 frames BGRA cada uno, anchos 320/801, DPI 96/144/192 y doce estados
+(tres idiomas por cuatro superficies). Usar solo salidas dentro de build.
+`--view-benchmark <carpeta-sintetica>` mide envío UI y entrega worker de seis órdenes
+con 30 reutilizaciones/filtros por criterio; incluye el sondeo de entregas del harness,
+no es una medida de CPU puro. No lanzarlo junto a builds u otras pruebas.
+
+`scripts/run_product_batch_benchmark.ps1` compara dos EXE secuencialmente sobre
+copias de fixtures (1000 por defecto), con dos calentamientos y 30 pares por escenario.
+Defaults y selección guardada alternan el orden base/candidato. Guarda hashes,
+manifiesto, trazas QPC, muestras y resumen en un RunRoot nuevo bajo build. El criterio
+es mediana <= +5% y p95 <= +10% frente a la base. Las imágenes pequeñas/sintéticas y
+la caché OS no controlada no certifican la primera apertura tras boot ni fotos grandes.

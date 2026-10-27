@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="250" viewBox="0 0 840 250">
+ <rect width="840" height="250" fill="#10171b"/>
+ <defs>
+  <g id="photo" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+   <rect x="2" y="5" width="28" height="22" rx="1.2"/>
+   <path d="M4 25 12 14 19 22 23 18 29 25"/>
+   <circle cx="23" cy="11" r="2" fill="currentColor" stroke="none"/>
+  </g>
+  <g id="return" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+   <path d="M13 5H28Q30 5 30 7V25Q30 27 28 27H4Q2 27 2 25V14 M4 25 12 14 19 22 23 18 29 25 M2 7H10 M6 3 2 7 6 11"/>
+   <circle cx="23" cy="11" r="2" fill="currentColor" stroke="none"/>
+  </g>
+  <g id="corners" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+   <path d="M2 12V5H9 M23 5H30V12 M30 20V27H23 M9 27H2V20 M5 24 12 14 19 22 23 18 28 24"/>
+   <circle cx="23" cy="11" r="2" fill="currentColor" stroke="none"/>
+  </g>
+ </defs>
+ <g fill="#e9edef" font-family="Segoe UI,sans-serif" text-anchor="middle">
+  <text x="140" y="32" font-size="16">A · Foto individual · Integrada</text>
+  <text x="420" y="32" font-size="16">B · Foto con retorno</text>
+  <text x="700" y="32" font-size="16">C · Esquinas abiertas</text>
+ </g>
+ <g color="#e9edef">
+  <use href="#photo" transform="translate(92 56) scale(3)"/>
+  <use href="#return" transform="translate(372 56) scale(3)"/>
+  <use href="#corners" transform="translate(652 56) scale(3)"/>
+ </g>
+ <g fill="#1a2124" stroke="#394145"><rect x="69" y="172" width="142" height="48" rx="8"/><rect x="349" y="172" width="142" height="48" rx="8"/><rect x="629" y="172" width="142" height="48" rx="8"/></g>
+ <g color="#e9edef"><use href="#photo" transform="translate(80 182) scale(.875)"/><use href="#return" transform="translate(360 182) scale(.875)"/><use href="#corners" transform="translate(640 182) scale(.875)"/></g>
+ <g color="#53deee"><use href="#photo" transform="translate(128 182) scale(.875)"/><use href="#return" transform="translate(408 182) scale(.875)"/><use href="#corners" transform="translate(688 182) scale(.875)"/></g>
+ <g color="#6b7072"><use href="#photo" transform="translate(176 182) scale(.875)"/><use href="#return" transform="translate(456 182) scale(.875)"/><use href="#corners" transform="translate(736 182) scale(.875)"/></g>
+ <text x="420" y="242" fill="#aeb8bd" font-family="Segoe UI,sans-serif" text-anchor="middle" font-size="12">Referencia 32 · Trazo 1,65 · Icono 28 DIP · Normal / foco / bloqueado</text>
+</svg>

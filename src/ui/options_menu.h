@@ -14,6 +14,7 @@ class App; // Forward declaration
 
 class OptionsMenu {
     friend class App;
+    friend class AsyncPreviewTests; // Exercises responsive translated controls with the native WARP renderer.
 public:
     OptionsMenu() = default;
     ~OptionsMenu() = default;
@@ -24,8 +25,10 @@ public:
     void Hide();
     bool IsVisible() const { return m_visible; }
 
+    // UI: draws localized controls and responsive tabs/buttons without changing preferences.
     void Draw(Renderer& renderer);
     bool OnMouseMove(float x, float y, KeyModifiers mods);
+    // UI: uses the same responsive tab/control geometry as Draw and commits selected preferences.
     bool OnMouseDown(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnMouseUp(MouseButton btn, float x, float y, KeyModifiers mods);
     bool OnKeyDown(uint32_t vk, KeyModifiers mods);
@@ -49,6 +52,7 @@ private:
 
     // UI: rebuilds current preference controls (no retired features); mode buttons cycle persisted IDs while skipping reserved 4.
     void BuildControls();
+    // UI: centers the settings container within the current client, including narrow windows.
     RectF GetBounds() const;
 
     App* m_app = nullptr;

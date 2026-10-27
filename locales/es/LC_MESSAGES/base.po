@@ -682,12 +682,12 @@ msgstr ""
 
 #: commenting.py:504 tagging.py:820
 msgid "Save"
-msgstr ""
+msgstr "Guardar"
 
 #: commenting.py:507 help_text.py:211 library_data.py:1917
 #: settings_handling.py:931
 msgid "Close"
-msgstr ""
+msgstr "Cerrar"
 
 #: control_panel.py:371
 msgid "No images to show"
@@ -742,7 +742,7 @@ msgstr ""
 #: control_panel.py:512 control_panel.py:528 control_panel.py:1485
 #: settings_handling.py:920
 msgid "Settings"
-msgstr ""
+msgstr "Configuración"
 
 #: control_panel.py:514
 msgid "Show previous"
@@ -798,7 +798,7 @@ msgstr ""
 
 #: control_panel.py:1494
 msgid "Save order metadata to disk"
-msgstr ""
+msgstr "Guardar metadatos de orden"
 
 #: control_panel.py:1496
 msgid "Show control panel in full-screen mode"
@@ -993,39 +993,39 @@ msgstr "Español"
 
 #: settings_handling.py:501
 msgid "General"
-msgstr ""
+msgstr "General"
 
 #: settings_handling.py:504
 msgid "Run on Windows Startup"
-msgstr ""
+msgstr "Ejecutar al iniciar Windows"
 
 #: settings_handling.py:506
 msgid "Supress start dialog and run lite mode"
-msgstr ""
+msgstr "Omitir diálogo inicial y usar modo ligero"
 
 #: settings_handling.py:507
 msgid "Full-screen mode on application start"
-msgstr ""
+msgstr "Iniciar en pantalla completa"
 
 #: settings_handling.py:509
 msgid "Hide to tray on close"
-msgstr ""
+msgstr "Ocultar en bandeja al cerrar"
 
 #: settings_handling.py:510
 msgid "Hide to tray on app start"
-msgstr ""
+msgstr "Ocultar en bandeja al iniciar"
 
 #: settings_handling.py:511
 msgid "Show standard (console) output overlay"
-msgstr ""
+msgstr "Mostrar salida de consola"
 
 #: settings_handling.py:512
 msgid "Animated effects"
-msgstr ""
+msgstr "Efectos animados"
 
 #: settings_handling.py:513
 msgid "Show animated cells overlay"
-msgstr ""
+msgstr "Mostrar celdas animadas"
 
 #: settings_handling.py:520
 msgid "Viewer page"
@@ -1033,23 +1033,23 @@ msgstr ""
 
 #: settings_handling.py:521
 msgid "Animated zoom"
-msgstr ""
+msgstr "Zoom animado"
 
 #: settings_handling.py:523
 msgid "Thumbnails size"
-msgstr ""
+msgstr "Tamaño de miniaturas"
 
 #: settings_handling.py:524
 msgid "Enable mouse wheel to zoom and Ctrl+mouse wheel to navigate through image list"
-msgstr ""
+msgstr "Rueda para zoom y Ctrl+rueda para navegar"
 
 #: settings_handling.py:525
 msgid "Show dummy-default thumbnail while generated one is not ready"
-msgstr ""
+msgstr "Mostrar miniatura provisional durante la carga"
 
 #: settings_handling.py:526
 msgid "Show thirds"
-msgstr ""
+msgstr "Mostrar regla de los tercios"
 
 #: settings_handling.py:528
 msgid "Show image center"
@@ -1229,14 +1229,14 @@ msgstr ""
 
 #: tagging.py:576
 msgid "Cancel"
-msgstr ""
+msgstr "Cancelar"
 
 #: tagging.py:578
 msgid "Delete (no confirmation)"
 msgstr ""
 
 msgid "UI language"
-msgstr ""
+msgstr "Idioma de la interfaz"
 
 #: settings_handling.py:828
 msgid "Restart app to take effect across the entire app!"
@@ -1244,7 +1244,7 @@ msgstr ""
 
 #: settings_handling.py:502 settings_handling.py:825
 msgid "UI language"
-msgstr ""
+msgstr "Idioma de la interfaz"
 
 
 #: hidapi_adapter.py:440
@@ -1423,3 +1423,321 @@ msgstr ""
 msgid "Waterfall page transparent value"
 msgstr ""
 
+
+
+# Active native interface: product batch 026–030.
+msgid "AVIF"
+msgstr "AVIF"
+
+msgid "Add Node"
+msgstr "Añadir nodo"
+
+msgid "Add Note"
+msgstr "Añadir nota"
+
+msgid "Add folder images (Shift+Ctrl+L)"
+msgstr "Añadir imágenes de carpeta (Shift+Ctrl+L)"
+
+msgid "Advanced"
+msgstr "Avanzado"
+
+msgid "Advanced Settings"
+msgstr "Configuración avanzada"
+
+msgid "All"
+msgstr "Todos"
+
+msgid "Application window opacity"
+msgstr "Opacidad de la ventana"
+
+msgid "Apply"
+msgstr "Aplicar"
+
+msgid "Ascending"
+msgstr "Ascendente"
+
+msgid "BMP"
+msgstr "BMP"
+
+msgid "Board"
+msgstr "Tablero"
+
+msgid "Board (NUM4)"
+msgstr "Tablero (NUM4)"
+
+msgid "Board Mode | Scroll: Zoom | Middle Drag: Pan | Left Drag: Move/Select | Alt+Click: Link | Right-Click: Menu | Delete: Remove | Ctrl+S: Save"
+msgstr "Tablero | Rueda: Zoom | Arrastre central: Desplazar | Arrastre izquierdo: Mover/Seleccionar | Alt+clic: Enlazar | Clic derecho: Menú | Supr: Eliminar | Ctrl+S: Guardar"
+
+msgid "Camera"
+msgstr "Cámara"
+
+msgid "Comma-separated tags (e.g. tag1, -tag2)..."
+msgstr "Etiquetas separadas por comas (p. ej. tag1, -tag2)..."
+
+msgid "Creator"
+msgstr "Autor"
+
+msgid "Date (Ascending)"
+msgstr "Fecha (ascendente)"
+
+msgid "Date (Descending)"
+msgstr "Fecha (descendente)"
+
+msgid "Default Debug Page"
+msgstr "Modo de depuración inicial"
+
+msgid "Delete (Del)"
+msgstr "Eliminar (Supr)"
+
+msgid "Delete Image (Del)"
+msgstr "Eliminar imagen (Supr)"
+
+msgid "Delete Link (Del)"
+msgstr "Eliminar enlace (Supr)"
+
+msgid "Delete image"
+msgstr "Eliminar imagen"
+
+msgid "Delete item (Del)"
+msgstr "Eliminar elemento (Supr)"
+
+msgid "Descending"
+msgstr "Descendente"
+
+msgid "Description / Comment"
+msgstr "Descripción / Comentario"
+
+msgid "Deselect All (Esc)"
+msgstr "Deseleccionar todo (Esc)"
+
+msgid "Dimensions"
+msgstr "Dimensiones"
+
+msgid "Drag & Drop Page"
+msgstr "Modo al arrastrar archivos"
+
+msgid "Drop an image here or pass a file path as argument\n\nWASD / Arrow Keys - Move & Paging\nCtrl+Scroll - Zoom / Browse\nCtrl+Drag - Region Magnifier\nG - Rule of Thirds"
+msgstr "Arrastra una imagen aquí o indica su ruta\n\nWASD / Flechas - Mover y navegar\nCtrl+rueda - Zoom / Navegar\nCtrl+arrastrar - Ampliar región\nG - Regla de los tercios"
+
+msgid "Enforce single instance"
+msgstr "Usar una sola instancia"
+
+msgid "Exit (Esc)"
+msgstr "Salir (Esc)"
+
+msgid "File size"
+msgstr "Tamaño de archivo"
+
+msgid "GIF"
+msgstr "GIF"
+
+msgid "HEIF / HEIC"
+msgstr "HEIF / HEIC"
+
+msgid "Image Viewer — Native C++20 Version"
+msgstr "Image Viewer — Versión nativa C++20"
+
+msgid "Image sent to Board"
+msgstr "Imagen enviada al tablero"
+
+msgid "Image types"
+msgstr "Tipos de imagen"
+
+msgid "JPEG / JFIF"
+msgstr "JPEG / JFIF"
+
+msgid "Language / About"
+msgstr "Idioma / Acerca de"
+
+msgid "Launch Page"
+msgstr "Modo inicial"
+
+msgid "Link this item (Alt+Click)"
+msgstr "Enlazar elemento (Alt+clic)"
+
+msgid "Loading..."
+msgstr "Cargando..."
+
+msgid "Metadata"
+msgstr "Metadatos"
+
+msgid "Modified"
+msgstr "Modificación"
+
+msgid "Modified date"
+msgstr "Fecha de modificación"
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Name (Ascending)"
+msgstr "Nombre (ascendente)"
+
+msgid "Name (Descending)"
+msgstr "Nombre (descendente)"
+
+msgid "Navigation actions"
+msgstr "Acciones de navegación"
+
+msgid "New Board"
+msgstr "Nuevo tablero"
+
+msgid "New tag..."
+msgstr "Nueva etiqueta..."
+
+msgid "No folder selected"
+msgstr "Ninguna carpeta seleccionada"
+
+msgid "No matching images"
+msgstr "No hay imágenes coincidentes"
+
+msgid "No new images found in active folder"
+msgstr "No hay imágenes nuevas en la carpeta activa"
+
+msgid "Open in Modal Viewer (Enter)"
+msgstr "Abrir en visor modal (Enter)"
+
+msgid "Others"
+msgstr "Otros"
+
+msgid "PNG / APNG"
+msgstr "PNG / APNG"
+
+msgid "Press"
+msgstr "Activar"
+
+msgid "Rating"
+msgstr "Clasificación"
+
+msgid "Rating unavailable for multiple images"
+msgstr "Clasificación no disponible para varias imágenes"
+
+msgid "Rotate 90° (R)"
+msgstr "Girar 90° (R)"
+
+msgid "Rule of Thirds (G)"
+msgstr "Regla de los tercios (G)"
+
+msgid "Save Board (Ctrl+S)"
+msgstr "Guardar tablero (Ctrl+S)"
+
+msgid "Scan directory tags (Ctrl+L)"
+msgstr "Escanear etiquetas de carpeta (Ctrl+L)"
+
+msgid "Scanning directory: {} / {} ({}%)"
+msgstr "Escaneando carpeta: {} / {} ({}%)"
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Search by tags"
+msgstr "Buscar por etiquetas"
+
+msgid "Search by tags (Ctrl+F)"
+msgstr "Buscar etiquetas (Ctrl+F)"
+
+msgid "Search tags..."
+msgstr "Buscar etiquetas..."
+
+msgid "Search: Filter"
+msgstr "Búsqueda: Filtrar"
+
+msgid "Search: Group"
+msgstr "Búsqueda: Agrupar"
+
+msgid "Send this image to the Recycle Bin?"
+msgstr "¿Enviar esta imagen a la Papelera de reciclaje?"
+
+msgid "Send to Board"
+msgstr "Enviar al tablero"
+
+msgid "Settings (O)"
+msgstr "Configuración (O)"
+
+msgid "Settings window opacity"
+msgstr "Opacidad de configuración"
+
+msgid "Settings... (O)"
+msgstr "Configuración... (O)"
+
+msgid "Show metadata"
+msgstr "Mostrar metadatos"
+
+msgid "Size"
+msgstr "Tamaño"
+
+msgid "Size (Ascending)"
+msgstr "Tamaño (ascendente)"
+
+msgid "Size (Descending)"
+msgstr "Tamaño (descendente)"
+
+msgid "Sort & Filter"
+msgstr "Ordenar y filtrar"
+
+msgid "Sort By"
+msgstr "Ordenar por"
+
+msgid "Sort by"
+msgstr "Ordenar por"
+
+msgid "Start"
+msgstr "Inicio"
+
+msgid "TIFF"
+msgstr "TIFF"
+
+msgid "Tags"
+msgstr "Etiquetas"
+
+msgid "Tags (T)"
+msgstr "Etiquetas (T)"
+
+msgid "Tags file already exists"
+msgstr "El archivo de etiquetas ya existe"
+
+msgid "Tags for {} images"
+msgstr "Etiquetas de {} imágenes"
+
+msgid "Title"
+msgstr "Título"
+
+msgid "Toggle Fullscreen (F11)"
+msgstr "Alternar pantalla completa (F11)"
+
+msgid "Toggle fullscreen mode"
+msgstr "Alternar pantalla completa"
+
+msgid "Unknown"
+msgstr "Desconocido"
+
+msgid "Viewer"
+msgstr "Visor"
+
+msgid "Viewer (NUM1)"
+msgstr "Visor (NUM1)"
+
+msgid "Viewer Page"
+msgstr "Visor"
+
+msgid "Waterfall"
+msgstr "Cascada"
+
+msgid "Waterfall (NUM3)"
+msgstr "Cascada (NUM3)"
+
+msgid "WebP"
+msgstr "WebP"
+
+
+msgid "Load failed"
+msgstr "Error de carga"
+
+msgid "Queued"
+msgstr "En cola"
+
+msgid "Quit"
+msgstr "Salir"
+
+msgid "Memory Allocated: ~{:.2f} MB"
+msgstr "Memoria utilizada: ~{:.2f} MB"

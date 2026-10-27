@@ -2,6 +2,27 @@
 
 # Contexto técnico de Image Viewer (placeholder)
 
+## Actualización funcional 026–030 — 2026-10-26
+
+[Acuerdo y criterios](changes/product-batch-20261026.md). El código incorpora menú
+simplificado/envío a Board, modal de orden/filtro, dock en tres modos, elevación
+animada de metadatos y selección de español. Board sigue siendo el mismo modo; no
+se restaura Library. Su workspace se prepara una vez para preservar ediciones en memoria.
+
+FolderInfo separa inventory completo de filePaths visibles. FolderScanService posee
+catálogos CPU y seis órdenes por inventario/revisión en su trabajador existente;
+las claves de fecha/tamaño son perezosas. App publica la vista en UI mediante el
+gestor, conservando original excluido con índice -1. Previews preparados de tipos
+ocultos se retienen por ruta dentro del inventario, con leases pendientes cancelados.
+La máscara image_filter_mask se persiste en el formato de arrays de Settings (511
+inicial); SortMode/Page, rutas y formatos anteriores no cambian. Los cambios de
+metadatos/borrado conocidos invalidan claves; no se añade vigilancia externa de carpetas.
+
+Los descriptores del dock comparten acción, glyph, etiqueta y enablement entre
+dibujo, entrada y MSAA. Metadatos animan una elevación UI sin alterar la fuente original.
+Español completa el catálogo heredado y lo expone en Settings. Los apartados históricos
+siguientes conservan sus fechas; resultados de ejecución del lote en 026–030.
+
 ## Nombre provisional y lote de producto — 2026-10-25
 
 **Image Viewer / image_viewer son placeholders**, no nombre definitivo. Desde 022,
@@ -47,7 +68,7 @@ El código es la fuente de verdad del comportamiento actual. Los planes antiguos
 
 **Usuario:** visor inspirado en Picasa, basado en el proyecto de Sergei Krumas y migrado posteriormente a C++ mediante asistencia de agentes. El placeholder actual es Image Viewer; las cabeceras atribuyen sus extensiones a xPhang.
 
-**Código:** aplicación de escritorio exclusiva de Windows. C++20, namespace `kv`, CMake y MSVC. El proyecto declara versión 0.90.0 y Windows 10 1903+ (18362); comprobar disponibilidad efectiva de las interfaces DirectX en cada sistema objetivo. `LICENSE` contiene GNU GPL versión 3; conservar atribuciones y no deducir otra licencia de comentarios antiguos del instalador. El recurso de versión Windows conserva una numeración histórica distinta, registrada como deuda técnica.
+**Código:** aplicación de escritorio exclusiva de Windows. C++20, namespace `kv`, CMake y MSVC. Desde 031, CMake declara versión 1.0.0 y Windows VERSIONINFO 1.0.0.0; se unifica la numeración histórica distinta. Requiere Windows 10 1903+ (18362); comprobar disponibilidad efectiva de DirectX en cada sistema objetivo. `LICENSE` contiene GNU GPL versión 3; conservar atribuciones y no deducir otra licencia de comentarios antiguos del instalador.
 
 No hay dependencia de Qt ni de un runtime Python para ejecutar o compilar el visor. Python/Pillow solo regeneran el ICO; CairoSVG es alternativa para renderizar su fuente SVG. Los formatos admitidos por extensión no garantizan que el sistema tenga un decodificador WIC compatible.
 

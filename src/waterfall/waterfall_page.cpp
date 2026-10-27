@@ -183,7 +183,7 @@ RectF WaterfallPage::EnlargeActiveItemRect(const RectF& rect) const {
 
 void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
     if (m_app->m_currentFolderIdx < 0 || m_app->m_currentFolderIdx >= static_cast<int>(m_app->m_folders.size())) {
-        renderer.DrawText(L"NO FOLDER SELECCIONADA", rect, Color::White(0.4f), 18.0f, TextAlign::Center, TextVAlign::Center);
+        renderer.DrawText(_(L"No folder selected"), rect, Color::White(0.4f), 18.0f, TextAlign::Center, TextVAlign::Center);
         return;
     }
 
@@ -261,7 +261,7 @@ void WaterfallPage::DrawPreviewsGrid(Renderer& renderer, const RectF& rect) {
             // Placeholder
             renderer.FillRoundedRect(drawRect, m_cornerRadius, m_cornerRadius, Color::FromRGBA(25, 25, 25, 120));
             renderer.DrawRoundedRect(drawRect, m_cornerRadius, m_cornerRadius, Color::White(0.08f), 1.0f);
-            renderer.DrawText(L"CARGANDO...", drawRect, Color::White(0.3f), 11.0f, TextAlign::Center, TextVAlign::Center);
+            renderer.DrawText(_(L"Loading..."), drawRect, Color::White(0.3f), 11.0f, TextAlign::Center, TextVAlign::Center);
             LoadPreviewTexture(m_app->m_currentFolderIdx, static_cast<int>(i));
         }
     }
@@ -588,29 +588,29 @@ bool WaterfallPage::OnMouseDown(MouseButton btn, float x, float y, KeyModifiers 
         if (GetCursorPos(&pt)) {
             HMENU hMenu = CreatePopupMenu();
             if (m_hoveredPreviewIdx != -1) {
-                AppendMenuW(hMenu, MF_STRING, 10, L"Open in Modal Viewer (Enter)");
-                AppendMenuW(hMenu, MF_STRING, 11, L"Tagging Modal... (T)");
-                AppendMenuW(hMenu, MF_STRING, 12, L"Delete Image (Del)");
+                AppendMenuW(hMenu, MF_STRING, 10, _(L"Open in Modal Viewer (Enter)").c_str());
+                AppendMenuW(hMenu, MF_STRING, 11, _(L"Tags (T)").c_str());
+                AppendMenuW(hMenu, MF_STRING, 12, _(L"Delete Image (Del)").c_str());
                 AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
             }
 
-            AppendMenuW(hMenu, MF_STRING, 13, L"Viewer (NUM1)");
+            AppendMenuW(hMenu, MF_STRING, 13, _(L"Viewer (NUM1)").c_str());
             HMENU hSortSub = CreatePopupMenu();
             int currentMode = m_app->m_settings.sort_mode;
 
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 30, L"Name (Ascending)");
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 31, L"Name (Descending)");
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 32, L"Date (Ascending)");
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 33, L"Date (Descending)");
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 34, L"Size (Ascending)");
-            AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 35, L"Size (Descending)");
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 0 ? MF_CHECKED : 0), 30, _(L"Name (Ascending)").c_str());
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 1 ? MF_CHECKED : 0), 31, _(L"Name (Descending)").c_str());
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 2 ? MF_CHECKED : 0), 32, _(L"Date (Ascending)").c_str());
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 3 ? MF_CHECKED : 0), 33, _(L"Date (Descending)").c_str());
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 4 ? MF_CHECKED : 0), 34, _(L"Size (Ascending)").c_str());
+            AppendMenuW(hSortSub, MF_STRING | (currentMode == 5 ? MF_CHECKED : 0), 35, _(L"Size (Descending)").c_str());
 
-            AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), L"Sort By");
+            AppendMenuW(hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(hSortSub), _(L"Sort By").c_str());
             AppendMenuW(hMenu, MF_SEPARATOR, 0, nullptr);
 
-            AppendMenuW(hMenu, MF_STRING, 1, L"Settings... (O)");
-            AppendMenuW(hMenu, MF_STRING, 2, L"Toggle Fullscreen (F11)");
-            AppendMenuW(hMenu, MF_STRING, 3, L"Exit (Esc)");
+            AppendMenuW(hMenu, MF_STRING, 1, _(L"Settings... (O)").c_str());
+            AppendMenuW(hMenu, MF_STRING, 2, _(L"Toggle Fullscreen (F11)").c_str());
+            AppendMenuW(hMenu, MF_STRING, 3, _(L"Exit (Esc)").c_str());
 
             int selected = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON | TPM_NONOTIFY,
                                           pt.x, pt.y, 0, m_app->m_window.GetHwnd(), nullptr);

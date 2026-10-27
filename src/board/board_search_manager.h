@@ -17,6 +17,7 @@ public:
 
     void Initialize();
     void Update(double dt);
+    // UI: renders localized search controls; search text and tag suggestions remain user data.
     void Draw(Renderer& renderer);
 
     // Enrutamiento de inputs
@@ -40,6 +41,7 @@ public:
     void PerformTagQueryAndInsert();
 
 private:
+    // UI: centers the search dialog inside the available client area.
     RectF GetSearchModalBounds() const;
     void UpdateFilteredSuggestions();
     void SelectSuggestion(const std::wstring& suggestion);

@@ -150,7 +150,8 @@ bool Settings::Load() {
     draw_default_thumbnail = ParseBool(FindKeyValueRaw(json, "draw_default_thumbnail"), draw_default_thumbnail);
     show_thirds = ParseBool(FindKeyValueRaw(json, "show_thirds"), show_thirds);
     show_metadata = ParseBool(FindKeyValueRaw(json, "show_metadata"), show_metadata);
-    sort_mode = ParseInt(FindKeyValueRaw(json, "sort_mode"), sort_mode);
+    sort_mode = std::clamp(ParseInt(FindKeyValueRaw(json, "sort_mode"), sort_mode),0,5);
+    image_filter_mask = ParseInt(FindKeyValueRaw(json, "image_filter_mask"), image_filter_mask) & 511;
 
     enable_file_log = ParseBool(FindKeyValueRaw(json, "enable_file_log"), enable_file_log);
     detail::g_enableFileLog = enable_file_log;
@@ -215,6 +216,7 @@ bool Settings::Save() {
     file << "  \"show_thirds\": [\n   " << (show_thirds ? "true" : "false") << ",\n   \"Show thirds\"\n  ],\n";
     file << "  \"show_metadata\": [\n   " << (show_metadata ? "true" : "false") << ",\n   \"Show metadata\"\n  ],\n";
     file << "  \"sort_mode\": [\n   " << sort_mode << ",\n   \"Sort mode\"\n  ],\n";
+    file << "  \"image_filter_mask\": [" << image_filter_mask << ", \"Image format families\"],\n";
     file << "  \"---diagnostics\": \"Diagnostics\",\n";
     file << "  \"enable_file_log\": [\n   " << (enable_file_log ? "true" : "false") << ",\n   \"Write log messages to kv_log.txt\"\n  ],\n";
     file << "  \"debug_ipc\": [\n   " << (enable_debug_ipc ? "true" : "false") << ",\n   \"Write debug IPC logs to debug_ipc.txt\"\n  ]\n";

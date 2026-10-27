@@ -1,5 +1,42 @@
 # Hoja de ruta
 
+## Entrega 1.0 — 2026-10-26
+
+[031: versión, limpieza y publicación](changes/031-release-1.0/result.md).
+Release/CTest 10/10; portable e instalador 1.0.0 desde staging limpio.
+Último EXE: Windows 1.0.0.0, con el orden final Settings/Exit del menú.
+Se retiraron aproximadamente 9,5 GiB de builds, diagnósticos, copias auxiliares y
+distribuciones anteriores. Se conservan fuentes, tests, documentación, historial
+Git y datos locales únicos. Las rutas históricas a artefactos anteriores no
+representan archivos disponibles tras esta limpieza.
+
+Continuación: usar `v1.0.0` y los presets para regenerar build. Paquetes vigentes en dist.
+
+Validación del propietario, 2026-10-26: pruebas funcionales satisfactorias del lote
+026–030, salvo el orden del menú contextual. Ajuste aplicado en 026: Settings
+penúltimo y Exit último. La comprobación del ajuste se registra en su resultado.
+
+## Lote 026–030 — 2026-10-26
+
+[Acuerdo, tareas, dependencias y criterios](changes/product-batch-20261026.md).
+Implementación completada en el árbol local; sin commit ni publicación remota.
+
+| ID | Resultado / criterios | Evidencia |
+| --- | --- | --- |
+| 026 | Menú del visor y envío único al tablero sin navegar, AC-01/02 | [Resultado](changes/026-menu-tablero/result.md) |
+| 027 | Modal de seis órdenes y filtros combinables, trabajo CPU/cachés/cancelación, AC-03/04 | [Resultado](changes/027-orden-filtro/result.md) |
+| 028 | Docks por modo, MSAA y tres propuestas vectoriales, AC-05 | [Resultado](changes/028-docks/result.md) |
+| 029 | Movimiento de metadatos con fade posterior, AC-06 | [Resultado](changes/029-metadatos/result.md) |
+| 030 | Opciones en ruso/español y selector Español, AC-07 | [Resultado](changes/030-localizacion/result.md) |
+
+Release/CTest final 10/10; 509 comprobaciones nuevas del lote y 144 frames WARP.
+Arranque medido después de filtros/docks: 30 pares por escenario, mediana +0,08%
+con defaults y -0,82% con selección guardada; p95 dentro de +10%.
+Reposo nativo: cero Draw/Present en cinco intervalos estables. [Medidas y límites](changes/027-orden-filtro/performance.md).
+Portable limpio: dist/image_viewer_026_030_20261026.zip. Pendiente aceptación manual
+del propietario; no se presenta como validación universal de UX, códecs o fotos grandes.
+
+
 ## Sesión 2026-10-26: transparencia y GPU
 
 - [023: transparencia de leyenda del dock](changes/023-transparencia-dock/result.md):

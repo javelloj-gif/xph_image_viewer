@@ -67,6 +67,10 @@ void WriteGlyph(int index, GlyphWriter& outline, GlyphWriter& fill) {
         o.Segment(2,6,23,6); o.Segment(2,12,18,12); o.Segment(2,18,12,18);
         f.Begin(3.5f,24); f.Line(8.5f,24); f.Line(6,27); f.End(true);
         o.Begin(21,17); o.Line(31,17); o.Line(27,23); o.Line(27,29); o.Line(24,27.5f); o.Line(24,23); o.End(true);
+    } else if (index==6) {
+        o.Box(2,5,28,22,1.2f);
+        f.Circle(23,11,2);
+        o.Begin(4,25); o.Line(12,14); o.Line(19,22); o.Line(23,18); o.Line(29,25); o.End();
     } else {
         // Six connected teeth, matching the reference silhouette rather than detached radial spokes.
         for (int tooth=0; tooth<6; ++tooth) {
@@ -89,7 +93,7 @@ bool DockIcons::EnsureResources(ID2D1Factory* factory) {
     if (!factory) return false;
     const auto properties = D2D1::StrokeStyleProperties(D2D1_CAP_STYLE_ROUND,D2D1_CAP_STYLE_ROUND,D2D1_CAP_STYLE_ROUND,D2D1_LINE_JOIN_ROUND);
     if (FAILED(factory->CreateStrokeStyle(properties,nullptr,0,&m_stroke))) return false;
-    for (int index=0;index<6;++index) {
+    for (int index=0;index<7;++index) {
         ComPtr<ID2D1GeometrySink> outlineSink, fillSink;
         if (FAILED(factory->CreatePathGeometry(&m_outlines[index])) || FAILED(factory->CreatePathGeometry(&m_fills[index])) ||
             FAILED(m_outlines[index]->Open(&outlineSink)) || FAILED(m_fills[index]->Open(&fillSink))) { m_stroke.Reset(); return false; }
@@ -102,7 +106,7 @@ bool DockIcons::EnsureResources(ID2D1Factory* factory) {
 
 bool DockIcons::Draw(Renderer& renderer, int index, const RectF& bounds, const Color& color) {
     auto* context = renderer.GetD2DContext();
-    if (!context || index < 0 || index >= 6 || bounds.Width() <= 0 || bounds.Height() <= 0) return false;
+    if (!context || index < 0 || index >= 7 || bounds.Width() <= 0 || bounds.Height() <= 0) return false;
     ComPtr<ID2D1Factory> factory; context->GetFactory(&factory);
     if (!EnsureResources(factory.Get())) return false;
     auto* brush = renderer.GetBrush(color);

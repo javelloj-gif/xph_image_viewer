@@ -42,6 +42,7 @@ public:
     bool show_thirds = false;
     bool show_metadata = true;
     int sort_mode = 0;
+    int image_filter_mask = 511; // Nine supported extension families; all enabled by default.
 
     // ─── Diagnostics ──────────────────────────────────────────────────────────
     bool enable_file_log = false;  // Enable kv_log.txt file logging (default: off)

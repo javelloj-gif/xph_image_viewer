@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 
 project(image_viewer
-    VERSION 0.90.0
+    VERSION 1.0.0
     DESCRIPTION "Image Viewer — Native C++20"
     LANGUAGES CXX
 )
@@ -62,6 +62,7 @@ set(SOURCES
     src/waterfall/waterfall_page.cpp
     src/ui/dock_icons.cpp
     src/ui/thumbnail_strip.cpp
+    src/ui/sort_filter_modal.cpp
     src/ui/options_menu.cpp
     src/ui/tagging_modal.cpp
     src/shell/shell_integrator.cpp
@@ -107,6 +108,7 @@ set(HEADERS
     src/ui/dock_icons.h
     src/ui/dock_accessibility.h
     src/ui/thumbnail_strip.h
+    src/ui/sort_filter_modal.h
     src/ui/options_menu.h
     src/ui/tagging_modal.h
     src/shell/shell_integrator.h
@@ -294,6 +296,10 @@ add_test(NAME settings.preferences COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile
     -RunRoot "${CMAKE_BINARY_DIR}/test-runs")
 set_tests_properties(settings.preferences PROPERTIES TIMEOUT 30)
 add_test(NAME ui.async_previews COMMAND async_preview_tests)
+add_test(NAME ui.product_batch COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+    -File "${CMAKE_SOURCE_DIR}/scripts/run_product_batch_tests.ps1"
+    -Executable "$<TARGET_FILE:async_preview_tests>" -RunRoot "${CMAKE_BINARY_DIR}/test-runs")
+set_tests_properties(ui.product_batch PROPERTIES TIMEOUT 60)
 set_tests_properties(ui.async_previews PROPERTIES TIMEOUT 60)
 add_test(NAME lifecycle.cancellation
     COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
