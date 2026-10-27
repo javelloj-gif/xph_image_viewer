@@ -288,8 +288,7 @@ void App::OnIpcOpenPath(const std::wstring& rawPath) {
 }
 
 // ─── Main Loop ───────────────────────────────────────────────────────────────
-// Uses a game-loop style approach: process messages, then render continuously.
-// This ensures smooth animations and responsive zoom/pan.
+// Polls deliveries/timers independently of drawing; visible transitions remain paced by Present.
 
 int App::Run() {
     MSG msg = {};
@@ -314,21 +313,8 @@ int App::Run() {
             DispatchMessageW(&msg);
         }
 
-        // Render a frame
-        RenderFrame();
-
-        // If no animation is playing and no image is being loaded,
-        // yield CPU time to other processes
-        bool needsContinuousRender = m_animations.HasActiveAnimations()
-                                   || m_thumbnailStrip.HasActiveAnimations()
-                                   || (IsViewerActive() && m_viewerPage.HasActiveAnimations())
-                                   || (m_animatedImage && !m_frameSequencer.IsPaused())
-                                   || (m_currentPage == Page::Board && m_boardPage.m_editor.m_editingNoteIdx != -1)
-                                   || (m_currentPage == Page::Waterfall && (std::abs(m_waterfallPage.m_targetScrollOffset - m_waterfallPage.m_scrollOffset) > 0.1f || m_waterfallPage.m_waterfallBlockActiveItem || (m_waterfallPage.m_hoveredOriginalAnim && !m_waterfallPage.m_hoveredAnimSequencer.IsPaused())))
-                                   || (m_dockRemaining > 0 || (m_dockOpacity > 0 && m_dockOpacity < 1));
-
-        if (!needsContinuousRender) {
-            // Wait for next message or 16ms timeout (~60fps max idle rate)
+        if (!RenderFrame()) {
+            // Existing producers publish on polling; keep their latency without redrawing stable/invisible content.
             MsgWaitForMultipleObjects(0, nullptr, FALSE, 16, QS_ALLINPUT);
         }
     }
@@ -336,13 +322,15 @@ int App::Run() {
 
 // ─── Render Frame ────────────────────────────────────────────────────────────
 
-void App::RenderFrame() {
+bool App::RenderFrame() {
     // Guard against rendering before the window has a valid size
     auto targetSize = m_renderer.GetTargetSize();
-    if (targetSize.width == 0 || targetSize.height == 0) return;
-    if (!m_renderer.IsInitialized()) return;
+    if (targetSize.width == 0 || targetSize.height == 0) return false;
+    if (!m_renderer.IsInitialized()) return false;
 
+    const auto folderRevision = m_folderData.GetPreviewLayoutRevision();
     m_folderData.ProcessPending();
+    if (m_folderData.GetPreviewLayoutRevision() != folderRevision) m_window.RequestRedraw();
     double dt = m_frameTimer.Tick();
     // Clamp dt to avoid huge jumps after loading stalls
     dt = std::min(dt, 0.1);
@@ -350,7 +338,9 @@ void App::RenderFrame() {
     UpdateDock(dt);
 
     // Update animations
+    const bool animatedProperties = m_animations.HasActiveAnimations();
     m_animations.Update(dt);
+    if (animatedProperties) m_window.RequestRedraw();
 
     // Update page animations
     if (m_currentPage == Page::Viewer) {
@@ -366,16 +356,23 @@ void App::RenderFrame() {
 
     // Update animated image playback
     if (m_animatedImage && !m_frameSequencer.IsPaused()) {
-        if (m_frameSequencer.Update(dt)) {
+        const bool frameChanged = m_frameSequencer.Update(dt);
+        // The visible progress bar advances between source frames; completed/background playback needs no drawing.
+        if (IsViewerActive() && (frameChanged || (!m_frameSequencer.IsComplete() && m_frameSequencer.GetFrameCount() > 0))) {
             m_window.RequestRedraw();
         }
     }
 
     // Process any pending GPU texture uploads from background threads
-    m_imageLoader.ProcessPendingTextures(m_renderer);
+    if (m_imageLoader.ProcessPendingTextures(m_renderer)) m_window.RequestRedraw();
+
+    m_fpsAccumulator += dt;
+    if (!m_window.ConsumeRedrawRequest()) {
+        UpdateRenderDiagnostics();
+        return false;
+    }
 
     // FPS counter
-    m_fpsAccumulator += dt;
     m_fpsFrameCount++;
     if (m_fpsAccumulator >= 1.0) {
         m_currentFps = m_fpsFrameCount / m_fpsAccumulator;
@@ -401,6 +398,7 @@ void App::RenderFrame() {
     DrawDock();
 
     const auto presentResult=m_renderer.EndFrame();
+    if (presentResult != S_OK) m_window.RequestRedraw();
     if (presentResult==S_OK) {
         if (m_stripReadyDrawnThisFrame) PerformanceTrace::Event("strip.viewport.submitted",m_imageGeneration);
         if (m_waterfallReadyDrawnThisFrame) PerformanceTrace::Event("waterfall.viewport.submitted",m_imageGeneration);
@@ -419,6 +417,11 @@ void App::RenderFrame() {
             if (scenario==L"waterfall") { SetPage(Page::Waterfall); PerformanceTrace::Event("waterfall.demand",m_imageGeneration); }
         }
     }
+    UpdateRenderDiagnostics();
+    return true;
+}
+
+void App::UpdateRenderDiagnostics() {
     if (PerformanceTrace::Get().Enabled()) {
         DXGI_FRAME_STATISTICS stats{};
         if (m_originalPresentId && m_renderer.GetPresentationStatistics(stats) && stats.PresentCount==m_originalPresentId) {
@@ -1518,7 +1521,8 @@ void App::DrawDock() {
     if (named >= 0) {
         const wchar_t* names[] = {L"Waterfall (NUM3)",L"Board (NUM4)",L"Rotate 90° (R)",L"Tags (T)",L"Sort & Filter — coming later",L"Settings (O)"};
         const auto tooltip = GetDockTooltipRect();
-        m_renderer.FillRoundedRect(tooltip,4*scale,4*scale,Color::Black(0.95f*alpha));
+        m_renderer.FillRoundedRect(tooltip,4*scale,4*scale,Color::Black(0.6f*alpha));
+        m_renderer.DrawRoundedRect(tooltip,4*scale,4*scale,Color::White(0.15f*alpha),scale);
         m_renderer.DrawText(names[named],tooltip,Color::White(alpha),12*scale,TextAlign::Center,TextVAlign::Center);
     }
 }

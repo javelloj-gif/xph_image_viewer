@@ -49,10 +49,10 @@ public:
 
     // ── Frame Management ───────────────────────────────────────────────────
 
-    /// Begin a new frame. Acquires the render target and sets it as current.
+    // UI: begins target drawing and records a draw event when optional diagnostics are enabled.
     void BeginFrame();
 
-    // UI: ends drawing and submits Present1; returns its status, which alone does not prove visibility.
+    // UI: ends drawing and traces/submits Present1; status alone does not prove visibility or GPU duration.
     HRESULT EndFrame();
     // UI diagnostics: exact DXGI present IDs/statistics; unsupported/occluded observations remain unconfirmed.
     UINT GetLastPresentId() const;

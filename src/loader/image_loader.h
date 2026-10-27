@@ -127,8 +127,8 @@ public:
     void CancelObsoleteRequests();
 
     /// UI: prunes obsolete tasks; canceled leases skip predicate/upload/callback. Validity-only rejection still delivers CPU result.
-    /// Call this once per frame from the main/render thread.
-    void ProcessPendingTextures(Renderer& renderer);
+    /// Poll on the main thread even without drawing. Returns whether any completion batch was drained.
+    bool ProcessPendingTextures(Renderer& renderer);
 
     // ── GPU Upload ─────────────────────────────────────────────────────────
     // Must be called on the main/render thread only.

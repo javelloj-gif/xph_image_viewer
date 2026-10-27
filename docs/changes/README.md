@@ -18,6 +18,10 @@ ampliarlos solo cuando el cambio lo requiera.
 
 ## Trabajos registrados
 
+- [023: Transparencia de la leyenda del dock](023-transparencia-dock/result.md).
+- [024: Diagnóstico de picos GPU](024-diagnostico-gpu/review.md).
+- [025: Renderizado por cambios](025-renderizado-por-cambios/result.md).
+
 - [001: Refactorización base y auditoría](001-refactorizacion-base/spec.md).
 - [002: Retirada de Library](002-retirar-library/spec.md).
 - [003: Diagnóstico de rendimiento](003-diagnostico-rendimiento/spec.md).

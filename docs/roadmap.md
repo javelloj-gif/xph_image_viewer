@@ -1,5 +1,20 @@
 # Hoja de ruta
 
+## Sesión 2026-10-26: transparencia y GPU
+
+- [023: transparencia de leyenda del dock](changes/023-transparencia-dock/result.md):
+  implementada, Release/CTest 9/9 y snapshot WARP. Pruebas aceptadas por el propietario.
+- [024: diagnóstico GPU](changes/024-diagnostico-gpu/review.md): análisis de código
+  y log GPU-Z finalizado; máximo 60%, persistencia minimizada reportada. El código
+  revisado presentaba en reposo; intervención posterior medida en 025.
+  Amplía OPT-007 con escenarios concretos, sin implementar una reducción de FPS/calidad.
+- [025: renderizado por cambios](changes/025-renderizado-por-cambios/result.md):
+  implementado, Release/CTest 9/9 y smoke nativo 10 escenarios. Referencia ~37
+  Present/s en reposo y 144 con dock retenido; final cero frames en tramos estables
+  visible/minimizado/oculto. Conserva sondeo CPU. Portable limpio entregado y
+  pruebas marcadas satisfactorias por el propietario. [Cierre local 023–025](changes/025-renderizado-por-cambios/closure.md):
+  commit/merge autorizados; ajustes finales y publicación remota para próximas sesiones cortas.
+
 ## Lote de producto acordado — 2026-10-25
 
 El mapeo 015–022 sustituye la indicación histórica de elegir el próximo cambio.
