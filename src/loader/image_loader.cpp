@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: ImageLoader
-// Description: ImageLoader implements multi-threaded image decoding using Windows Imaging Component (WIC) for [IMAGE_VIEWER_APP_NAME].
+// Description: ImageLoader implements multi-threaded image decoding using Windows Imaging Component (WIC) for Fotassa.
 // Responsibility: Decode pixel files asynchronously, queuing raw bytes for main thread GPU texture uploading.
 // ============================================================================
 #include "common/pch.h"

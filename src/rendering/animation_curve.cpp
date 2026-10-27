@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: AnimationCurve
-// Description: AnimationCurve provides mathematical easing curves to drive smooth UI animations in [IMAGE_VIEWER_APP_NAME].
+// Description: AnimationCurve provides mathematical easing curves to drive smooth UI animations in Fotassa.
 // Responsibility: Implement easing curves (cubic, expo, quadratic, elastic back, etc.).
 // ============================================================================
 #include "common/pch.h"

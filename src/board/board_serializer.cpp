@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardSerializer
-// Description: BoardSerializer handles saving and reading canvas layouts using the custom binary format of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardSerializer handles saving and reading canvas layouts using the custom binary format of Fotassa.
 // Responsibility: Serialize/deserialize `BoardItem` structures to `.board` layout files.
 // ============================================================================
 #include "common/pch.h"

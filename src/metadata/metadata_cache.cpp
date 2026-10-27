@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: MetadataCache
-// Description: MetadataCache maintains in-memory and on-disk indexed tags to speed up directory searches in [IMAGE_VIEWER_APP_NAME].
+// Description: MetadataCache maintains in-memory and on-disk indexed tags to speed up directory searches in Fotassa.
 // Responsibility: Load, save, and maintain the binary database (`user_data/xmp_tag_cache.bin` using the `KTAG` v1 format) with path normalization.
 // ============================================================================
 #include "common/pch.h"

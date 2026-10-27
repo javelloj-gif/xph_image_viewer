@@ -2163,8 +2163,8 @@ msgstr "GIF"
 msgid "HEIF / HEIC"
 msgstr "HEIF / HEIC"
 
-msgid "Image Viewer — Native C++20 Version"
-msgstr "Image Viewer — Версия на C++20"
+msgid "Fotassa — Native C++20 Version"
+msgstr "Fotassa — Версия на C++20"
 
 msgid "Image sent to Board"
 msgstr "Изображение отправлено на доску"

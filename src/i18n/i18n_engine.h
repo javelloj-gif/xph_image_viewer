@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: I18nEngine
-// Description: I18nEngine loads and queries gettext-compatible localization files for language switching in [IMAGE_VIEWER_APP_NAME].
+// Description: I18nEngine loads and queries gettext-compatible localization files for language switching in Fotassa.
 // Responsibility: Translate wide strings using `.po` runtime tables.
 // ============================================================================
 #pragma once

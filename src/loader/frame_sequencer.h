@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: FrameSequencer
-// Description: FrameSequencer manages frame timing, speed adjustments, and repeat counts for animated images in [IMAGE_VIEWER_APP_NAME].
+// Description: FrameSequencer manages frame timing, speed adjustments, and repeat counts for animated images in Fotassa.
 // Responsibility: Track active frame indices and elapsed frame delays for GIF/APNG/WebP animations.
 // ============================================================================
 #pragma once

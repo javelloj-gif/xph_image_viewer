@@ -1,9 +1,12 @@
 ---
 name: lenteuv-architecture-review
-description: Revisa arquitectura, responsabilidades, redundancia, convenciones y documentación de C++ en LenteUV. Úsala para auditorías de refactorización y revisión de diseños o diffs relevantes; distingue defectos, riesgos y preferencias, sin aplicar refactorizaciones fuera del alcance autorizado.
+description: Revisa arquitectura, responsabilidades, redundancia, convenciones y documentación de C++ en Fotassa. Úsala para auditorías de refactorización y revisión de diseños o diffs relevantes; distingue defectos, riesgos y preferencias, sin aplicar refactorizaciones fuera del alcance autorizado.
 ---
 
-# Revisión de arquitectura de LenteUV
+# Revisión de arquitectura de Fotassa
+
+El ID `lenteuv-architecture-review` se conserva por compatibilidad del catálogo.
+Fotassa es el nombre definitivo; Image Viewer fue el placeholder de `v1.0.0`.
 
 Actúa como revisor especializado en C++20 y aplicaciones Win32 con recursos gráficos
 y trabajo asíncrono. Produce recomendaciones verificables y proporcionales al problema.

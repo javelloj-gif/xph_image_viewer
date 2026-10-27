@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: WicMetadataReaderWriter
-// Description: WicMetadataReaderWriter leverages the WIC API to parse and write XMP Dublin Core tags in standard-compliant files for [IMAGE_VIEWER_APP_NAME].
+// Description: WicMetadataReaderWriter leverages the WIC API to parse and write XMP Dublin Core tags in standard-compliant files for Fotassa.
 // Responsibility: Read and write XMP bag elements using Direct WIC query reader interfaces, falling back to full block transcoding if needed.
 // ============================================================================
 #pragma once

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardSelectionManager
-// Description: BoardSelectionManager controls picking, rectangular box selection, and translation/scaling of elements on the canvas of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardSelectionManager controls picking, rectangular box selection, and translation/scaling of elements on the canvas of Fotassa.
 // Responsibility: Manage rubber-band selection, drag translations of selected item sets, handle scaling vectors from TL/TR/BL/BR control boundaries.
 // ============================================================================
 #pragma once

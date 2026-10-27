@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: PngChunkInjector
-// Description: PngChunkInjector injects raw XMP iTXt metadata chunks directly into PNG streams for [IMAGE_VIEWER_APP_NAME].
+// Description: PngChunkInjector injects raw XMP iTXt metadata chunks directly into PNG streams for Fotassa.
 // Responsibility: Direct binary manipulation of PNG files to write/replace XMP XML payload packets and compute CRC32 checksums.
 // ============================================================================
 #include "common/pch.h"

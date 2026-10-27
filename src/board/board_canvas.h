@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardCanvas
-// Description: BoardCanvas controls the viewport transformations, coordinate projections, and background grid patterns for the board interface of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardCanvas controls the viewport transformations, coordinate projections, and background grid patterns for the board interface of Fotassa.
 // Responsibility: Keep zoom and pan states, convert screen/world coordinate spaces, and draw checkerboard or alignment grids.
 // ============================================================================
 #pragma once

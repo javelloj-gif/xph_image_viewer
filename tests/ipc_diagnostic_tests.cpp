@@ -390,7 +390,7 @@ public:
     // Launches only an isolated extracted product EXE, switches the remaining modes and checks graceful process exit.
     static int PackagedCases(const std::filesystem::path& executable, const std::filesystem::path& image) {
         const auto root = executable.parent_path();
-        Check((executable.filename() == L"image_viewer.exe" || executable.filename() == L"lenteuv.exe") && image.parent_path() == root / L"test" &&
+        Check((executable.filename() == L"fotassa.exe" || executable.filename() == L"image_viewer.exe" || executable.filename() == L"lenteuv.exe") && image.parent_path() == root / L"test" &&
             std::filesystem::is_directory(root / L"user_data"), "package smoke requires owned EXE/test/user_data staging");
         for (const auto* flag : {L"--multiple", L"--lite"}) {
             std::wstring command = L"\"" + executable.wstring() + L"\" " + flag + L" --windowed \"" + image.wstring() + L"\"";

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: ThumbnailStrip
-// Description: ThumbnailStrip manages the reorderable row of image previews displayed at the bottom of the screen in [IMAGE_VIEWER_APP_NAME].
+// Description: ThumbnailStrip manages the reorderable row of image previews displayed at the bottom of the screen in Fotassa.
 // Responsibility: Draw selection markers, re-ordering layout guides, and handle thumbnail click events.
 // ============================================================================
 #include "common/pch.h"

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: SingleInstanceIpc
-// Description: Named-pipe discovery and path forwarding for Image Viewer.
+// Description: Named-pipe discovery and path forwarding for Fotassa.
 // Responsibility: Own the server thread and expose delivery stages without acknowledging image application.
 // ============================================================================
 #include "common/pch.h"

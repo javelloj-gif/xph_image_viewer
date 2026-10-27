@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: None (Precompiled Headers Configuration)
-// Description: Pch configures precompiled compiler headers to accelerate builds of [IMAGE_VIEWER_APP_NAME].
+// Description: Pch configures precompiled compiler headers to accelerate builds of Fotassa.
 // Responsibility: Include Windows, DirectX, WIC, and STL libraries.
 // ============================================================================
 #pragma once

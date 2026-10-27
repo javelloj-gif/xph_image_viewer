@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: Types
-// Description: Types defines the core primitives, vectors, and logging macro functions shared across modules in [IMAGE_VIEWER_APP_NAME].
+// Description: Types defines the core primitives, vectors, and logging macro functions shared across modules in Fotassa.
 // Responsibility: Colors, geometric rectangles, high-resolution clocks, and file log writers.
 // ============================================================================
 #pragma once

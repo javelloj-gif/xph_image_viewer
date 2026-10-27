@@ -1,5 +1,12 @@
 # Hoja de ruta
 
+## Corrección de nombre 032 — 2026-10-26
+
+Nombre definitivo **Fotassa**. [Alcance y evidencia](changes/032-nombre-fotassa/result.md).
+Las fuentes corregidas siguen a `v1.0.0`; la etiqueta conserva la entrega original
+con placeholder. Para continuar, usar las ramas corregidas, no esa etiqueta.
+Los apartados siguientes documentan entregas y nombres históricos.
+
 ## Entrega 1.0 — 2026-10-26
 
 [031: versión, limpieza y publicación](changes/031-release-1.0/result.md).

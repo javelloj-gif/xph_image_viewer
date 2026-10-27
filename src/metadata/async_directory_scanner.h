@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: AsyncDirectoryScanner
-// Description: AsyncDirectoryScanner manages thread-pool directory scans to locate tagged images asynchronously in [IMAGE_VIEWER_APP_NAME].
+// Description: AsyncDirectoryScanner manages thread-pool directory scans to locate tagged images asynchronously in Fotassa.
 // Responsibility: Scan files recursively on a background manager thread and parse cache-missed files in parallel using CPU-bounded threads.
 // ============================================================================
 #pragma once

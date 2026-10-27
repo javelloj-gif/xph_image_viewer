@@ -1,4 +1,4 @@
 interface:
-  display_name: "Revisión de arquitectura de LenteUV"
+  display_name: "Revisión de arquitectura de Fotassa"
   short_description: "Audita arquitectura, contratos y deuda de C++"
   default_prompt: "Usa $lenteuv-architecture-review para revisar el componente o diff indicado y entregar hallazgos con evidencia, sin modificar fuentes."

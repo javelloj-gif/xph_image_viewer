@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardTextEditor
-// Description: BoardTextEditor processes text edits, cursor positions, and string formatting for active notes on the board of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardTextEditor processes text edits, cursor positions, and string formatting for active notes on the board of Fotassa.
 // Responsibility: Manage caret blinking times, text input sequences, character insertion/erasing, and dimension calculations for note items.
 // ============================================================================
 #pragma once

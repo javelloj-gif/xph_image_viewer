@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: JpegSegmentInjector
-// Description: JpegSegmentInjector inserts APP1 metadata segments containing XMP packets into JPEG files for [IMAGE_VIEWER_APP_NAME].
+// Description: JpegSegmentInjector inserts APP1 metadata segments containing XMP packets into JPEG files for Fotassa.
 // Responsibility: Split JPEG streams at segments and insert APP1/XMP markers containing custom XML tag payloads.
 // ============================================================================
 #pragma once

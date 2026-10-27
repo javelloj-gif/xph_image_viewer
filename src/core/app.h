@@ -1,11 +1,11 @@
 // ============================================================================
 // Class: App
-// Project: Image Viewer
+// Project: Fotassa
 // Author: xPhang
 // Based on: Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)
 //           Fork extended with Direct2D/Direct3D 11, XMP tagging, Board page,
 //           multi-language support and Windows shell integration.
-// Description: App is the central coordinator for the Image Viewer application,
+// Description: App is the central coordinator for the Fotassa application,
 //              managing the main event loop, routing system messages, and
 //              page navigation across Viewer, Board and Waterfall pages.
 // Responsibility: Orchestrate the Win32 window message loop and delegate

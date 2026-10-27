@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: Window
-// Description: Window encapsulates the Win32 window creation and message dispatching for [IMAGE_VIEWER_APP_NAME], providing support for transparent overlays.
+// Description: Window encapsulates the Win32 window creation and message dispatching for Fotassa, providing support for transparent overlays.
 // Responsibility: Handle low-level Win32 window creation, Custom Hit-Testing, drag-and-drop registration, and DPI scaling events.
 // ============================================================================
 #pragma once
@@ -14,7 +14,7 @@ namespace kv {
 
 // Nonpersisted creation parameters; Window owns the resulting HWND on its creating UI thread.
 struct WindowConfig {
-    std::wstring title       = L"Image Viewer";
+    std::wstring title       = L"Fotassa";
     int          width       = 1280;
     int          height      = 800;
     bool         frameless   = true;

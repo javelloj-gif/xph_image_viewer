@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: WaterfallPage
-// Description: WaterfallPage implements the virtual scrolling masonry grid layout for browsing folder contents in [IMAGE_VIEWER_APP_NAME].
+// Description: WaterfallPage implements the virtual scrolling masonry grid layout for browsing folder contents in Fotassa.
 // Responsibility: Virtual scroll column coordinate maps and modal image viewers.
 // ============================================================================
 #include "common/pch.h"

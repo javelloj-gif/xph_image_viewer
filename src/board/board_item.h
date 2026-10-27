@@ -1,6 +1,6 @@
 // ============================================================================
 // Struct: BoardItem
-// Description: BoardItem represents the structural state and geometry of a single element (image, label, link, or note) on the canvas of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardItem represents the structural state and geometry of a single element (image, label, link, or note) on the canvas of Fotassa.
 // Responsibility: Data container holding type, bounds, colors, link anchors, texture loaders, and visibility flags.
 // ============================================================================
 #pragma once

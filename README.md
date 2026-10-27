@@ -1,8 +1,11 @@
-# Image Viewer (placeholder)
+# Fotassa
 
 Versión **1.0** (`1.0.0`). Entrega Windows x64: portable
-`image_viewer_portable_1.0.0.zip` e instalador `image_viewer_setup_1.0.0.exe`.
-Fuentes: etiqueta `v1.0.0`. [Resultado de entrega](docs/changes/031-release-1.0/result.md).
+`fotassa_portable_1.0.0.zip` e instalador `fotassa_setup_1.0.0.exe`.
+Fuentes corregidas: ramas `codex/015-roadmap-design` y `codex/repository-foundation`.
+La etiqueta `v1.0.0` conserva la entrega original con nombre provisional;
+los paquetes originales no se renombran ni sustituyen retroactivamente.
+[Corrección de nombre](docs/changes/032-nombre-fotassa/result.md).
 
 Visor de imágenes para Windows inspirado en Picasa, derivado del
 [image_viewer de Sergei Krumas](https://github.com/sergkrumas/image_viewer),
@@ -22,7 +25,7 @@ CMake 3.21+ y PowerShell. Desde esta carpeta:
 cmake --preset windows-x64
 cmake --build --preset release
 ctest --preset release
-./build/windows-x64/bin/Release/image_viewer.exe ./tests/fixtures/linux.png
+./build/windows-x64/bin/Release/fotassa.exe ./tests/fixtures/linux.png
 ```
 
 También: `./scripts/build.ps1 -Configuration Release -Test`.

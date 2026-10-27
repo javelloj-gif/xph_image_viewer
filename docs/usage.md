@@ -7,7 +7,7 @@ handlers globales.
 
 ## Abrir imágenes y cambiar de modo
 
-Ejecuta `image_viewer.exe` con la ruta de un archivo o directorio, o arrástralo a la ventana.
+Ejecuta `fotassa.exe` con la ruta de un archivo o directorio, o arrástralo a la ventana.
 Las carpetas visitadas se guardan en la sesión. La configuración de instancia única
 envía aperturas externas al proceso activo; `--multiple` o `--lite` la omiten.
 

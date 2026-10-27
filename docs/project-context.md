@@ -1,6 +1,18 @@
 > Actualización 2026-10-23: [014](changes/014-cancelacion-ar005/result.md) completa AR-005 con cancelación cooperativa por consumidor/WIC/escáner y envío IPC con presupuesto total. El hilo conserva sus dependencias hasta completar la operación activa; no se fuerza ni detacha. La base está lista para nuevos cambios funcionales.
 
-# Contexto técnico de Image Viewer (placeholder)
+# Contexto técnico de Fotassa
+
+## Nombre definitivo — 2026-10-26
+
+**Fotassa** reemplaza el placeholder Image Viewer. Proyecto CMake `fotassa`,
+EXE `fotassa.exe`, paquetes `fotassa_portable_1.0.0.zip` y
+`fotassa_setup_1.0.0.exe`. La versión sigue en 1.0.0; `v1.0.0` conserva la entrega
+original anterior a esta corrección. No interpretar los apartados históricos
+como instrucciones para restaurar el placeholder. [Cambio 032](changes/032-nombre-fotassa/result.md).
+Se conservan recursos internos `image_viewer.ico`, `image_viewer.svg` y
+`image_viewer_setup.iss`, rutas de datos, pipe, clase HWND, manifiesto, registro,
+AppId/directorio de instalación y variables de diagnóstico según el contrato 022.
+La licencia y las atribuciones a Sergei Krumas y xPhang permanecen intactas.
 
 ## Actualización funcional 026–030 — 2026-10-26
 
@@ -25,7 +37,7 @@ siguientes conservan sus fechas; resultados de ejecución del lote en 026–030.
 
 ## Nombre provisional y lote de producto — 2026-10-25
 
-**Image Viewer / image_viewer son placeholders**, no nombre definitivo. Desde 022,
+**Histórico, sustituido por 032:** Image Viewer / image_viewer eran placeholders. Desde 022,
 CMake/EXE, títulos, About, mensajes, icono y empaquetado activos usan esos nombres.
 Se preservan Sergei Krumas, xPhang y licencia. Las excepciones compatibles (datos,
 pipe, identidad Windows, registro/instalación y diagnósticos) están inventariadas
@@ -66,7 +78,7 @@ El código es la fuente de verdad del comportamiento actual. Los planes antiguos
 
 ## Producto, procedencia y plataforma
 
-**Usuario:** visor inspirado en Picasa, basado en el proyecto de Sergei Krumas y migrado posteriormente a C++ mediante asistencia de agentes. El placeholder actual es Image Viewer; las cabeceras atribuyen sus extensiones a xPhang.
+**Usuario:** Fotassa es un visor inspirado en Picasa, basado en el proyecto de Sergei Krumas y migrado posteriormente a C++ mediante asistencia de agentes; las cabeceras atribuyen sus extensiones a xPhang.
 
 **Código:** aplicación de escritorio exclusiva de Windows. C++20, namespace `kv`, CMake y MSVC. Desde 031, CMake declara versión 1.0.0 y Windows VERSIONINFO 1.0.0.0; se unifica la numeración histórica distinta. Requiere Windows 10 1903+ (18362); comprobar disponibilidad efectiva de DirectX en cada sistema objetivo. `LICENSE` contiene GNU GPL versión 3; conservar atribuciones y no deducir otra licencia de comentarios antiguos del instalador.
 

@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(image_viewer
+project(fotassa
     VERSION 1.0.0
-    DESCRIPTION "Image Viewer — Native C++20"
+    DESCRIPTION "Fotassa — Native C++20"
     LANGUAGES CXX
 )
 
 if(NOT WIN32 OR NOT MSVC)
-    message(FATAL_ERROR "Image Viewer requires Windows and MSVC (Visual Studio 2022 or newer).")
+    message(FATAL_ERROR "Fotassa requires Windows and MSVC (Visual Studio 2022 or newer).")
 endif()
 include(CTest)
 

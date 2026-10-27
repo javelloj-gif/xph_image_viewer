@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: OptionsMenu
-// Description: OptionsMenu renders the in-app HUD interface overlay to toggle options and settings for [IMAGE_VIEWER_APP_NAME].
+// Description: OptionsMenu renders the in-app HUD interface overlay to toggle options and settings for Fotassa.
 // Responsibility: Render settings categories, checkboxes, sliders, and keybinding panels.
 // ============================================================================
 #pragma once

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <title>Image Viewer — neutral placeholder</title>
+  <title>Fotassa — photo frame</title>
   <rect x="4" y="4" width="56" height="56" rx="8" fill="#151c24"/>
   <rect x="12" y="14" width="40" height="36" fill="none" stroke="#00e8f0" stroke-width="3"/>
   <path d="M15 46 L27 29 L36 40 L42 33 L50 46 Z" fill="#e6edf3"/>

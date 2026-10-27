@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: OptionsMenu
-// Description: OptionsMenu renders the in-app HUD interface overlay to toggle options and settings for [IMAGE_VIEWER_APP_NAME].
+// Description: OptionsMenu renders the in-app HUD interface overlay to toggle options and settings for Fotassa.
 // Responsibility: Render settings categories, checkboxes, sliders, and keybinding panels.
 // ============================================================================
 #include "common/pch.h"
@@ -212,7 +212,7 @@ void OptionsMenu::BuildControls() {
         // Info Label
         ControlItem appLabel;
         appLabel.type = ControlItem::Label;
-        appLabel.label = _(L"Image Viewer — Native C++20 Version");
+        appLabel.label = _(L"Fotassa — Native C++20 Version");
         appLabel.rect = RectF::FromXYWH(contentLeft, currentY, bounds.Width() - 60.0f, 30.0f);
         m_controls.push_back(appLabel);
         currentY += rowHeight * 1.5f;

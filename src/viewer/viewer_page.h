@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: ViewerPage
-// Description: ViewerPage implements the single-image display screen with advanced zoom, pan, and visual grids for [IMAGE_VIEWER_APP_NAME].
+// Description: ViewerPage implements the single-image display screen with advanced zoom, pan, and visual grids for Fotassa.
 // Responsibility: Handle fit-to-screen transforms, thirds divisions, and Ctrl+drag spotlights.
 // ============================================================================
 #pragma once

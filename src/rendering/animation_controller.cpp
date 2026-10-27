@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: AnimationController
-// Description: AnimationController schedules, updates, and dispatches properties interpolated over time for active UI transitions in [IMAGE_VIEWER_APP_NAME].
+// Description: AnimationController schedules, updates, and dispatches properties interpolated over time for active UI transitions in Fotassa.
 // Responsibility: Manage active UI transitions and prevent timer collision flags.
 // ============================================================================
 #include "common/pch.h"

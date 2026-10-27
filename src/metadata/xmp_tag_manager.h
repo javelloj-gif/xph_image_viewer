@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: XmpTagManager
-// Description: XmpTagManager acts as the primary service interface to query, modify, and search image metadata tags in [IMAGE_VIEWER_APP_NAME].
+// Description: XmpTagManager acts as the primary service interface to query, modify, and search image metadata tags in Fotassa.
 // Responsibility: Main entry/facade coordinating metadata requests, mapping calls to the cache, reader/writer, and directory scanners.
 // ============================================================================
 #pragma once

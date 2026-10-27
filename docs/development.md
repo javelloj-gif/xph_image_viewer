@@ -52,7 +52,7 @@ optativo `scripts/run_gpu_idle_diagnostics.ps1` (PowerShell 7, NVIDIA/nvidia-smi
 contadores GPU Engine de Windows) copia EXE/DLLs/locales y crea datos/PNG sintéticos:
 
 ```powershell
-./scripts/run_gpu_idle_diagnostics.ps1 -Executable build/windows-x64/bin/Release/image_viewer.exe -RunRoot build/gpu-idle -Seconds 8 -Repetitions 3
+./scripts/run_gpu_idle_diagnostics.ps1 -Executable build/windows-x64/bin/Release/fotassa.exe -RunRoot build/gpu-idle -Seconds 8 -Repetitions 3
 ```
 
 Muestra su ventana propia y recorre visible, foco del dock, minimizado, oculto y
@@ -231,7 +231,7 @@ como nombre simple. `-CMakePath`, `-ISCCPath`, `-DumpBinPath` y `-RuntimeDirecto
 permiten rutas explícitas. `-PythonPath` pertenece al script de release.
 
 La versión predeterminada se lee de `project(... VERSION ...)` en CMake. El recurso
-Windows todavía conserva su versión histórica: no confundir la etiqueta del paquete
+Windows declara 1.0.0.0 desde 031: no confundir la etiqueta del paquete
 con una migración de versión de datos.
 
 Las herramientas se buscan por PATH, `vswhere` y ubicaciones de instalación estándar.
@@ -246,8 +246,8 @@ Los defaults de `packaging/default-settings.json` conservan las decisiones del Z
 anterior, sin BOM; `session.txt` nace vacío. No se incluyen muestras ni caches/logs.
 ZIP e instalador usan el mismo staging. Los resultados van a:
 
-- `dist/image_viewer_portable_<versión>.zip`
-- `dist/image_viewer_setup_<versión>.exe`
+- `dist/fotassa_portable_<versión>.zip`
+- `dist/fotassa_setup_<versión>.exe`
 
 Inno Setup 6 mantiene AppId/tareas/asociaciones del instalador anterior. Compilar el
 instalador no lo instala. Probar instalación/desinstalación en una ubicación aislada
@@ -328,7 +328,7 @@ imagen sintética BMP de 64 MiB; 314 checks. No modificar fixtures ni usar datos
 
 Pruebas y portable final en [014/result](changes/014-cancelacion-ar005/result.md).
 Para comprobar el producto empaquetado en una copia aislada, el harness admite
---ipc-package <image_viewer.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
+--ipc-package <fotassa.exe> <test/seed.png>; exige user_data y fixture junto al EXE.
 Lanza solo sus hijos con --multiple/--lite, recorre los tres modos restantes y envía NUM2 reservado por mensajes a
 su HWND/PID y solicita cierre normal. El watchdog solo limpia sus propios hijos.
 Conservar otra extracción limpia para el usuario. No certifica UX visual universal.
@@ -365,9 +365,9 @@ ni borrar datos/artefactos por inercia.
 
 ## Cierre 019–022 (2026-10-26)
 
-El target/EXE actual es `image_viewer` / `image_viewer.exe`. Packaging usa
+Desde 032 el target/EXE actual es `fotassa` / `fotassa.exe`. Packaging usa
 `packaging/image_viewer_setup.iss`, `src/resources/image_viewer.ico` y prefijos
-`image_viewer_`. El generador neutral funciona con Python estándar; no necesita
+`fotassa_` desde 032. El generador neutral funciona con Python estándar; no necesita
 Pillow ni CairoSVG. Recursos antiguos archivados en 022/history, fuera del build.
 
 Nueve suites conservadas. Regresiones adicionales cubren composición modal,

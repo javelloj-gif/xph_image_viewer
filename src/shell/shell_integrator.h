@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: ShellIntegrator
-// Description: ShellIntegrator coordinates Windows shell operations, COM bindings, system tray menus, and Recycle Bin deletes for [IMAGE_VIEWER_APP_NAME].
+// Description: ShellIntegrator coordinates Windows shell operations, COM bindings, system tray menus, and Recycle Bin deletes for Fotassa.
 // Responsibility: Query explorer processes for paths, handle recycle-bin moves, and system tray menu events.
 // ============================================================================
 #pragma once

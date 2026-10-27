@@ -30,9 +30,10 @@ function Get-CMake {
     return (Resolve-Tool 'cmake.exe' '' @((Join-Path $vsRoot 'Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe')))
 }
 
+# Reads Fotassa's package version from the root CMake project declaration.
 function Get-ProjectVersion {
     $contents = Get-Content -LiteralPath (Join-Path $ProjectRoot 'CMakeLists.txt') -Raw
-    $match = [regex]::Match($contents, '(?s)project\(\s*image_viewer\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)')
+    $match = [regex]::Match($contents, '(?s)project\(\s*fotassa\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)')
     if (!$match.Success) { throw 'Cannot read project version from CMakeLists.txt.' }
     return $match.Groups[1].Value
 }

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: App
-// Description: App is the central coordinator for the [IMAGE_VIEWER_APP_NAME] application, managing the main event loop, routing system messages, and page navigation.
+// Description: App is the central coordinator for the Fotassa application, managing the main event loop, routing system messages, and page navigation.
 // Responsibility: Orchestrate the Win32 window message loop and delegate actions to page components.
 // ============================================================================
 #include "common/pch.h"
@@ -96,7 +96,7 @@ InitResult App::Initialize(const AppConfig& config) {
 
     // ── Create Window ─────────────────────────────────────────────────────
     WindowConfig wndConfig;
-    wndConfig.title       = L"Image Viewer";
+    wndConfig.title       = L"Fotassa";
     wndConfig.width       = 1280;
     wndConfig.height      = 800;
     wndConfig.frameless   = config.frameless;
@@ -176,7 +176,7 @@ InitResult App::Initialize(const AppConfig& config) {
     ShellIntegrator::RegisterTrayIcon(
         m_window.GetHwnd(),
         LoadIconW(nullptr, IDI_APPLICATION),
-        L"Image Viewer"
+        L"Fotassa"
     );
 
     // ── Wire Events ───────────────────────────────────────────────────────
@@ -700,7 +700,7 @@ void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loa
             m_frameSequencer.SetFrames(delays, anim->loopCount);
 
             ResetView();
-            m_window.SetTitle(std::format(L"Image Viewer — {} ({} frames)",
+            m_window.SetTitle(std::format(L"Fotassa — {} ({} frames)",
                 fs::path(path).filename().wstring(), anim->FrameCount()));
             
             m_folderData.AddToHistory(path);
@@ -718,7 +718,7 @@ void App::ApplyLoadedImage(const std::wstring& path, const ViewerLoadResult& loa
         m_animatedImage = nullptr;
         m_frameSequencer.Reset();
         ResetView();
-        m_window.SetTitle(std::format(L"Image Viewer — {} ({}×{})",
+        m_window.SetTitle(std::format(L"Fotassa — {} ({}×{})",
             fs::path(path).filename().wstring(), image->width, image->height));
 
         m_folderData.AddToHistory(path);
@@ -829,7 +829,7 @@ void App::DeleteImage(const std::wstring& path) {
         } else {
             m_currentIndex = -1;
             ResetView();
-            m_window.SetTitle(L"Image Viewer");
+            m_window.SetTitle(L"Fotassa");
             m_waterfallPage.m_viewerModal = false;
         }
     } else {

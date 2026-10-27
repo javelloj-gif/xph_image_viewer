@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: Settings
-// Description: Settings handles serialization, deserialization, and runtime updates of user preferences for [IMAGE_VIEWER_APP_NAME].
+// Description: Settings handles serialization, deserialization, and runtime updates of user preferences for Fotassa.
 // Responsibility: Load and save configurations from `settings.json`.
 // ============================================================================
 #pragma once

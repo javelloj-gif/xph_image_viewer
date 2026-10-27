@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: Renderer
-// Description: Renderer wraps Direct2D and Direct3D 11 initialization and provides hardware-accelerated drawing APIs for [IMAGE_VIEWER_APP_NAME].
+// Description: Renderer wraps Direct2D and Direct3D 11 initialization and provides hardware-accelerated drawing APIs for Fotassa.
 // Responsibility: DXGI swap-chains, DirectComposition target blending, and Direct2D primitive draw calls.
 // ============================================================================
 #include "common/pch.h"

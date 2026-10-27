@@ -1,6 +1,6 @@
 // ============================================================================
 // app.rc — Windows Resource Script
-// Image Viewer — Native C++20
+// Fotassa — Native C++20
 // ============================================================================
 
 #include <winresrc.h>
@@ -31,12 +31,12 @@ BEGIN
         BLOCK "040904B0"  // English (US), Unicode
         BEGIN
             VALUE "CompanyName",      "xPhang"
-            VALUE "FileDescription",  "Image Viewer"
+            VALUE "FileDescription",  "Fotassa"
             VALUE "FileVersion",      "1.0.0.0"
-            VALUE "InternalName",     "image_viewer"
-            VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. Image Viewer is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
-            VALUE "OriginalFilename", "image_viewer.exe"
-            VALUE "ProductName",      "Image Viewer"
+            VALUE "InternalName",     "fotassa"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 xPhang. Fotassa is a fork of Sergkruma's image viewer by Sergei Krumas (github.com/sergkrumas)."
+            VALUE "OriginalFilename", "fotassa.exe"
+            VALUE "ProductName",      "Fotassa"
             VALUE "ProductVersion",   "1.0.0.0"
         END
     END

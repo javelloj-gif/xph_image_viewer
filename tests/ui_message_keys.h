@@ -28,7 +28,7 @@ inline const wchar_t* const kUiMessageKeys[]={
     L"Drag & Drop Page",
     L"Default Debug Page",
     L"UI language",
-    L"Image Viewer — Native C++20 Version",
+    L"Fotassa — Native C++20 Version",
     L"Start",
     L"Viewer",
     L"Board",

@@ -1,4 +1,4 @@
-"""Generate the original neutral photo-frame placeholder as a multi-band Windows ICO.
+"""Generate Fotassa's photo-frame icon as a multi-band Windows ICO.
 
 Uses only Python's standard library. Geometry mirrors assets/branding/image_viewer.svg;
 no historical bitmap or third-party artwork is imported. Run from any working directory.

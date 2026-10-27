@@ -1,4 +1,9 @@
-# Image Viewer (placeholder): entrada para agentes
+# Fotassa: entrada para agentes
+
+Nombre definitivo: **Fotassa**; proyecto/EXE `fotassa` / `fotassa.exe`.
+Image Viewer fue el placeholder de la entrega original `v1.0.0`.
+Leer [032](docs/changes/032-nombre-fotassa/result.md) para la corrección posterior;
+conservar nombres históricos y contratos internos de compatibilidad.
 
 Visor de imágenes nativo de Windows en C++20. Tres modos: Viewer, Waterfall
 y Board. Conserva la atribución a Sergei Krumas y xPhang y la licencia

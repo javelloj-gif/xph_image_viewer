@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardPage
-// Description: BoardPage coordinates the virtual infinite workspace UI page in [IMAGE_VIEWER_APP_NAME].
+// Description: BoardPage coordinates the virtual infinite workspace UI page in Fotassa.
 // Responsibility: Act as main page handler receiving mouse and keyboard inputs, forwarding events to selection, text editor, canvas, and file loaders.
 // ============================================================================
 #pragma once

@@ -1,6 +1,6 @@
 // ============================================================================
 // Class: BoardItemRenderer
-// Description: BoardItemRenderer draws nodes, image frames, and connection links on the virtual canvas of [IMAGE_VIEWER_APP_NAME].
+// Description: BoardItemRenderer draws nodes, image frames, and connection links on the virtual canvas of Fotassa.
 // Responsibility: Direct2D drawing logic for nodes, connection links, editing status, and textured images.
 // ============================================================================
 #pragma once
