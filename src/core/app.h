@@ -91,7 +91,7 @@ public:
     // Reports the last forwarding open/write error for the startup failure dialog; no application ACK.
     DWORD GetIpcSendError() const { return m_ipc.GetDiagnostics().sendError; }
 
-    // Runs UI/render; on quit stops IPC and joins scanners before loader and dependency teardown.
+    // UI: polls deliveries/timers, waits when no frame is drawn; on quit joins producers before dependency teardown.
     int Run();
 
 private:
@@ -119,8 +119,10 @@ private:
     void OnMouseLeave();
 
     // ── Rendering ─────────────────────────────────────────────────────────
-    // UI: updates active consumers, delivers pending textures, draws overlays and presents.
-    void RenderFrame();
+    // UI: always updates/delivers; draws only pending visible content. Returns whether presentation was attempted.
+    bool RenderFrame();
+    // UI: polls optional presentation statistics/diagnostic exit even on ticks without drawing.
+    void UpdateRenderDiagnostics();
     // UI: draws Viewer, Board or Waterfall using renderer-owned resources.
     void DrawViewerContent();
     // UI: identifies both hosts of the single shared viewer, without changing page identity.
@@ -243,7 +245,7 @@ private:
     bool IsDockHit(float x, float y) const;
     // UI: retains hover/focus/owned overlays, then fades with the existing effects preference.
     void UpdateDock(double dt);
-    // UI: draws reference-faithful Outline vectors, separators, cyan hover/active states and command tooltips.
+    // UI thread: draws Outline icons and command tooltips with the metadata bar's translucent background/border.
     void DrawDock();
     // UI: invokes existing page/action handlers; index 4 is deliberately inert.
     void InvokeDock(int index);

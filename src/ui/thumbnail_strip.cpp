@@ -123,11 +123,13 @@ void ThumbnailStrip::Update(double dt) {
 
     float lerpFactor = 1.0f - std::exp(-15.0f * static_cast<float>(dt));
     const float previousScroll=m_scrollX;
+    const float previousOpacity=m_opacity;
     m_scrollX = std::lerp(m_scrollX, m_targetScrollX, lerpFactor);
     m_opacity = std::lerp(m_opacity, m_targetOpacity, lerpFactor);
 
     if (std::abs(m_targetScrollX - m_scrollX) < 0.1f) m_scrollX = m_targetScrollX;
     if (std::abs(m_targetOpacity - m_opacity) < 0.01f) m_opacity = m_targetOpacity;
+    if (m_scrollX != previousScroll || m_opacity != previousOpacity) m_app->m_window.RequestRedraw();
     m_scrollStableFrames=m_scrollX==previousScroll ? std::min(2u,m_scrollStableFrames+1) : 0;
 
     // Check mouse autohide trigger

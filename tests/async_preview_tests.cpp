@@ -1741,7 +1741,75 @@ public:
         Check(window.HitTest(101,150) == HTLEFT && window.HitTest(400,101) == HTTOP, "native resizing borders remain available");
     }
 
-    // Runs original regressions and the optional pre-upload validity contract with checks active in Release.
+    // Exercises real hidden update/input delivery without a drawable target or GPU submission.
+    void HiddenRenderUpdates() {
+        AsyncPreviewTests isolated;
+        auto& live = isolated.app;
+        auto& window = live.m_window;
+        live.m_currentPage = Page::Start;
+        live.m_renderer.m_width = 800;
+        live.m_renderer.m_height = 600;
+        live.m_renderer.m_initialized = true; // No context: any accidental drawing in this hidden test fails.
+        live.m_frameTimer.Reset();
+        window.m_redrawPending = false;
+        int deliveries = 0;
+        live.m_imageLoader.m_pendingTextures.push_back({nullptr, [&](auto) { ++deliveries; }});
+        Check(!live.RenderFrame() && deliveries == 1, "hidden tick delivers pending callback without drawing");
+        Check(window.m_redrawPending.load(), "completion retains redraw while hidden");
+        Check(!window.ConsumeRedrawRequest() && window.m_redrawPending.load(), "hidden consumption preserves pending frame");
+        window.m_redrawPending = false;
+        Check(!live.RenderFrame() && !window.m_redrawPending.load(), "settled hidden tick does not invent a frame");
+        live.m_animations.Start("test-property", 0, 1, 0.001);
+        Sleep(5);
+        Check(!live.RenderFrame() && window.m_redrawPending.load() && !live.m_animations.HasActiveAnimations(),
+            "last property animation tick retains its final frame while hidden");
+        window.m_redrawPending = false;
+        Check(!live.RenderFrame() && !window.m_redrawPending.load(), "completed property transition stops invalidating");
+        window.RequestRedraw();
+        Check(!live.RenderFrame() && window.m_redrawPending.load(), "explicit redraw remains pending across hidden updates");
+
+        int inputs = 0;
+        window.events.onKeyDown = [&](uint32_t, KeyModifiers) { ++inputs; };
+        window.m_redrawPending = false;
+        window.HandleMessage(WM_KEYDOWN, 'O', 0);
+        Check(inputs == 1 && window.m_redrawPending.load(), "input dirties state even when handler does not invalidate");
+        window.m_redrawPending = false;
+        window.HandleMessage(WM_PAINT, 0, 0);
+        Check(window.m_redrawPending.load(), "native expose retains redraw after validation");
+
+        live.m_viewerPage.Initialize(&live);
+        live.m_currentPage = Page::Viewer;
+        live.m_viewerPage.m_mouseInactivityTimer = 10;
+        live.m_viewerPage.m_metadataOpacity = 0;
+        live.m_animatedImage = std::make_shared<AnimatedImageData>();
+        live.m_frameSequencer.SetFrames({1.0}, 1);
+        window.m_redrawPending = false;
+        Sleep(5);
+        Check(!live.RenderFrame() && live.m_frameSequencer.IsComplete() && window.m_redrawPending.load(),
+            "finite animation completes and retains its final hidden frame");
+        window.m_redrawPending = false;
+        Check(!live.RenderFrame() && !window.m_redrawPending.load(), "completed unpaused animation does not request repeated frames");
+        live.m_frameSequencer.SetFrames({1000.0}, 0);
+        window.m_redrawPending = false;
+        Check(!live.RenderFrame() && window.m_redrawPending.load(), "visible progress bar invalidates between source frames");
+        live.m_currentPage = Page::Start;
+        window.m_redrawPending = false;
+        Check(!live.RenderFrame() && !window.m_redrawPending.load(), "background playback does not dirty another page");
+        live.m_animatedImage.reset();
+
+        live.m_viewerPage.Initialize(&live);
+        live.m_thumbnailStrip.SetFileList({L"synthetic-missing.png"});
+        auto& strip = live.m_thumbnailStrip;
+        strip.m_thumbnails[0].loadFailed = true;
+        strip.m_opacity = 0;
+        strip.m_targetOpacity = 1;
+        window.m_redrawPending = false;
+        strip.Update(0.05);
+        Check(strip.m_opacity > 0 && window.m_redrawPending.load(), "strip fade invalidates without pointer input");
+        live.m_renderer.m_initialized = false;
+    }
+
+    // Runs original regressions plus hidden update/invalidation contracts, with checks active in Release.
     int Run() {
         ProducerShutdownOrder();
         StripReplacement();
@@ -1760,6 +1828,7 @@ public:
         ExteriorGestureRegressions();
         DiagnosticAliasRegressions();
         ClientHitTestRegressions();
+        HiddenRenderUpdates();
         std::cout << "Passed " << checks << " production async preview checks\n";
         return 0;
     }

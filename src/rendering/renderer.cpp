@@ -251,6 +251,7 @@ void Renderer::Resize(uint32_t width, uint32_t height) {
 }
 
 void Renderer::BeginFrame() {
+    PerformanceTrace::Event("render.draw");
     m_d2dContext->BeginDraw();
     m_transformStack.clear();
     m_transformStack.push_back(D2D1::Matrix3x2F::Identity());
@@ -281,7 +282,9 @@ HRESULT Renderer::EndFrame() {
     if (FAILED(hr)) return hr;
 
     DXGI_PRESENT_PARAMETERS params = {};
+    PerformanceTrace::Event("render.present.begin");
     hr = m_swapChain->Present1(1, 0, &params);
+    PerformanceTrace::Event("render.present.end", 0, static_cast<uint32_t>(hr));
 
     if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
         HandleDeviceLost(m_hwnd, m_translucent);

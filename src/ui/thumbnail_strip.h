@@ -40,7 +40,7 @@ public:
     /// Initialize with the parent App context
     void Initialize(App* app);
 
-    /// UI thread: updates animations/autohide and requests thumbnails within the visible interval.
+    // UI: advances animations/autohide, invalidates visible transitions and requests thumbnails in range.
     void Update(double dt);
 
     /// UI thread: draws current-image emphasis, selection checks and reflected previews in the shared clip.

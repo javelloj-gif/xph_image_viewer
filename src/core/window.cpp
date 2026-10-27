@@ -127,7 +127,15 @@ void Window::SetTitle(const std::wstring& title) {
 }
 
 void Window::RequestRedraw() {
-    InvalidateRect(m_hwnd, nullptr, FALSE);
+    m_redrawPending.store(true, std::memory_order_relaxed);
+    if (m_hwnd) InvalidateRect(m_hwnd, nullptr, FALSE);
+}
+
+bool Window::ConsumeRedrawRequest() {
+    if (!IsWindowVisible(m_hwnd) || CheckMinimized()) return false;
+    if (!m_redrawPending.exchange(false, std::memory_order_relaxed)) return false;
+    ValidateRect(m_hwnd, nullptr);
+    return true;
 }
 
 void Window::SetFullscreen(bool fullscreen) {
@@ -251,6 +259,14 @@ LRESULT Window::HitTest(int x, int y) const {
 }
 
 LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
+    // Input can change hover/editor state even when its handler does not invalidate explicitly.
+    if ((msg >= WM_MOUSEFIRST && msg <= WM_MOUSELAST) ||
+        (msg >= WM_KEYFIRST && msg <= WM_KEYLAST) || msg == WM_MOUSELEAVE ||
+        msg == WM_COMMAND || msg == WM_DROPFILES || msg == WM_SHOWWINDOW ||
+        msg == WM_SIZE || msg == WM_DPICHANGED || msg == WM_ACTIVATE ||
+        msg == WM_SETFOCUS || msg == WM_KILLFOCUS) {
+        m_redrawPending.store(true, std::memory_order_relaxed);
+    }
     switch (msg) {
 
     case WM_GETOBJECT:
@@ -258,6 +274,7 @@ LRESULT Window::HandleMessage(UINT msg, WPARAM wp, LPARAM lp) {
         break;
 
     case WM_PAINT: {
+        m_redrawPending.store(true, std::memory_order_relaxed);
         ValidateRect(m_hwnd, nullptr);
         if (events.onPaint) {
             events.onPaint();

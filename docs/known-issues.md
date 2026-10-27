@@ -95,5 +95,30 @@ activo, sin GPU/VRAM ni comparación. Primera ejecución real y Explorer siguen 
 - `deleted.po` contenía solo el mensaje heredado `Over user points`, sin consumidor
   en las fuentes nativas; no se perdió una traducción vigente al retirarlo.
 
+## GPU-024 — Actividad persistente, incluso minimizado (2026-10-26)
+
+El propietario reporta picos >50% con RTX 4070 Ti SUPER 16 GB y LG27GL850 144 Hz,
+incluida ejecución minimizada. Log GPU-Z analizado: 368 muestras, máximo 60%,
+media por muestra 18,73%, actividad durante minutos. Sin PID, clocks/potencia ni
+eventos del visor. [Revisión 024](changes/024-diagnostico-gpu/review.md) identifica
+presentación incondicional, retenciones UI y falta de suspensión explícita oculto;
+no hay atribución causal medida ni corrección GPU implementada. Seguimiento de
+OPT-007; validar por separado carga inicial y reposo con visibilidad etiquetada.
+
+Segundo log con eventos reportados: apertura 17:52:30, minimizar 17:53:30,
+cierre 17:54:15. Medias globales: visible 29,17%, minimizado 9,27%, cerrado
+0,43% (solo siete muestras tras cierre). Sin cinco segundos de transición,
+minimizado mantiene media 9,20%, máximo 18%. Refuerza relación temporal y
+actividad residual, sin atribución exacta al proceso ni picos >50% minimizado
+en esta captura. Detalle y hashes en la revisión 024.
+
+Intervención [025](changes/025-renderizado-por-cambios/result.md): elimina dibujo
+sin invalidación y oculto/minimizado; referencia con ~37 Present/s en reposo y 144
+con dock retenido, final cero Draw/Present y muestras de motor del PID en cero en
+los cinco tramos estables sintéticos. Release/CTest 9/9 y smoke nativo 10 casos.
+No implica 0% global ni cobertura de cargas nuevas/grandes. El propietario marca
+las pruebas satisfactorias y acepta la entrega el 2026-10-26, sin nuevo log aportado
+ni ampliación de cobertura. Se conserva sondeo CPU de hasta 16 ms.
+
 Registrar nuevos problemas con pasos, versión/commit, entorno y evidencia. Separar
 los defectos previos de regresiones de la reforma en [validación](validation.md).

@@ -594,7 +594,7 @@ void ImageLoader::CancelObsoleteRequests() {
     // Canceled captures and CPU buffers are released on UI, outside both queue locks.
 }
 
-void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
+bool ImageLoader::ProcessPendingTextures(Renderer& renderer) {
     CancelObsoleteRequests();
     std::vector<PendingViewer> viewers;
     { std::lock_guard lock(m_pendingMutex); viewers.swap(m_pendingViewers); }
@@ -633,6 +633,7 @@ void ImageLoader::ProcessPendingTextures(Renderer& renderer) {
             pa.callback(pa.anim);
         }
     }
+    return !viewers.empty() || !pending.empty() || !pendingAnimated.empty();
 }
 
 void ImageLoader::UploadToGpu(ImageData& image, Renderer& renderer) {

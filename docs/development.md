@@ -47,6 +47,27 @@ de `assets/branding/image_viewer.svg`; produce bandas 16/32/48/256. Revisa el di
 
 ## Tests aislados
 
+Desde [025](changes/025-renderizado-por-cambios/result.md), el diagnóstico nativo
+optativo `scripts/run_gpu_idle_diagnostics.ps1` (PowerShell 7, NVIDIA/nvidia-smi y
+contadores GPU Engine de Windows) copia EXE/DLLs/locales y crea datos/PNG sintéticos:
+
+```powershell
+./scripts/run_gpu_idle_diagnostics.ps1 -Executable build/windows-x64/bin/Release/image_viewer.exe -RunRoot build/gpu-idle -Seconds 8 -Repetitions 3
+```
+
+Muestra su ventana propia y recorre visible, foco del dock, minimizado, oculto y
+restaurado; no usa la instancia ni imágenes del usuario. Necesita acceso del entorno
+a los contadores y al escritorio. No ejecutar builds/tests durante la medición.
+`Seconds` es número de muestras con espera mínima de 1 s; consultar duración QPC
+real de stages.csv, porque consultas PDH/nvidia-smi agregan tiempo. Exporta CSV,
+manifest y trazas ignorados. Descarta muestras PDH inválidas por instancia, registra
+errores y deja ausencias como nulas. ProcessMaxEnginePercent es máximo de instancias
+válidas de ese PID, no suma/promedio global ni medida de energía. DeviceSensors
+es dispositivo completo: carga, clock gráfico, potencia y memoria usada.
+Los eventos optativos render.draw/render.present.begin/end cuentan llamadas del
+proceso; sus tiempos no miden duración GPU. Capturas fallidas no son evidencia de
+producto; exigir cierre normal, trace sin overflow e identidad/visibilidad válidas.
+
 La configuración actual contiene nueve suites. `settings.preferences` usa
 `run_settings_preferences_tests.ps1` y el modo `--settings-preferences-tests` del
 harness productivo, con EXE/defaults copiados, marcador y user_data propios.

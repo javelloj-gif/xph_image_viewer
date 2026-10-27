@@ -6,6 +6,7 @@
 #pragma once
 
 #include "common/types.h"
+#include <atomic>
 
 namespace kv {
 
@@ -106,7 +107,10 @@ public:
     void Minimize();
     void Maximize();
     void Restore();
+    // UI/worker-safe while HWND lives: retains a redraw request and invalidates the native client.
     void RequestRedraw();
+    // UI: consumes pending work only for a visible, non-minimized window; validates its native paint region.
+    bool ConsumeRedrawRequest();
 
     // ── Events ─────────────────────────────────────────────────────────────
     WindowEvents events;
@@ -132,6 +136,7 @@ private:
     bool              m_frameless  = true;
     bool              m_translucent = true;
     bool              m_fullscreen = false;
+    std::atomic<bool> m_redrawPending{true};
     int               m_resizeBorderWidth = 6; // pixels for resize hit zone
 
     // Saved placement for fullscreen toggle
